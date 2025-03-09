@@ -16,18 +16,17 @@ struct Cell: Identifiable {
     var neighborMines: Int = 0
 }
 
-
 class GameBoard: ObservableObject {
     @Published var cells: [[Cell]] = []
     @Published var gameOver = false
     @Published var win = false
     @Published var remainingCells: Int = 0
-    @Published var gameTime: Int = 0 // 游戏时长（秒）
+    @Published var gameTime: Int = 0
     let rowCount: Int
     let columnCount: Int
-    let mineCount: Int
+    var mineCount: Int
     private var timer: Timer? = nil
-    //在这里调节游戏的难度，修改mineCount的数值即可
+    
     init(rowCount: Int = 16, columnCount: Int = 12, mineCount: Int = 32) {
         self.rowCount = rowCount
         self.columnCount = columnCount
@@ -40,7 +39,6 @@ class GameBoard: ObservableObject {
         var allCoordinates = (0..<rowCount).flatMap { x in (0..<columnCount).map { y in (x, y) } }
         allCoordinates.shuffle()
         
-        // 重置地雷
         for (x, y) in allCoordinates.prefix(mineCount) {
             cells[x][y].isMine = true
             updateNeighborMines(x: x, y: y)
@@ -48,15 +46,13 @@ class GameBoard: ObservableObject {
         
         gameOver = false
         win = false
-        gameTime = 0 // 重置游戏时长
+        gameTime = 0
         updateRemainingCells()
-        
-        // 启动计时器
         startTimer()
     }
     
     private func startTimer() {
-        timer?.invalidate() // 如果已有定时器，先停止
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             if !self.gameOver {
                 self.gameTime += 1
@@ -114,7 +110,7 @@ class GameBoard: ObservableObject {
     private func checkWin() {
         if remainingCells == 0 {
             win = true
-            gameOver = true // 游戏结束
+            gameOver = true
         }
     }
     
@@ -127,21 +123,22 @@ class GameBoard: ObservableObject {
 struct ContentView: View {
     @StateObject var gameBoard: GameBoard
     @State private var showWinAlert = false
+    @State private var showingDifficultyOptions = false
+    @State private var selectedDifficulty: String = "难度" // 默认显示"难度"
+    let isPad = UIDevice.current.userInterfaceIdiom == .pad
     
     init() {
         let isPad = UIDevice.current.userInterfaceIdiom == .pad
-        let rowCount = isPad ? 20 : 14  // iPad 使用 24 行，iPhone 使用 14 行
-        let columnCount = isPad ? 18 : 10  // iPad 使用186 列，iPhone 使用 10 列
+        let rowCount = isPad ? 20 : 14
+        let columnCount = isPad ? 18 : 10
         
         _gameBoard = StateObject(wrappedValue: GameBoard(rowCount: rowCount, columnCount: columnCount))
     }
     
     var body: some View {
         GeometryReader { geometry in
-            // 自适应布局核心计算
             let containerWidth = min(geometry.size.width, geometry.size.height) * 0.9
             let cellSize = containerWidth / CGFloat(gameBoard.columnCount)
-            let isPad = UIDevice.current.userInterfaceIdiom == .pad
             
             VStack(spacing: isPad ? 30 : 20) {
                 // 标题
@@ -167,50 +164,25 @@ struct ContentView: View {
                         }
                     )
                 
+                // 状态栏
                 HStack {
-                    // 剩余地雷显示
-                    Text("剩余: \(gameBoard.remainingCells)")
-                        .font(.system(size: isPad ? 24 : 18, weight: .bold, design: .rounded))
-                        .padding(10)
-                        .frame(width: isPad ? 180 : 150)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color(white: 0.75))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .strokeBorder(Color.white, lineWidth: 2)
-                                        .offset(x: -1, y: -1)
-                                        .blendMode(.screen)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .strokeBorder(Color(white: 0.4), lineWidth: 2)
-                                        .offset(x: 1, y: 1)
-                                        .blendMode(.multiply)
-                                )
-                        )
+                    StatusItem(title: "剩余", value: gameBoard.remainingCells)
                     
-                    // 游戏时长显示
-                    Text("时长: \(gameBoard.gameTime)秒")
-                        .font(.system(size: isPad ? 24 : 18, weight: .bold, design: .rounded))
-                        .padding(10)
-                        .frame(width: isPad ? 180 : 150)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color(white: 0.75))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .strokeBorder(Color.white, lineWidth: 2)
-                                        .offset(x: -1, y: -1)
-                                        .blendMode(.screen)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .strokeBorder(Color(white: 0.4), lineWidth: 2)
-                                        .offset(x: 1, y: 1)
-                                        .blendMode(.multiply)
-                                )
-                        )
+                    // 难度按钮
+                    Button {
+                        showingDifficultyOptions = true
+                    } label: {
+                        StatusItem(title: selectedDifficulty, value: nil)
+                            .foregroundColor(.black) // 确保文字颜色一致
+                    }
+                    
+                    StatusItem(title: "时长", value: gameBoard.gameTime)
+                }
+                .confirmationDialog("选择难度", isPresented: $showingDifficultyOptions) {
+                    Button("简单") { updateDifficulty(0.1, label: "简单") }
+                    Button("中等") { updateDifficulty(0.15, label: "中等") }
+                    Button("困难") { updateDifficulty(0.2, label: "困难") }
+                    Button("取消", role: .cancel) { }
                 }
                 
                 // 游戏棋盘
@@ -243,9 +215,7 @@ struct ContentView: View {
                     .border(Color(white: 0.4), width: 2)
                 }
                 
-//                Spacer() // 将按钮推到顶部和底部之间的空间
-                
-                // 控制按钮
+                // 新游戏按钮
                 Button(action: {
                     gameBoard.resetGame()
                 }) {
@@ -255,7 +225,7 @@ struct ContentView: View {
                         .padding(.horizontal, isPad ? 40 : 30)
                 }
                 .buttonStyle(RetroButtonStyle())
-                .padding(.bottom, geometry.size.height * 0.05) // 设置按钮距离底部的距离为屏幕高度的 5%
+                .padding(.bottom, geometry.size.height * 0.05)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(isPad ? 30 : 20)
@@ -272,8 +242,49 @@ struct ContentView: View {
             }
         }
     }
+    
+    private func updateDifficulty(_ percentage: Double, label: String) {
+        let totalCells = gameBoard.rowCount * gameBoard.columnCount
+        gameBoard.mineCount = max(1, Int(Double(totalCells) * percentage))
+        selectedDifficulty = label // 更新显示的难度标签
+        gameBoard.resetGame()
+    }
+    
+    private struct StatusItem: View {
+        let title: String
+        let value: Int?
+        var displayText: String {
+            value != nil ? "\(title): \(value!)" : title
+        }
+        
+        var body: some View {
+            let isPad = UIDevice.current.userInterfaceIdiom == .pad
+            Text(displayText)
+                .font(.system(size: isPad ? 24 : 18, weight: .bold, design: .rounded))
+                .foregroundColor(.black) // 统一文字颜色
+                .padding(10)
+                .frame(width: isPad ? 120 : 100)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(white: 0.75))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(Color.white, lineWidth: 2)
+                                .offset(x: -1, y: -1)
+                                .blendMode(.screen)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(Color(white: 0.4), lineWidth: 2)
+                                .offset(x: 1, y: 1)
+                                .blendMode(.multiply)
+                        )
+                )
+        }
+    }
 }
 
+// ...（CellView和RetroButtonStyle保持不变，与之前相同）...
 
 // MARK: - 单元格视图
 struct CellView: View {
@@ -281,7 +292,6 @@ struct CellView: View {
     
     var body: some View {
         ZStack {
-            // 单元格背景
             Rectangle()
                 .fill(cell.isRevealed ? Color(white: 0.6) : Color(white: 0.75))
                 .overlay(
@@ -302,7 +312,6 @@ struct CellView: View {
                     }
                 )
             
-            // 显示内容
             if cell.isRevealed {
                 if cell.isMine {
                     Text("💣")
@@ -341,9 +350,11 @@ struct RetroButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Color.white, lineWidth: 2)
                         .offset(x: 1, y: 1)
+                        .blendMode(.screen)
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(Color(white: 0.4), lineWidth: 2)
                         .offset(x: -1, y: -1)
+                        .blendMode(.multiply)
                 }
             )
             .cornerRadius(6)
