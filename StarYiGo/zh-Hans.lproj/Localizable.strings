@@ -1,0 +1,327 @@
+/* App Identity */
+"app.name" = "星弈围棋";
+"app.subtitle" = "对弈 · 闯关 · 成长";
+"home.hero.poeticSubtitle" = "STARYI GO · 手谈弈境";
+"home.hero.playSubtitle" = "一键开局 · 纯离线分级陪练";
+"home.hero.questSubtitle" = "探索五大星弈岛屿 · 挑战守关大师";
+"home.hero.matchOptions" = "对局设置";
+"home.starterCamp" = "5路启蒙营";
+
+/* Home Modules */
+"home.greeting" = "你好，%@";
+"home.dailyGoal" = "今日目标";
+"home.dailyGoalProgress" = "已完成 %d / %d";
+"home.totalStars" = "%d 颗星";
+"home.totalWins" = "%d 胜局";
+"home.aiCard.title" = "AI 对弈";
+"home.aiCard.subtitle" = "纯离线分级陪练，从 25K 萌新到 1D 进阶";
+"home.aiCard.boardSize" = "棋盘";
+"home.aiCard.opponent" = "对手";
+"home.aiCard.playAs" = "执棋";
+"home.aiCard.handicap" = "让子";
+"home.aiCard.ruleMode" = "玩法规则";
+"home.aiCard.start" = "AI 对弈";
+"home.aiCard.resume" = "继续对局";
+"home.puzzleCard.title" = "星弈闯关";
+"home.puzzleCard.subtitle" = "五大岛屿手筋与死活冒险";
+"home.puzzleCard.solved" = "已通关 %d / %d";
+"home.puzzleCard.continue" = "扬帆闯关";
+"home.puzzleCard.mistakes" = "错题本 (%d)";
+"home.dailyCard.title" = "每日一题";
+"home.dailyCard.subtitle" = "今日限定妙手挑战";
+"home.dailyCard.done" = "今日已完成！";
+"home.twoPlayerCard.title" = "双人棋桌";
+"home.twoPlayerCard.subtitle" = "同屏面对面下一局";
+"home.twoPlayer.capture5" = "5路吃子棋 · 先吃 3 子胜";
+"home.twoPlayer.capture7" = "7路吃子棋 · 先吃 5 子胜";
+"home.archiveCard.title" = "棋谱书院";
+"home.archiveCard.subtitle" = "经典名局讲解与个人复盘";
+"home.settings" = "设置";
+
+/* Rules & Capture Go */
+"rule.standard" = "标准围空对弈";
+"rule.captureRace" = "吃子棋 · 先提 %d 子胜";
+"rule.captureShort" = "吃子赛(%d子)";
+"rule.captureQuickSection" = "趣味吃子棋（新手推荐）";
+
+/* Go Term Codex (招式图鉴) */
+"codex.title" = "招式图鉴";
+"codex.collectedCount" = "已掌握 %d / %d 招";
+"codex.masteredCount" = "全开放学习 · 已掌握 %d / %d 招";
+"codex.allOpenHint" = "全年龄段 · 随时可学";
+"codex.tier.starter.title" = "一阶 · 启蒙乐园";
+"codex.tier.starter.badge" = "30K–18K · 4–7岁";
+"codex.tier.tactics.title" = "二阶 · 步法与手筋";
+"codex.tier.tactics.badge" = "17K–10K · 7–10岁";
+"codex.tier.fighting.title" = "三阶 · 战斗与对杀";
+"codex.tier.fighting.badge" = "9K–3K · 9–14岁";
+"codex.tier.mastery.title" = "四阶 · 布局与段位";
+"codex.tier.mastery.badge" = "2K–1D+ · 12岁+";
+"codex.masteredBadge" = "已掌握";
+"codex.masteredStamped" = "已盖章掌握 ★";
+"codex.stampLearned" = "学会啦！盖章 +5🪙";
+"codex.practiceMove" = "去练这一招 →";
+"codex.watchClassic" = "看名局实战讲解 →";
+"codex.practiceLive" = "开一局实战试试 →";
+"codex.tapToDemo" = "看动态演示";
+"codex.metaphorHeader" = "一秒听懂";
+"codex.ruleHeader" = "围棋正规原理";
+"codex.openFull" = "打开完整招式图鉴";
+"codex.unlockToast.title" = "招式盖章掌握！";
+
+/* Islands Adventure Map */
+"islands.title" = "星弈群岛";
+"islands.bossDuel" = "挑战岛屿大师";
+"islands.bossCoop" = "亲子联棋";
+"islands.bossSubtitle" = "9路实战检验 · 对战%@ (%@)";
+"islands.chapterProgress" = "已通关 %d / %d";
+"islands.worldNumber" = "第 %d 岛";
+"islands.lockedBadge" = "未解锁";
+"islands.clearedBadge" = "已通关";
+"islands.tapToEnter" = "点击闯关";
+"islands.lockedToast" = "下一步，先通关「%@」";
+"islands.stageNumber" = "第 %d 关";
+"islands.stagePlay" = "开始挑战";
+"islands.stageReplay" = "再次挑战";
+"islands.stageLockedToast" = "先通关第 %d 关即可解锁此关";
+"islands.bossLockedHint" = "通关本岛全部 %d 关即可解锁岛屿大师战";
+"islands.bossUnlockedBadge" = "终极试炼已解锁";
+"islands.bossDefeatedBadge" = "已击败岛主";
+"islands.nextIsland" = "前往下一岛 · %@";
+"islands.starsCount" = "%d / %d 星";
+"islands.starterDock.title" = "5路启蒙游乐场";
+"islands.starterDock.subtitle" = "零基础 4 步学会「气、叫吃、连接、两眼活棋」";
+"islands.starterDock.captureQuick" = "开一局 5路吃子棋";
+"island.bamboo.name" = "青芽竹林";
+"island.bamboo.desc" = "打吃与提子启蒙";
+"island.canyon.name" = "疾风峡谷";
+"island.canyon.desc" = "征子、枷吃与倒扑手筋";
+"island.lake.name" = "双月湖泊";
+"island.lake.desc" = "死活做眼与破眼杀棋";
+"island.temple.name" = "金秋古寺";
+"island.temple.desc" = "补断连结与对杀紧气";
+"island.peak.name" = "星辰之巅";
+"island.peak.desc" = "收官妙手与段位试炼";
+
+/* Board Sizes & Colors */
+"board.size.5" = "5路";
+"board.size.7" = "7路";
+"board.size.9" = "9路";
+"board.size.13" = "13路";
+"board.size.19" = "19路";
+"board.size.5.desc" = "吃子启蒙";
+"board.size.7.desc" = "趣味小盘";
+"board.size.9.desc" = "快速实战";
+"board.size.13.desc" = "均衡进阶";
+"board.size.19.desc" = "标准全场";
+"board.koBadge" = "劫";
+"stone.black" = "执黑";
+"stone.white" = "执白";
+"handicap.none" = "分先";
+"handicap.stones" = "让 %d 子";
+
+/* AI Opponents */
+"ai.sprout.name" = "萌新小芽";
+"ai.sprout.desc" = "温和陪练，适合练习基础吃子与连接";
+"ai.rabbit.name" = "灵巧小兔";
+"ai.rabbit.desc" = "积极进攻，适合锻炼局部对杀手感";
+"ai.fox.name" = "机敏狐狸";
+"ai.fox.desc" = "懂得打吃、切断与占角，颇具趣味";
+"ai.panda.name" = "沉稳熊猫";
+"ai.panda.desc" = "注重棋形与围空，布局沉着稳健";
+"ai.crane.name" = "清风白鹤";
+"ai.crane.desc" = "局部计算深入，攻守更加均衡";
+"ai.dragon.name" = "星弈青龙";
+"ai.dragon.desc" = "强力离线 MCTS 对手，迎接真正挑战";
+
+/* Generic + Character-Specific Companion Dialogues */
+"companion.greet" = "请多指教！我们来下一盘好玩的棋吧！";
+"companion.thinking" = "嗯……让我想想这一步下哪好呢…";
+"companion.playerCaptured" = "哇！竟然被你吃掉了，好犀利！";
+"companion.playerBigCapture" = "太厉害了！！这一手大提子简直是妙手！";
+"companion.aiCaptured" = "嘿嘿，得手啦！要注意保护己方棋子的「气」哦！";
+"companion.playerAtari" = "小心！你有棋子被「叫吃」，只剩 1 口气啦！";
+"companion.goodMove" = "下得很稳健，继续加油！";
+"companion.pass" = "这手我先「停一手」，该你落子啦！";
+"companion.playerWin" = "恭喜获胜！你的棋艺又进步一大截啦！";
+"companion.aiWin" = "很精彩的对决！要不要用时光沙漏回到关键一手再试试？";
+
+"companion.sprout.greet" = "芽芽报道！咱们一起数「气」、开心吃子吧！";
+"companion.sprout.playerCaptured" = "呀！芽芽的棋子被提走啦，你眼神真棒！";
+"companion.sprout.playerWin" = "哇塞你赢了！快去下一座岛挑战更强的伙伴吧！";
+
+"companion.rabbit.greet" = "蹦蹦跳跳！我出招超快，小心我的「叫吃」哦！";
+"companion.rabbit.playerAtari" = "看招！小兔叫吃——快把你的棋子救出来！";
+"companion.rabbit.playerCaptured" = "哎呀跳太急了，被你反吃啦！";
+
+"companion.fox.greet" = "嘿嘿，狐狸可最擅长切断和设陷阱啦，准备好了吗？";
+"companion.fox.aiCaptured" = "中计啦嘿嘿！记住手拉手连接才不容易被切断哦。";
+"companion.fox.playerBigCapture" = "什么？！竟然反过来识破了狐狸的妙手！";
+
+"companion.panda.greet" = "喝口竹叶茶，稳扎稳打围大空，请多指教。";
+"companion.panda.goodMove" = "好棋形！不慌不忙，颇有大将之风。";
+"companion.panda.playerWin" = "了不起！你的棋形和围空功夫已经出师啦！";
+
+"companion.crane.greet" = "清风拂面，攻守平衡。让我们切磋一番吧！";
+"companion.crane.playerBigCapture" = "好一记锐利手筋！白鹤佩服！";
+
+"companion.dragon.greet" = "欢迎登上星辰之巅！全力以赴，让我见识你的段位实力吧！";
+"companion.dragon.playerBigCapture" = "惊人的计算力！！青龙也要认真起来了！";
+"companion.dragon.playerWin" = "不可思议！你已通过星辰之巅的终极试炼！";
+
+/* Game Play */
+"game.title.vsAI" = "对战 %@";
+"game.title.twoPlayer" = "双人棋桌";
+"game.turn.black" = "黑方落子";
+"game.turn.white" = "白方落子";
+"game.turn.aiThinking" = "%@ 思考中…";
+"game.moveCount" = "第 %d 手";
+"game.captures" = "提子";
+"game.captureGoalBadge" = "提子 %d / %d";
+"game.komi" = "贴目 %.1f";
+"game.libertiesTip" = "长按棋盘上任意棋子，可点亮「萤火虫气数」";
+"game.libertiesBadge" = "%d 气";
+"game.action.undo" = "悔棋";
+"game.action.hint" = "AI 支招";
+"game.action.territory" = "形势判断";
+"game.action.pass" = "停一手";
+"game.action.score" = "数子";
+"game.action.resign" = "认输";
+"game.action.newGame" = "新开一局";
+"game.action.tabletop" = "面对面模式";
+"game.action.coopToggle" = "亲子联棋模式（轮流合作）";
+"game.action.confirmPlace" = "确认落子";
+"game.action.cancelPlace" = "取消";
+"game.tabletop.kidAssist" = "儿童护航";
+"game.coop.kidTurn" = "亲子联棋 · 轮到小棋士落子！";
+"game.coop.parentTurn" = "亲子联棋 · 轮到家长搭档落子！";
+"game.coopTeamName" = "%@ 亲子战队";
+"game.deadStones.title" = "终局死子确认";
+"game.deadStones.hint" = "已自动标出死子（红叉）。点击任意棋块可切换死活，确认后精准数子！";
+"game.deadStones.confirm" = "确认数子";
+"game.deadStones.resume" = "继续对局";
+"game.status.passBanner" = "%@ 停了一手";
+"game.status.atariWarning" = "叫吃提醒：有棋块只剩 1 口气！";
+"game.status.illegal.suicide" = "禁入点：落下去自己没气啦（不能下自杀手）！";
+"game.status.illegal.ko" = "打劫规则：沙漏冷却中，不能立刻回提，请先走别处！";
+"game.status.illegal.occupied" = "这个交叉点已经有棋子了。";
+"game.status.hintHeader" = "AI 推荐落点";
+"game.status.noHint" = "当前没有明显增益点，可以考虑停一手。";
+"game.confirm.resignTitle" = "确定要认输吗？";
+"game.confirm.resignMessage" = "本盘对局会自动保存到「棋谱书院」，随时可以复盘学习。";
+"game.confirm.newGameTitle" = "重新开始一局？";
+"game.confirm.newGameMessage" = "当前对局进度将被清空。";
+
+/* Hint Reasons */
+"hint.capture" = "可以立刻提掉对方棋子！";
+"hint.escape" = "快把被「叫吃」的己方棋子逃出来！";
+"hint.atari" = "「叫吃」对方，制造战术压力。";
+"hint.corner" = "抢占宝贵的角部「星位」与根据地。";
+"hint.connect" = "补强棋形，把己方棋子手拉手连成一片。";
+"hint.territory" = "扩大地盘与外势。";
+"hint.bestMove" = "综合搜索评估出的最佳一手。";
+
+/* Game Result & Time Hourglass */
+"result.title" = "对局结束";
+"result.bossDefeatedBadge" = "🏆 岛屿大师击败 · 段位认证提升！";
+"result.blackWins" = "黑方胜";
+"result.whiteWins" = "白方胜";
+"result.byPoints" = "胜 %.1f 子";
+"result.byCaptureRace" = "吃子棋达成 · 先提 %d 子获胜！";
+"result.byResign" = "中盘胜";
+"result.blackScore" = "黑方归属（子+空）";
+"result.whiteScore" = "白方归属（含贴目 %.1f）";
+"result.savedNotice" = "棋谱已自动保存至棋谱书院";
+"result.bestMove" = "本局亮眼妙手：第 %d 手";
+"result.turningPoint" = "时光沙漏转折点：第 %d 手";
+"result.rewindAction" = "时光倒流至第 %d 手翻盘再战";
+"result.playAgain" = "再来一局";
+"result.reviewGame" = "立即复盘";
+"result.backHome" = "返回主屏";
+
+/* Puzzles */
+"puzzle.hub.title" = "星弈群岛";
+"puzzle.category.all" = "全部";
+"puzzle.category.capture" = "吃子技巧";
+"puzzle.category.tactics" = "经典手筋";
+"puzzle.category.lifeAndDeath" = "死活天地";
+"puzzle.category.endgame" = "实战收官";
+"puzzle.category.mistakes" = "错题本";
+"puzzle.mistakes.empty" = "太棒了！目前没有错题需要复习。";
+"puzzle.play.blackToPlay" = "黑先";
+"puzzle.play.whiteToPlay" = "白先";
+"puzzle.play.tryAgain" = "差一点哦！看看对手的反击，重做再试一次吧！";
+"puzzle.play.solved" = "妙手！闯关成功！";
+"puzzle.play.learnedTerm" = "掌握招式：【%@】";
+"puzzle.play.hintUsed" = "已在棋盘上高亮提示关键点";
+"puzzle.play.reset" = "重做本题";
+"puzzle.play.hint" = "看提示";
+"puzzle.play.next" = "下一关";
+"puzzle.play.allDone" = "全部关卡已通关！";
+"puzzle.play.attempts" = "尝试：%d 次";
+
+/* Archive & Review (Replay Hall) */
+"archive.title" = "棋谱书院";
+"archive.tab.myGames" = "我的对局";
+"archive.tab.classics" = "名局讲解";
+"archive.empty.title" = "还没有保存的对局";
+"archive.empty.subtitle" = "完成对局会自动保存在这里，也可以先看「名局讲解」学招式！";
+"archive.delete" = "删除";
+"review.title" = "棋谱复盘";
+"review.coachLabel" = "熊猫老师步步解说";
+"review.moveOf" = "第 %d / %d 手";
+"review.tryVariation" = "从此步试下";
+"review.exitVariation" = "回到主线";
+"review.variationBanner" = "试下模式 — 点击棋盘探索不同变化";
+"review.copySGF" = "导出 SGF";
+"review.copiedSGF" = "已复制！";
+
+/* Settings */
+"settings.title" = "游戏设置";
+"settings.section.profile" = "小棋士与家庭档案";
+"settings.profile.nickname" = "昵称";
+"settings.profile.avatar" = "头像";
+"settings.profile.addKid" = "添加小棋士";
+"settings.profile.addKidTitle" = "添加家庭成员档案";
+"settings.profile.addKidHint" = "每个孩子都有独立的闯关星数、招式图鉴和段位进度。";
+"settings.profile.newKidDefault" = "小棋友";
+"settings.section.language" = "全球语言";
+"settings.language.system" = "跟随系统";
+"settings.language.zh" = "简体中文";
+"settings.language.en" = "English";
+"settings.section.appearance" = "棋盘主题收藏";
+"settings.theme.kaya" = "经典榧木";
+"settings.theme.bamboo" = "护眼竹青";
+"settings.theme.midnight" = "星空夜弈";
+"settings.theme.sakura" = "樱花春木";
+"settings.theme.ocean" = "珊瑚海风";
+"settings.theme.needCoins" = "还差星币，闯关即可赚取（需 %d 🪙）";
+"settings.section.assists" = "教学辅助与棋盘显示";
+"settings.assist.expressiveStones" = "萌趣表情棋子（气紧冒汗 · 两眼皇冠）";
+"settings.assist.liveLiberties" = "新手自动呼吸气提示（小棋盘与吃子棋）";
+"settings.assist.confirmMove" = "大棋盘二次确认落子（13路/19路）";
+"settings.assist.coordinates" = "显示棋盘坐标";
+"settings.assist.moveNumbers" = "显示落子手数";
+"settings.assist.atari" = "叫吃轻颤与红晕提醒（仅剩 1 气）";
+"settings.assist.zenMode" = "纯净禅意道场（隐藏表情与伴学台词）";
+"settings.section.feedback" = "音乐、音效与触感";
+"settings.feedback.bgm" = "海岛五声木琴背景音乐";
+"settings.feedback.sound" = "落子木声与五声提示音";
+"settings.feedback.haptics" = "触感震动反馈";
+"settings.section.eyecare" = "护眼时长提醒";
+"settings.eyecare.off" = "关闭";
+"settings.eyecare.minutes" = "%d 分钟";
+"settings.eyecare.alertTitle" = "休息一下眼睛吧";
+"settings.eyecare.alertMessage" = "你已经专注下棋 %d 分钟啦，眺望远方让眼睛放松一会儿吧！";
+"settings.eyecare.keepPlaying" = "休息好了，继续";
+"settings.section.about" = "家长安心守护";
+"settings.about.kidSafe" = "100% 离线运行 · 零广告 · 零弹窗打扰";
+"settings.about.offlineNote" = "采用正规围棋规则与全球标准术语，内置纯离线分级 AI 陪练引擎。";
+
+/* Ranks & Common */
+"rank.label" = "%@ 小棋士";
+"common.cancel" = "取消";
+"common.done" = "完成";
+"common.ok" = "好的";
+"common.close" = "关闭";
+"common.back" = "返回";
