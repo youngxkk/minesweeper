@@ -1,0 +1,327 @@
+/* App Identity */
+"app.name" = "StarYi Go";
+"app.subtitle" = "Play, Solve & Grow";
+"home.hero.poeticSubtitle" = "STARYI GO · PLAY, SOLVE & GROW";
+"home.hero.playSubtitle" = "Instant offline match";
+"home.hero.questSubtitle" = "Explore 5 Go Islands & Boss Duels";
+"home.hero.matchOptions" = "Match Options";
+"home.starterCamp" = "5×5 Starter Camp";
+
+/* Home Modules */
+"home.greeting" = "Hello, %@";
+"home.dailyGoal" = "Today's Goal";
+"home.dailyGoalProgress" = "%d / %d done";
+"home.totalStars" = "%d Stars";
+"home.totalWins" = "%d Wins";
+"home.aiCard.title" = "Play vs AI";
+"home.aiCard.subtitle" = "Offline smart opponents from 25K to 1D";
+"home.aiCard.boardSize" = "Board";
+"home.aiCard.opponent" = "Opponent";
+"home.aiCard.playAs" = "Play As";
+"home.aiCard.handicap" = "Handicap";
+"home.aiCard.ruleMode" = "Game Mode";
+"home.aiCard.start" = "Play vs AI";
+"home.aiCard.resume" = "Resume Match";
+"home.puzzleCard.title" = "StarYi Islands";
+"home.puzzleCard.subtitle" = "Adventure through 5 Go Islands";
+"home.puzzleCard.solved" = "%d / %d Cleared";
+"home.puzzleCard.continue" = "Set Sail";
+"home.puzzleCard.mistakes" = "Mistake Book (%d)";
+"home.dailyCard.title" = "Daily Challenge";
+"home.dailyCard.subtitle" = "Today's special puzzle";
+"home.dailyCard.done" = "Cleared Today!";
+"home.twoPlayerCard.title" = "Tabletop 2P";
+"home.twoPlayerCard.subtitle" = "Play face-to-face on one device";
+"home.twoPlayer.capture5" = "5×5 Capture Go · First to 3";
+"home.twoPlayer.capture7" = "7×7 Capture Go · First to 5";
+"home.archiveCard.title" = "Replay Hall";
+"home.archiveCard.subtitle" = "Guided classics & your replays";
+"home.settings" = "Settings";
+
+/* Rules & Capture Go */
+"rule.standard" = "Standard Territory Go";
+"rule.captureRace" = "Capture Go · First to %d";
+"rule.captureShort" = "Capture %d";
+"rule.captureQuickSection" = "Fun Capture Go (Great for Beginners)";
+
+/* Go Term Codex */
+"codex.title" = "Go Codex";
+"codex.collectedCount" = "%d / %d Mastered";
+"codex.masteredCount" = "All Open · %d / %d Mastered";
+"codex.allOpenHint" = "All Ages · Learn Anytime";
+"codex.tier.starter.title" = "Tier 1 · Starter";
+"codex.tier.starter.badge" = "30K–18K · Ages 4–7";
+"codex.tier.tactics.title" = "Tier 2 · Tactics";
+"codex.tier.tactics.badge" = "17K–10K · Ages 7–10";
+"codex.tier.fighting.title" = "Tier 3 · Fighting";
+"codex.tier.fighting.badge" = "9K–3K · Ages 9–14";
+"codex.tier.mastery.title" = "Tier 4 · Dan Mastery";
+"codex.tier.mastery.badge" = "2K–1D+ · 12+ & Adults";
+"codex.masteredBadge" = "Mastered";
+"codex.masteredStamped" = "Mastered ★";
+"codex.stampLearned" = "Got It! Stamp +5🪙";
+"codex.practiceMove" = "Practice This Move →";
+"codex.watchClassic" = "Watch Guided Game →";
+"codex.practiceLive" = "Try Live Match →";
+"codex.tapToDemo" = "Watch Demo";
+"codex.metaphorHeader" = "Quick Kid Idea";
+"codex.ruleHeader" = "Real Go Rule";
+"codex.openFull" = "Open Full Go Codex";
+"codex.unlockToast.title" = "Go Move Mastered!";
+
+/* Islands Adventure Map */
+"islands.title" = "StarYi Islands";
+"islands.bossDuel" = "Challenge Island Master";
+"islands.bossCoop" = "Co-op 2P";
+"islands.bossSubtitle" = "9×9 Trial Match vs %@ (%@)";
+"islands.chapterProgress" = "%d / %d Cleared";
+"islands.worldNumber" = "World %d";
+"islands.lockedBadge" = "Locked";
+"islands.clearedBadge" = "Cleared";
+"islands.tapToEnter" = "Enter";
+"islands.lockedToast" = "Next up, clear %@";
+"islands.stageNumber" = "Stage %d";
+"islands.stagePlay" = "Play Now";
+"islands.stageReplay" = "Replay";
+"islands.stageLockedToast" = "Clear Stage %d first to unlock this stage";
+"islands.bossLockedHint" = "Clear all %d stages on this island to unlock the Boss Duel";
+"islands.bossUnlockedBadge" = "Boss Trial Unlocked";
+"islands.bossDefeatedBadge" = "Master Defeated";
+"islands.nextIsland" = "Next Island · %@";
+"islands.starsCount" = "%d / %d ★";
+"islands.starterDock.title" = "5×5 Starter Playground";
+"islands.starterDock.subtitle" = "Learn Liberties, Atari, Connect & Two Eyes in 4 fun steps";
+"islands.starterDock.captureQuick" = "Play 5×5 Capture Go";
+"island.bamboo.name" = "Sprout Bamboo";
+"island.bamboo.desc" = "Capture & Atari Basics";
+"island.canyon.name" = "Swift Canyon";
+"island.canyon.desc" = "Nets, Ladders & Snapbacks";
+"island.lake.name" = "Twin-Moon Lake";
+"island.lake.desc" = "Life, Death & Two Eyes";
+"island.temple.name" = "Golden Temple";
+"island.temple.desc" = "Connections & Capturing Races";
+"island.peak.name" = "Starlight Peak";
+"island.peak.desc" = "Endgame Mastery & Dan Trials";
+
+/* Board Sizes & Colors */
+"board.size.5" = "5×5";
+"board.size.7" = "7×7";
+"board.size.9" = "9×9";
+"board.size.13" = "13×13";
+"board.size.19" = "19×19";
+"board.size.5.desc" = "First Capture";
+"board.size.7.desc" = "Mini Match";
+"board.size.9.desc" = "Quick & Tactical";
+"board.size.13.desc" = "Balanced Growth";
+"board.size.19.desc" = "Full Classic";
+"board.koBadge" = "Ko";
+"stone.black" = "Black";
+"stone.white" = "White";
+"handicap.none" = "Even";
+"handicap.stones" = "%d Stones";
+
+/* AI Opponents */
+"ai.sprout.name" = "Sprout";
+"ai.sprout.desc" = "Gentle starter for learning captures";
+"ai.rabbit.name" = "Swift Rabbit";
+"ai.rabbit.desc" = "Active beginner, fun tactical fights";
+"ai.fox.name" = "Clever Fox";
+"ai.fox.desc" = "Spots atari, cuts, and corners";
+"ai.panda.name" = "Wise Panda";
+"ai.panda.desc" = "Solid shape and territory sense";
+"ai.crane.name" = "Cloud Crane";
+"ai.crane.desc" = "Deep local reading and balanced play";
+"ai.dragon.name" = "Star Dragon";
+"ai.dragon.desc" = "Strong offline MCTS challenger";
+
+/* Generic + Character-Specific Companion Dialogues */
+"companion.greet" = "Let's have a fun match! Good luck!";
+"companion.thinking" = "Hmm... let me think carefully...";
+"companion.playerCaptured" = "Whoa! Nice capture! You got me!";
+"companion.playerBigCapture" = "Amazing!! That was a huge capture!";
+"companion.aiCaptured" = "Gotcha! Watch your liberties closely!";
+"companion.playerAtari" = "Atari! One of your groups has 1 liberty!";
+"companion.goodMove" = "Solid move! Keep going!";
+"companion.pass" = "I'll pass this turn. Your move!";
+"companion.playerWin" = "You played brilliantly! Well deserved win!";
+"companion.aiWin" = "Great fight! Want to rewind a key move and try again?";
+
+"companion.sprout.greet" = "Hi there! Let's count liberties and practice capturing together!";
+"companion.sprout.playerCaptured" = "Yay! You spotted my last liberty and captured me!";
+"companion.sprout.playerWin" = "You won!! You're ready for the next island!";
+
+"companion.rabbit.greet" = "Hop hop! I play fast — watch out for my sudden Atari!";
+"companion.rabbit.playerAtari" = "Zoom! Atari! Quick, rescue your stones!";
+"companion.rabbit.playerCaptured" = "Whoa, I hopped too fast and got caught!";
+
+"companion.fox.greet" = "Hehe, Fox loves sneaky cuts and traps. Ready to outsmart me?";
+"companion.fox.aiCaptured" = "Gotcha! Remember to connect your stones so I can't cut them!";
+"companion.fox.playerBigCapture" = "What?! You saw right through my Fox trap!";
+
+"companion.panda.greet" = "Calm tea, sturdy shape, big territory. Have a great game.";
+"companion.panda.goodMove" = "Strong, peaceful shape. Very impressive!";
+"companion.panda.playerWin" = "Splendid balance and territory! You earned this victory!";
+
+"companion.crane.greet" = "Like wind over mountain clouds — let us test our reading!";
+"companion.crane.playerBigCapture" = "A razor-sharp tesuji! Well played indeed!";
+
+"companion.dragon.greet" = "Welcome to Starlight Peak! Show me everything you've learned!";
+"companion.dragon.playerBigCapture" = "Incredible reading!! Now the Dragon gets serious!";
+"companion.dragon.playerWin" = "Magnificent! You conquered Starlight Peak!";
+
+/* Game Play */
+"game.title.vsAI" = "vs %@";
+"game.title.twoPlayer" = "Tabletop 2P";
+"game.turn.black" = "Black's Turn";
+"game.turn.white" = "White's Turn";
+"game.turn.aiThinking" = "%@ is thinking...";
+"game.moveCount" = "Move %d";
+"game.captures" = "Captures";
+"game.captureGoalBadge" = "Captures %d / %d";
+"game.komi" = "Komi %.1f";
+"game.libertiesTip" = "Hold any stone to inspect its firefly liberties";
+"game.libertiesBadge" = "%d Lib";
+"game.action.undo" = "Undo";
+"game.action.hint" = "AI Hint";
+"game.action.territory" = "Territory";
+"game.action.pass" = "Pass";
+"game.action.score" = "Count";
+"game.action.resign" = "Resign";
+"game.action.newGame" = "New Match";
+"game.action.tabletop" = "Face-to-Face";
+"game.action.coopToggle" = "Parent-Child Co-op Mode";
+"game.action.confirmPlace" = "Place Stone";
+"game.action.cancelPlace" = "Cancel";
+"game.tabletop.kidAssist" = "Kid Assist";
+"game.coop.kidTurn" = "Co-op Pair Go · Kid's Turn!";
+"game.coop.parentTurn" = "Co-op Pair Go · Partner's Turn!";
+"game.coopTeamName" = "%@ Co-op Team";
+"game.deadStones.title" = "Confirm Dead Stones";
+"game.deadStones.hint" = "Trapped dead stones are marked with X. Tap any group to toggle, then confirm score!";
+"game.deadStones.confirm" = "Confirm Score";
+"game.deadStones.resume" = "Keep Playing";
+"game.status.passBanner" = "%@ passed";
+"game.status.atariWarning" = "Atari! A group has only 1 liberty left.";
+"game.status.illegal.suicide" = "Suicide move: no liberties there unless you capture!";
+"game.status.illegal.ko" = "Ko Rule: spot locked for 1 turn — play elsewhere first!";
+"game.status.illegal.occupied" = "That intersection already has a stone.";
+"game.status.hintHeader" = "AI Suggestion";
+"game.status.noHint" = "No better moves found — consider passing.";
+"game.confirm.resignTitle" = "Resign this match?";
+"game.confirm.resignMessage" = "The match will be saved to Replay Hall so you can review it anytime.";
+"game.confirm.newGameTitle" = "Start a new match?";
+"game.confirm.newGameMessage" = "Current game progress will be reset.";
+
+/* Hint Reasons */
+"hint.capture" = "Captures opponent stones!";
+"hint.escape" = "Saves your group from Atari!";
+"hint.atari" = "Puts opponent stones in Atari.";
+"hint.corner" = "Claims a valuable corner Star Point.";
+"hint.connect" = "Connects and strengthens your stones.";
+"hint.territory" = "Expands territory and influence.";
+"hint.bestMove" = "Strongest move found by AI search.";
+
+/* Game Result & Time Hourglass */
+"result.title" = "Match Complete";
+"result.bossDefeatedBadge" = "🏆 Island Master Defeated · Rank Certified!";
+"result.blackWins" = "Black Wins";
+"result.whiteWins" = "White Wins";
+"result.byPoints" = "by %.1f points";
+"result.byCaptureRace" = "Capture Go Winner · First to %d Captures!";
+"result.byResign" = "by resignation";
+"result.blackScore" = "Black Area";
+"result.whiteScore" = "White Area (+%.1f komi)";
+"result.savedNotice" = "Game saved to Replay Hall";
+"result.bestMove" = "Highlight Move: Move %d";
+"result.turningPoint" = "Time Hourglass: Move %d";
+"result.rewindAction" = "Rewind to Move %d & Retry";
+"result.playAgain" = "Play Again";
+"result.reviewGame" = "Review Game";
+"result.backHome" = "Home";
+
+/* Puzzles */
+"puzzle.hub.title" = "StarYi Islands";
+"puzzle.category.all" = "All";
+"puzzle.category.capture" = "Capture";
+"puzzle.category.tactics" = "Tactics";
+"puzzle.category.lifeAndDeath" = "Life & Death";
+"puzzle.category.endgame" = "Endgame";
+"puzzle.category.mistakes" = "Mistake Book";
+"puzzle.mistakes.empty" = "No mistakes to review — great job!";
+"puzzle.play.blackToPlay" = "Black to Play";
+"puzzle.play.whiteToPlay" = "White to Play";
+"puzzle.play.tryAgain" = "Not quite! Look how the opponent replies, then retry!";
+"puzzle.play.solved" = "Brilliant! You solved it!";
+"puzzle.play.learnedTerm" = "Move Mastered: %@";
+"puzzle.play.hintUsed" = "Hint highlighted on the board";
+"puzzle.play.reset" = "Retry";
+"puzzle.play.hint" = "Hint";
+"puzzle.play.next" = "Next Puzzle";
+"puzzle.play.allDone" = "All puzzles cleared!";
+"puzzle.play.attempts" = "Tries: %d";
+
+/* Archive & Review (Replay Hall) */
+"archive.title" = "Replay Hall";
+"archive.tab.myGames" = "My Matches";
+"archive.tab.classics" = "Guided Classics";
+"archive.empty.title" = "No Saved Matches Yet";
+"archive.empty.subtitle" = "Finish a match to save it automatically, or watch Guided Classics!";
+"archive.delete" = "Delete";
+"review.title" = "Game Replay";
+"review.coachLabel" = "Panda Coach Commentary";
+"review.moveOf" = "Move %d / %d";
+"review.tryVariation" = "Try Variation";
+"review.exitVariation" = "Main Line";
+"review.variationBanner" = "Variation Mode — tap board to explore ideas";
+"review.copySGF" = "Export SGF";
+"review.copiedSGF" = "Copied!";
+
+/* Settings */
+"settings.title" = "Game Settings";
+"settings.section.profile" = "Player & Family Profiles";
+"settings.profile.nickname" = "Nickname";
+"settings.profile.avatar" = "Avatar";
+"settings.profile.addKid" = "Add Player";
+"settings.profile.addKidTitle" = "Add Family Player";
+"settings.profile.addKidHint" = "Each player gets their own Island stars, Codex cards, and Go rank.";
+"settings.profile.newKidDefault" = "Junior Player";
+"settings.section.language" = "Language";
+"settings.language.system" = "System";
+"settings.language.zh" = "简体中文";
+"settings.language.en" = "English";
+"settings.section.appearance" = "Board Collection";
+"settings.theme.kaya" = "Kaya Wood";
+"settings.theme.bamboo" = "Bamboo Jade";
+"settings.theme.midnight" = "Starlight Night";
+"settings.theme.sakura" = "Sakura Wood";
+"settings.theme.ocean" = "Coral Sea";
+"settings.theme.needCoins" = "Earn %d 🪙 in Islands to unlock!";
+"settings.section.assists" = "Learning & Board Assists";
+"settings.assist.expressiveStones" = "Cute Stone Expressions (Atari Sweat & Crown)";
+"settings.assist.liveLiberties" = "Auto Liberty Dots on Starter Boards";
+"settings.assist.confirmMove" = "Confirm Before Placing (13×13 / 19×19)";
+"settings.assist.coordinates" = "Show Coordinates";
+"settings.assist.moveNumbers" = "Show Move Numbers";
+"settings.assist.atari" = "Atari Shiver & Glow (1 Liberty)";
+"settings.assist.zenMode" = "Zen Dojo Mode (Classic Pure Board)";
+"settings.section.feedback" = "Music, Sound & Haptics";
+"settings.feedback.bgm" = "Island Pentatonic Music";
+"settings.feedback.sound" = "Wood Clacks & Chimes";
+"settings.feedback.haptics" = "Haptic Feedback";
+"settings.section.eyecare" = "Eye-Care Timer";
+"settings.eyecare.off" = "Off";
+"settings.eyecare.minutes" = "%d min";
+"settings.eyecare.alertTitle" = "Time for a Short Break";
+"settings.eyecare.alertMessage" = "You have been playing for %d minutes. Rest your eyes and look far away!";
+"settings.eyecare.keepPlaying" = "Rested, Continue";
+"settings.section.about" = "Family Safe & Offline";
+"settings.about.kidSafe" = "100% Offline · Zero Ads · Kid Safe";
+"settings.about.offlineNote" = "Teaches authentic Go rules and global terminology with a built-in offline AI engine.";
+
+/* Ranks & Common */
+"rank.label" = "%@ Player";
+"common.cancel" = "Cancel";
+"common.done" = "Done";
+"common.ok" = "OK";
+"common.close" = "Close";
+"common.back" = "Back";
