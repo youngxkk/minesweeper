@@ -385,11 +385,21 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         let minS = shortlist.map(\.heuristicScore).min() ?? 0.0
         let span = max(1.0, maxS - minS)
 
+        // Fuse offline spatial Policy-Value neural prior at the root for strong ranks (5K -> 5D)
+        let neuralEval: NeuralEvaluation? = (node.parent == nil && !ruleSet.isCaptureRace && (level == .crane || level == .tiger || level.isHighDan))
+            ? StarYiNeuralPolicyValueNet.evaluate(state: node.state, mover: mover)
+            : nil
+        let n = node.state.size
+
         var built: [MCTSNode] = []
         built.reserveCapacity(shortlist.count)
         for c in shortlist {
             if case .success(let out) = node.state.applying(action: .place(c.point), color: mover) {
-                let normPrior = 0.20 + 0.72 * ((c.heuristicScore - minS) / span)
+                var normPrior = 0.20 + 0.72 * ((c.heuristicScore - minS) / span)
+                if let nn = neuralEval {
+                    let nnProb = nn.policy[c.point.row * n + c.point.col]
+                    normPrior = normPrior * 0.58 + min(1.0, nnProb * 7.5) * 0.42
+                }
                 built.append(MCTSNode(
                     movePoint: c.point,
                     reason: c.reason,
@@ -458,13 +468,111 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         }
 
         let bestMoverWR = variations.first?.winrateForMover ?? (1.0 / (1.0 + exp(-est.blackLead / Double(max(5, state.size)))))
-        let blackWR = (color == .black) ? bestMoverWR : (1.0 - bestMoverWR)
+        let blackWR = min(0.98, max(0.02, (color == .black) ? bestMoverWR : (1.0 - bestMoverWR)))
+        let counts = countStones(on: state)
+        let calibratedLead = calibratedScoreLead(
+            state: state,
+            blackCount: counts.black,
+            whiteCount: counts.white,
+            blackWinrate: blackWR,
+            rawTerritoryLead: est.blackLead
+        )
 
         return PositionAnalysis(
-            blackWinrate: min(0.98, max(0.02, blackWR)),
-            blackScoreLead: est.blackLead,
+            blackWinrate: blackWR,
+            blackScoreLead: calibratedLead,
             topVariations: variations
         )
+    }
+
+    private func countStones(on state: GoBoardState) -> (black: Int, white: Int) {
+        var b = 0, w = 0
+        for stone in state.grid {
+            if stone == .black { b += 1 }
+            else if stone == .white { w += 1 }
+        }
+        return (b, w)
+    }
+
+    /// Prevents flood-fill territory estimation from assigning the entire empty board (+353.5 pts!)
+    /// during early opening moves when only one color or very few stones exist, and ensures
+    /// scoreLead stays directionally consistent with blackWinrate.
+    private func calibratedScoreLead(
+        state: GoBoardState,
+        blackCount: Int,
+        whiteCount: Int,
+        blackWinrate: Double,
+        rawTerritoryLead: Double
+    ) -> Double {
+        let clampedWR = min(0.96, max(0.04, blackWinrate))
+        let wrLead = log(clampedWR / (1.0 - clampedWR)) * Double(state.size) * 0.25
+        let totalStones = blackCount + whiteCount
+        let boardArea = Double(state.size * state.size)
+
+        // Before both players have stones or in early opening, flood-fill territory is meaningless.
+        if blackCount == 0 || whiteCount == 0 || totalStones < max(6, state.size / 2) {
+            return (wrLead * 2.0).rounded() / 2.0
+        }
+
+        // Guard against wildly inflated flood-fill leads when the board is still mostly open.
+        let fillRatio = Double(totalStones) / max(1.0, boardArea)
+        let maxPlausibleLead = fillRatio < 0.25 ? Double(state.size) * 1.5 : boardArea * 0.45
+        if abs(rawTerritoryLead) > maxPlausibleLead {
+            return (wrLead * 2.0).rounded() / 2.0
+        }
+
+        // If winrate and raw territory lead disagree strongly in sign, trust winrate-calibrated lead.
+        let wrSign = blackWinrate - 0.5
+        if abs(wrSign) > 0.05 && (wrSign * rawTerritoryLead < 0) {
+            return (wrLead * 2.0).rounded() / 2.0
+        }
+
+        let blend = min(1.0, max(0.0, (fillRatio - 0.08) / 0.25))
+        let result = wrLead * (1.0 - blend) + rawTerritoryLead * blend
+        return (result * 2.0).rounded() / 2.0
+    }
+
+    /// Checks whether `played` maps to any point in `candidates` under a dihedral (D4) symmetry
+    /// that leaves `state` invariant (e.g., all 4 star points on an empty board are equivalent).
+    private func isSymmetricallyEquivalent(
+        played: BoardPoint,
+        to candidates: [BoardPoint],
+        on state: GoBoardState
+    ) -> Bool {
+        if candidates.contains(played) { return true }
+        let n = state.size
+        func transform(_ pt: BoardPoint, _ sym: Int) -> BoardPoint {
+            let r = pt.row, c = pt.col
+            switch sym {
+            case 0: return BoardPoint(row: r, col: c)
+            case 1: return BoardPoint(row: r, col: n - 1 - c)
+            case 2: return BoardPoint(row: n - 1 - r, col: c)
+            case 3: return BoardPoint(row: n - 1 - r, col: n - 1 - c)
+            case 4: return BoardPoint(row: c, col: r)
+            case 5: return BoardPoint(row: c, col: n - 1 - r)
+            case 6: return BoardPoint(row: n - 1 - c, col: r)
+            default: return BoardPoint(row: n - 1 - c, col: n - 1 - r)
+            }
+        }
+        let isEmpty = state.grid.allSatisfy { $0 == nil }
+        for sym in 1..<8 {
+            let mapped = transform(played, sym)
+            guard candidates.contains(mapped) else { continue }
+            if isEmpty { return true }
+            var invariant = true
+            for r in 0..<n where invariant {
+                for c in 0..<n {
+                    let p = BoardPoint(row: r, col: c)
+                    let tp = transform(p, sym)
+                    if state.stone(at: p) != state.stone(at: tp) {
+                        invariant = false
+                        break
+                    }
+                }
+            }
+            if invariant { return true }
+        }
+        return false
     }
 
     private func analyzeGameSync(
@@ -483,11 +591,11 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         // Fast per-move evaluation calibrated by game length so full-game review completes in ~1-2s!
         let perMoveIters = moves.count > 80 ? 28 : (moves.count > 40 ? 44 : 64)
         var winrateHistory: [Double] = [0.5]
-        var scoreLeadHistory: [Double] = [-initialState.komi]
+        var scoreLeadHistory: [Double] = [0.0]
         var reviewed: [ReviewedMove] = []
 
         var prevBlackWR = 0.5
-        var prevBlackLead = -initialState.komi
+        var prevBlackLead = 0.0
 
         for (i, mv) in moves.enumerated() {
             let stateBefore = states[i]
@@ -495,40 +603,68 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
 
             let preAnalysis = analyzePositionSync(for: stateBefore, color: mv.color, maxVariations: 3, iterations: perMoveIters)
             let afterEst = GoScoring.estimateTerritory(state: stateAfter)
-            let afterBlackLead = afterEst.blackLead
-            let rawAfterWR = 1.0 / (1.0 + exp(-afterBlackLead / Double(max(6, stateAfter.size))))
-            // Blend MCTS & territory estimate for smooth, realistic winrate curves
             let bestBeforeMoverWR = preAnalysis.topVariations.first?.winrateForMover ?? (mv.color == .black ? prevBlackWR : (1.0 - prevBlackWR))
             let bestMovePt = preAnalysis.topVariations.first?.firstMove
+            let topCandidatePts = Array(preAnalysis.topVariations.prefix(2).map(\.firstMove))
+
+            let isBeforeEmpty = stateBefore.grid.allSatisfy { $0 == nil }
+            let playedIsOpeningStandard: Bool = {
+                guard isBeforeEmpty, case .place(let p) = mv.action else { return false }
+                let s = stateBefore.size
+                let minEdge = min(p.row, p.col, s - 1 - p.row, s - 1 - p.col)
+                return s >= 9 ? (minEdge >= 2) : (minEdge >= 1)
+            }()
 
             let playedIsTop: Bool = {
                 if case .place(let p) = mv.action {
-                    return preAnalysis.topVariations.prefix(2).contains(where: { $0.firstMove == p })
+                    if playedIsOpeningStandard { return true }
+                    return isSymmetricallyEquivalent(played: p, to: topCandidatePts, on: stateBefore)
                 }
                 return false
             }()
 
+            let stoneCounts = countStones(on: stateAfter)
+            let totalStonesAfter = stoneCounts.black + stoneCounts.white
+            let hasBothColors = stoneCounts.black > 0 && stoneCounts.white > 0
+            let rawAfterWR: Double = hasBothColors
+                ? (1.0 / (1.0 + exp(-afterEst.blackLead / Double(max(6, stateAfter.size)))))
+                : 0.5
+
             let afterBlackWR: Double
-            if playedIsTop {
+            if isBeforeEmpty && playedIsTop {
+                afterBlackWR = 0.5
+            } else if playedIsTop {
                 afterBlackWR = (mv.color == .black) ? bestBeforeMoverWR : (1.0 - bestBeforeMoverWR)
             } else {
                 afterBlackWR = 0.55 * rawAfterWR + 0.45 * prevBlackWR
             }
 
+            let afterBlackLead = calibratedScoreLead(
+                state: stateAfter,
+                blackCount: stoneCounts.black,
+                whiteCount: stoneCounts.white,
+                blackWinrate: afterBlackWR,
+                rawTerritoryLead: afterEst.blackLead
+            )
+
             let moverWRBefore = (mv.color == .black) ? prevBlackWR : (1.0 - prevBlackWR)
             let moverWRAfter = (mv.color == .black) ? afterBlackWR : (1.0 - afterBlackWR)
-            let wrDrop = max(0.0, moverWRBefore - moverWRAfter)
+            let wrDrop = (isBeforeEmpty && playedIsTop) ? 0.0 : max(0.0, moverWRBefore - moverWRAfter)
 
             let moverLeadBefore = (mv.color == .black) ? prevBlackLead : -prevBlackLead
             let moverLeadAfter = (mv.color == .black) ? afterBlackLead : -afterBlackLead
-            let scoreDrop = max(0.0, moverLeadBefore - moverLeadAfter)
+            let scoreDrop = (isBeforeEmpty && playedIsTop) ? 0.0 : max(0.0, moverLeadBefore - moverLeadAfter)
+
+            // Ensure Move 1 symmetric standard opening isn't compared against an equivalent corner
+            let effectiveBestPoint = (isBeforeEmpty && playedIsTop) ? nil : bestMovePt
+            let _ = totalStonesAfter
 
             // Detect concrete Go tactical mistakes for plain-language kid-friendly feedback!
             let (quality, diagZh, diagEn) = diagnoseMove(
                 move: mv,
                 stateBefore: stateBefore,
                 stateAfter: stateAfter,
-                bestPoint: bestMovePt,
+                bestPoint: effectiveBestPoint,
                 bestReason: preAnalysis.topVariations.first?.reason,
                 wrDrop: wrDrop,
                 scoreDrop: scoreDrop,
@@ -660,9 +796,9 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         let isCaptureRace = ruleSet.isCaptureRace
 
         // Character playstyle + Coaching theme weights
-        var atariWeight: Double = (level == .rabbit || level == .fox) ? 1.30 : (level == .panda ? 0.92 : 1.05)
-        var connectWeight: Double = (level == .panda || level == .crane) ? 1.35 : 1.05
-        var cutWeight: Double = (level == .fox || level == .dragon) ? 1.35 : 1.05
+        var atariWeight: Double = (level == .rabbit || level == .fox || level == .tiger) ? 1.30 : (level == .panda || level == .deer ? 0.94 : 1.08)
+        var connectWeight: Double = (level == .panda || level == .crane || level == .deer) ? 1.35 : 1.08
+        var cutWeight: Double = (level == .fox || level == .tiger || level.isHighDan) ? 1.35 : 1.05
         let captureMultiplier: Double = isCaptureRace ? 1.65 : 1.0
 
         switch coachingStyle {

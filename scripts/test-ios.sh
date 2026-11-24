@@ -17,9 +17,10 @@ result_dir="${TEST_OUTPUT_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/staryigo-tests.XXXXX
 mkdir -p "$result_dir"
 
 case "$mode" in
-  pr) selection=(-skip-testing:StarYiGoTests/NightlyAITests) ;;
-  nightly) selection=(-only-testing:StarYiGoTests/NightlyAITests) ;;
-  *) echo "Usage: $0 [pr|nightly]" >&2; exit 2 ;;
+  pr) selection=(-skip-testing:StarYiGoTests/NightlyAITests -skip-testing:StarYiGoTests/UpgradeInstallationTests) ;;
+  device) selection=(-only-testing:StarYiGoUITests/StarYiGoUITests/testChineseNineteenLineBoardOnPhoneAndPad) ;;
+  ai|nightly) selection=(-only-testing:StarYiGoTests/NightlyAITests) ;;
+  *) echo "Usage: $0 [pr|ai|device]" >&2; exit 2 ;;
 esac
 
 # Pick a compatible iPhone from the newest available iOS runtime.

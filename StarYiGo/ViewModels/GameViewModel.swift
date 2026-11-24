@@ -5,6 +5,7 @@
 
 import Combine
 import Foundation
+import UIKit
 
 enum CompanionMood: Equatable {
     case greeting
@@ -41,9 +42,10 @@ final class GameViewModel: ObservableObject {
     @Published var highlightedPocketPoints: Set<BoardPoint> = []
     @Published var activeCountingPocketLabel: String? = nil
 
-    // Go Clock & Byoyomi State
+    // Go Clock & Byoyomi State + Per-Player Elapsed Time
     @Published var clock: GoClock
-    @Published var impulseWarningBanner: String? = nil
+    @Published var blackElapsedSeconds: Int = 0
+    @Published var whiteElapsedSeconds: Int = 0
 
     // Nintendo Companion Personality State
     @Published var companionMood: CompanionMood = .greeting
@@ -56,10 +58,6 @@ final class GameViewModel: ObservableObject {
     // Two-Player Tabletop 180° Face-to-Face Mode + Parent-Child Assist
     @Published var isTabletopFaceToFace: Bool = false
     @Published var tabletopKidAssistColor: StoneColor? = nil
-
-    // Co-op Pair Go vs Boss (Parent & Child alternate turns together!)
-    @Published var isCoopMode: Bool = false
-    @Published var coopTurnSeat: Int = 1 // 1 = Kid, 2 = Parent
 
     // Tactile physical feedback events for GoBoardView animations
     @Published var lastCapturedPoints: [BoardPoint] = []
@@ -75,25 +73,63 @@ final class GameViewModel: ObservableObject {
     let handicap: Int
     let bossIslandId: String?
     let examTier: Int?
+    let tacticalScenario: TacticalScenario?
+    let campaignNodeId: String?
+
+    /// Board marker labels for tactical scenarios (e.g. 🎯 on the target White group or ★ on the Black dragon to save).
+    var scenarioBoardLabels: [BoardPoint: String] {
+        guard let scenario = tacticalScenario, let pt = scenario.markedPoint, boardState.stone(at: pt) != nil else {
+            return [:]
+        }
+        switch scenario.goal {
+        case .captureMarkedGroup: return [pt: "🎯"]
+        case .surviveAndLive: return [pt: "★"]
+        default: return [:]
+        }
+    }
+
+    var scenarioProgressSummary: String? {
+        guard let scenario = tacticalScenario else { return nil }
+        let isZh = appState?.l10n.language.isChinese ?? true
+        switch scenario.goal {
+        case .captureRace(let target):
+            return isZh ? "提子目标：\(boardState.blackCaptures)/\(target)" : "Captures: \(boardState.blackCaptures)/\(target)"
+        case .captureMarkedGroup(_, let maxPlies):
+            let left = max(0, maxPlies - moves.count)
+            return isZh ? "吃掉 🎯 目标 · 剩余 \(left) 手" : "Capture 🎯 · \(left) moves left"
+        case .surviveAndLive(_, let survivePlies):
+            let left = max(0, survivePlies - moves.count)
+            return isZh ? "守住 ★ 黑龙 · 还需坚持 \(left) 手或两眼活" : "Keep ★ alive · \(left) moves left"
+        case .endgameComeback(let maxPlies):
+            let left = max(0, maxPlies - moves.count)
+            return isZh ? "收官逆转 · 剩余 \(left) 手结算" : "Endgame · \(left) moves to score"
+        }
+    }
 
     private let aiEngine: GoAIEngine
     private weak var appState: AppState?
     private var stateHistory: [GoBoardState] = []
     /// Tracks human-perspective lead after each ply for Time Hourglass turning-point analysis.
     private var humanLeadHistory: [Double] = [0]
-    private var aiTask: Task<Void, Never>?
+    private(set) var aiTask: Task<Void, Never>?
     private var bannerDismissTask: Task<Void, Never>?
     private var pocketAnimTask: Task<Void, Never>?
+    private var isSuspended = false
     private var clockTimer: Timer?
     private var lastTurnStartTime: Date = Date()
-    private var didWarnImpulseThisTurn: Bool = false
+    private var lastHumanThinkDuration: TimeInterval?
+    private let simulateHumanThinkingPacing: Bool
 
     var isExamMatch: Bool {
         examTier != nil || (appState?.settings.assistPreset == .examSim)
     }
 
     var isUndoAllowed: Bool {
-        !isExamMatch
+        guard !isExamMatch, !isAIThinking, !isGameOver else { return false }
+        if let humanColor {
+            return moves.contains { $0.color == humanColor }
+        }
+        return !moves.isEmpty
     }
 
     var isGameOver: Bool {
@@ -103,6 +139,36 @@ final class GameViewModel: ObservableObject {
     var isTwoPlayer: Bool {
         if case .twoPlayer = mode { return true }
         return false
+    }
+
+    var shouldConfirmBeforeLeaving: Bool {
+        !isTwoPlayer && !isGameOver && !moves.isEmpty
+    }
+
+    func makePausedAIMatchSnapshot() -> PausedAIMatchSnapshot? {
+        guard case .vsAI(let difficulty, let playerColor) = mode,
+              !isExamMatch,
+              bossIslandId == nil,
+              tacticalScenario == nil,
+              !isGameOver,
+              !moves.isEmpty else {
+            return nil
+        }
+        return PausedAIMatchSnapshot(
+            boardSize: boardSize,
+            difficulty: difficulty,
+            playerColor: playerColor,
+            handicap: handicap,
+            ruleSet: ruleSet,
+            scoringRule: scoringRule,
+            timeControl: timeControl,
+            coachingStyle: coachingStyle,
+            moves: moves,
+            clock: clock,
+            blackElapsedSeconds: blackElapsedSeconds,
+            whiteElapsedSeconds: whiteElapsedSeconds,
+            savedAt: Date()
+        )
     }
 
     var aiDifficulty: AIDifficulty? {
@@ -125,9 +191,16 @@ final class GameViewModel: ObservableObject {
         }
     }
 
+    var stonePlacementMode: StonePlacementMode {
+        appState?.settings.stonePlacementMode ?? .doubleTap
+    }
+
+    var showsConfirmPlacementButton: Bool {
+        appState != nil && stonePlacementMode == .confirmButton
+    }
+
     var requiresConfirmBeforePlace: Bool {
-        guard let settings = appState?.settings else { return false }
-        return settings.confirmBeforePlace && boardSize.rawValue >= 13
+        appState != nil
     }
 
     var companionDialogueText: String {
@@ -159,10 +232,12 @@ final class GameViewModel: ObservableObject {
         coachingStyle: AICoachingStyle = .standard,
         handicap: Int = 0,
         bossIslandId: String? = nil,
-        isCoopMode: Bool = false,
         examTier: Int? = nil,
+        tacticalScenario: TacticalScenario? = nil,
+        campaignNodeId: String? = nil,
         aiEngine: GoAIEngine = CoreMLGoAIEngine.shared,
-        appState: AppState? = nil
+        appState: AppState? = nil,
+        simulateHumanThinkingPacing: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
     ) {
         self.boardSize = boardSize
         self.mode = mode
@@ -173,17 +248,95 @@ final class GameViewModel: ObservableObject {
         self.clock = GoClock(timeControl: timeControl)
         self.handicap = handicap
         self.bossIslandId = bossIslandId
-        self.isCoopMode = isCoopMode
         self.examTier = examTier
+        self.tacticalScenario = tacticalScenario
+        self.campaignNodeId = campaignNodeId
         self.aiEngine = aiEngine
         self.appState = appState
+        self.simulateHumanThinkingPacing = simulateHumanThinkingPacing
 
-        let komi = handicap > 0 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
-        let initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
+        let initial: GoBoardState
+        if let scenario = tacticalScenario {
+            initial = scenario.makeInitialState()
+        } else {
+            let komi = handicap > 0 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
+            initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
+        }
         self.boardState = initial
         self.stateHistory = [initial]
         self.humanLeadHistory = [0]
         self.lastTurnStartTime = Date()
+
+        startClockIfNeeded()
+        triggerAIIfNeeded()
+    }
+
+    convenience init(
+        resuming snapshot: PausedAIMatchSnapshot,
+        aiEngine: GoAIEngine = CoreMLGoAIEngine.shared,
+        appState: AppState? = nil,
+        simulateHumanThinkingPacing: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+    ) {
+        self.init(
+            boardSize: snapshot.boardSize,
+            mode: .vsAI(difficulty: snapshot.difficulty, playerColor: snapshot.playerColor),
+            ruleSet: snapshot.ruleSet,
+            scoringRule: snapshot.scoringRule,
+            timeControl: snapshot.timeControl,
+            coachingStyle: snapshot.coachingStyle,
+            handicap: snapshot.handicap,
+            bossIslandId: nil,
+            examTier: nil,
+            tacticalScenario: nil,
+            campaignNodeId: nil,
+            aiEngine: aiEngine,
+            appState: appState,
+            simulateHumanThinkingPacing: simulateHumanThinkingPacing
+        )
+        restore(from: snapshot)
+    }
+
+    private func restore(from snapshot: PausedAIMatchSnapshot) {
+        aiTask?.cancel()
+        isAIThinking = false
+        pendingPoint = nil
+        suggestions = []
+
+        let komi = snapshot.handicap > 0 ? 0.5 : snapshot.scoringRule.defaultKomi(for: snapshot.boardSize)
+        var state = GoBoardState(size: snapshot.boardSize.rawValue, komi: komi, handicap: snapshot.handicap)
+        var history: [GoBoardState] = [state]
+        var replayedMoves: [GoMove] = []
+        var leads: [Double] = [0]
+
+        for move in snapshot.moves {
+            if case .success(let outcome) = state.applying(action: move.action, color: move.color) {
+                state = outcome.nextState
+                history.append(state)
+                replayedMoves.append(
+                    GoMove(
+                        moveNumber: replayedMoves.count + 1,
+                        color: move.color,
+                        action: move.action,
+                        capturedPoints: outcome.capturedPoints
+                    )
+                )
+                let est = GoScoring.estimateTerritory(state: state)
+                let lead = (snapshot.playerColor == .black) ? est.blackLead : -est.blackLead
+                leads.append(lead)
+            }
+        }
+
+        boardState = state
+        stateHistory = history
+        moves = replayedMoves
+        humanLeadHistory = leads
+        clock = snapshot.clock
+        blackElapsedSeconds = snapshot.blackElapsedSeconds
+        whiteElapsedSeconds = snapshot.whiteElapsedSeconds
+        lastTurnStartTime = Date()
+        lastHumanThinkDuration = nil
+        companionMood = .greeting
+        companionEvent = .greet
 
         startClockIfNeeded()
         triggerAIIfNeeded()
@@ -196,10 +349,17 @@ final class GameViewModel: ObservableObject {
         clockTimer?.invalidate()
     }
 
+    func formattedElapsedTime(for color: StoneColor) -> String {
+        let secs = color == .black ? blackElapsedSeconds : whiteElapsedSeconds
+        let m = secs / 60
+        let s = secs % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+
     private func startClockIfNeeded() {
         clockTimer?.invalidate()
         clockTimer = nil
-        guard timeControl.isTimed else { return }
+        guard !isSuspended, !isGameOver else { return }
         clockTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.tickClock()
@@ -207,9 +367,29 @@ final class GameViewModel: ObservableObject {
         }
     }
 
-    private func tickClock() {
-        guard timeControl.isTimed, !isGameOver, !isMarkingDeadStones else { return }
+    func setSuspended(_ suspended: Bool) {
+        guard isSuspended != suspended else { return }
+        isSuspended = suspended
+        if suspended {
+            clockTimer?.invalidate()
+            clockTimer = nil
+            aiTask?.cancel()
+            isAIThinking = false
+        } else if !isGameOver {
+            startClockIfNeeded()
+            triggerAIIfNeeded()
+        }
+    }
+
+    func tickClock() {
+        guard !isSuspended, !isGameOver, !isMarkingDeadStones else { return }
         let activeColor = boardState.currentTurn
+        if activeColor == .black {
+            blackElapsedSeconds += 1
+        } else {
+            whiteElapsedSeconds += 1
+        }
+        guard timeControl.isTimed else { return }
         let event = clock.tick(activeColor: activeColor)
         switch event {
         case .normal:
@@ -252,31 +432,26 @@ final class GameViewModel: ObservableObject {
             unsealedWarningPoints = []
         }
 
-        // Anti-Impulse Guard ("防随手冷静保护"): gentle nudge if a kid taps < 1.5s after opponent's move
-        if appState?.settings.antiImpulseGuard == true,
-           !didWarnImpulseThisTurn,
-           moves.count >= 2,
-           Date().timeIntervalSince(lastTurnStartTime) < 1.5,
-           pendingPoint == nil {
-            didWarnImpulseThisTurn = true
-            SoundAndHapticsManager.shared.playHint()
-            let isZh = appState?.l10n.language.isChinese ?? true
-            showTransientBanner(
-                isZh ? "别着急秒拍！先看一眼对手刚走的棋再落子哦 ✨" : "Hold on! Take 2 seconds to check your opponent's move first ✨",
-                duration: 2.2
-            )
-            return
-        }
-
         if requiresConfirmBeforePlace {
-            if pendingPoint == point {
-                confirmPendingPlacement()
-            } else if boardState.stone(at: point) == nil {
-                pendingPoint = point
-                SoundAndHapticsManager.shared.playGridTick()
-                statusBanner = nil
-            } else {
-                triggerIllegalFeedback(at: point, error: .occupied)
+            switch stonePlacementMode {
+            case .doubleTap:
+                if pendingPoint == point {
+                    confirmPendingPlacement()
+                } else if boardState.stone(at: point) == nil {
+                    pendingPoint = point
+                    SoundAndHapticsManager.shared.playGridTick()
+                    statusBanner = nil
+                } else {
+                    triggerIllegalFeedback(at: point, error: .occupied)
+                }
+            case .confirmButton:
+                if boardState.stone(at: point) == nil {
+                    pendingPoint = point
+                    SoundAndHapticsManager.shared.playGridTick()
+                    statusBanner = nil
+                } else {
+                    triggerIllegalFeedback(at: point, error: .occupied)
+                }
             }
             return
         }
@@ -321,7 +496,7 @@ final class GameViewModel: ObservableObject {
     }
 
     func undo() {
-        guard isUndoAllowed, !isAIThinking, !isGameOver, !moves.isEmpty else { return }
+        guard isUndoAllowed else { return }
         if isMarkingDeadStones {
             cancelDeadStoneReview()
         }
@@ -342,6 +517,7 @@ final class GameViewModel: ObservableObject {
         }
 
         refreshTerritoryIfVisible()
+        triggerAIIfNeeded()
     }
 
     /// Nintendo "Time Hourglass" — rewinds the match straight back to before a turning-point move so kids can retry!
@@ -370,6 +546,7 @@ final class GameViewModel: ObservableObject {
         companionMood = .cheering
         companionEvent = .greet
         SoundAndHapticsManager.shared.playHourglassRewind()
+        SoundAndHapticsManager.shared.playVoice(.rewind, delay: 0.12)
 
         triggerAIIfNeeded()
     }
@@ -404,21 +581,7 @@ final class GameViewModel: ObservableObject {
 
     /// Enters dead-stone confirmation (auto-marking trapped dead stones) with unsealed-boundary readiness check!
     func beginDeadStoneReview(bypassUnsealedWarning: Bool = false) {
-        guard !isGameOver else { return }
-        if ruleSet.isCaptureRace {
-            let winner: StoneColor = boardState.blackCaptures >= boardState.whiteCaptures ? .black : .white
-            finishGame(with: GameResult(
-                winner: winner,
-                blackScore: Double(boardState.blackCaptures),
-                whiteScore: Double(boardState.whiteCaptures),
-                komi: 0,
-                byResignation: false,
-                byCaptureRace: true,
-                captureTarget: ruleSet.captureTarget,
-                boardSize: boardSize.rawValue
-            ))
-            return
-        }
+        guard !isGameOver, !ruleSet.isCaptureRace else { return }
 
         let estimatedDead = GoScoring.autoEstimateDeadStones(state: boardState)
         let readiness = GoScoring.analyzeEndgameReadiness(state: boardState, deadStoneIndices: estimatedDead)
@@ -447,10 +610,12 @@ final class GameViewModel: ObservableObject {
 
     /// Lets players immediately resume the game to play out any disputed dead/alive group!
     func playOutDispute() {
-        pocketAnimTask?.cancel()
-        highlightedPocketPoints = []
-        activeCountingPocketLabel = nil
+        guard isMarkingDeadStones else { return }
         cancelDeadStoneReview()
+        // Resuming opens a new passing sequence, even if the AI passes immediately.
+        boardState.consecutivePasses = 0
+        stateHistory[stateHistory.count - 1] = boardState
+        triggerAIIfNeeded()
         let isZh = appState?.l10n.language.isChinese ?? true
         showTransientBanner(
             isZh ? "已恢复对局：请直接续下验证争议棋块的死活！" : "Match resumed: Play out the disputed group to prove life or death!",
@@ -515,7 +680,7 @@ final class GameViewModel: ObservableObject {
         finishGame(with: result)
     }
 
-    func cancelDeadStoneReview() {
+    private func cancelDeadStoneReview() {
         pocketAnimTask?.cancel()
         highlightedPocketPoints = []
         activeCountingPocketLabel = nil
@@ -575,21 +740,27 @@ final class GameViewModel: ObservableObject {
         lastCapturedPoints = []
         illegalFlashPoint = nil
         moves = []
-        coopTurnSeat = 1
         companionMood = .greeting
         companionEvent = .greet
 
-        let komi = handicap > 0 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
-        let initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
+        let initial: GoBoardState
+        if let scenario = tacticalScenario {
+            initial = scenario.makeInitialState()
+        } else {
+            let komi = handicap > 0 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
+            initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
+        }
         boardState = initial
         stateHistory = [initial]
         humanLeadHistory = [0]
         clock = GoClock(timeControl: timeControl)
+        blackElapsedSeconds = 0
+        whiteElapsedSeconds = 0
         unsealedWarningPoints = []
         highlightedPocketPoints = []
         activeCountingPocketLabel = nil
         lastTurnStartTime = Date()
-        didWarnImpulseThisTurn = false
+        lastHumanThinkDuration = nil
         startClockIfNeeded()
         triggerAIIfNeeded()
     }
@@ -606,9 +777,7 @@ final class GameViewModel: ObservableObject {
                 SoundAndHapticsManager.shared.playWrong()
             }
         case .success(let outcome):
-            if isCoopMode {
-                coopTurnSeat = (coopTurnSeat == 1) ? 2 : 1
-            }
+            lastHumanThinkDuration = max(0, Date().timeIntervalSince(lastTurnStartTime))
             applySuccessfulOutcome(outcome, action: action, color: color)
             if !isGameOver {
                 triggerAIIfNeeded()
@@ -619,6 +788,7 @@ final class GameViewModel: ObservableObject {
     private func triggerIllegalFeedback(at point: BoardPoint, error: MoveError) {
         if error == .koViolation || error == .suicide {
             SoundAndHapticsManager.shared.playKoBounce()
+            SoundAndHapticsManager.shared.playVoice(.illegalMove, delay: 0.08, cooldown: 2.5)
             if error == .koViolation {
                 appState?.unlockCodexTerm("ko", showToast: true)
             } else {
@@ -626,6 +796,7 @@ final class GameViewModel: ObservableObject {
             }
         } else {
             SoundAndHapticsManager.shared.playWrong()
+            SoundAndHapticsManager.shared.playVoice(.illegalMove, delay: 0.08, cooldown: 2.5)
         }
         illegalFlashPoint = point
         illegalEventID = UUID()
@@ -648,7 +819,7 @@ final class GameViewModel: ObservableObject {
 
     private func triggerAIIfNeeded() {
         guard case .vsAI(let difficulty, let humanColor) = mode else { return }
-        guard !isGameOver, !isMarkingDeadStones, boardState.currentTurn != humanColor else { return }
+        guard !isSuspended, !isGameOver, !isMarkingDeadStones, boardState.currentTurn != humanColor else { return }
 
         isAIThinking = true
         companionMood = .thinking
@@ -657,6 +828,9 @@ final class GameViewModel: ObservableObject {
         let aiColor = boardState.currentTurn
         let currentRules = ruleSet
         let style = coachingStyle
+        let humanThinkDuration = lastHumanThinkDuration
+        let clockSnapshot = clock
+        let useHumanPacing = simulateHumanThinkingPacing && (appState?.settings.aiSimulatedThinkingEnabled ?? true)
 
         aiTask?.cancel()
         aiTask = Task { [weak self] in
@@ -668,9 +842,19 @@ final class GameViewModel: ObservableObject {
                 ruleSet: currentRules,
                 coachingStyle: style
             ) ?? .pass
+            let targetDuration: TimeInterval = useHumanPacing
+                ? AIThinkingPacer.targetThinkingDuration(
+                    for: snapshot,
+                    difficulty: difficulty,
+                    chosenAction: moveAction,
+                    lastHumanThinkDuration: humanThinkDuration,
+                    clock: clockSnapshot,
+                    aiColor: aiColor
+                )
+                : 0.26
             let elapsed = Date().timeIntervalSince(start)
-            if elapsed < 0.26 {
-                try? await Task.sleep(nanoseconds: UInt64((0.26 - elapsed) * 1_000_000_000))
+            if elapsed < targetDuration {
+                try? await Task.sleep(nanoseconds: UInt64((targetDuration - elapsed) * 1_000_000_000))
             }
             guard !Task.isCancelled, let self else { return }
             self.isAIThinking = false
@@ -690,7 +874,6 @@ final class GameViewModel: ObservableObject {
         suggestions = []
         clock.completeMove(for: color)
         lastTurnStartTime = Date()
-        didWarnImpulseThisTurn = false
         boardState = outcome.nextState
         stateHistory.append(outcome.nextState)
 
@@ -709,12 +892,54 @@ final class GameViewModel: ObservableObject {
 
         updateCompanionReaction(move: move, outcome: outcome)
 
+        let nextAtariPoints = outcome.nextState.atariPoints()
+        let hasTension = (outcome.nextState.koIndex != nil) || !nextAtariPoints.isEmpty
+        SoundAndHapticsManager.shared.setMatchTension(hasTension)
+
         if !outcome.capturedPoints.isEmpty {
             lastCapturedPoints = outcome.capturedPoints
             captureEventID = UUID()
             SoundAndHapticsManager.shared.playCapture(count: outcome.capturedPoints.count)
-        } else if case .place = action {
-            SoundAndHapticsManager.shared.playStonePlace()
+            let isHumanMove = (humanColor == nil || color == humanColor)
+            if outcome.capturedPoints.count >= 3 {
+                SoundAndHapticsManager.shared.playWonderMoment()
+                if isHumanMove {
+                    SoundAndHapticsManager.shared.playVoice(.captureBig, delay: 0.16, cooldown: 3.0)
+                }
+            } else if isHumanMove {
+                SoundAndHapticsManager.shared.playVoice(.captureSmall, delay: 0.14, cooldown: 8.0)
+            }
+        } else if case .place(let pt) = action {
+            let createdAtari = nextAtariPoints.contains { outcome.nextState.stone(at: $0) == color.opposite }
+            SoundAndHapticsManager.shared.playStonePlace(at: pt, boardSize: boardState.size, isAtari: createdAtari)
+            if createdAtari {
+                SoundAndHapticsManager.shared.playVoice(.atari, delay: 0.10, cooldown: 10.0)
+            }
+        }
+
+        if UIAccessibility.isVoiceOverRunning, let l10n = appState?.l10n {
+            let side = color == .black ? l10n.t("stone.black") : l10n.t("stone.white")
+            var parts: [String] = []
+            switch action {
+            case .place(let pt):
+                parts.append("\(side) \(pt.humanLabel(boardSize: boardState.size))")
+            case .pass:
+                parts.append(l10n.t("game.status.passBanner", side))
+            case .resign:
+                parts.append(l10n.t("game.action.resign"))
+            }
+            if !outcome.capturedPoints.isEmpty {
+                parts.append(l10n.localized(
+                    zh: "提掉 \(outcome.capturedPoints.count) 子",
+                    en: "captured \(outcome.capturedPoints.count)",
+                    ja: "\(outcome.capturedPoints.count)子取り",
+                    ko: "\(outcome.capturedPoints.count)점 따냄",
+                    zhHant: "提掉 \(outcome.capturedPoints.count) 子"
+                ))
+            } else if nextAtariPoints.contains(where: { outcome.nextState.stone(at: $0) == color.opposite }) {
+                parts.append(l10n.localized(zh: "叫吃", en: "Atari", ja: "アタリ", ko: "단수", zhHant: "叫吃"))
+            }
+            UIAccessibility.post(notification: .announcement, argument: parts.joined(separator: ", "))
         }
 
         if outcome.nextState.koIndex != nil {
@@ -732,33 +957,111 @@ final class GameViewModel: ObservableObject {
 
         // Check Capture Race (吃子棋) win condition!
         if case .captureRace(let target) = ruleSet {
-            if boardState.blackCaptures >= target {
+            let captures = color == .black ? boardState.blackCaptures : boardState.whiteCaptures
+            if captures >= target {
                 finishGame(with: GameResult(
-                    winner: .black,
+                    winner: color,
                     blackScore: Double(boardState.blackCaptures),
                     whiteScore: Double(boardState.whiteCaptures),
                     komi: 0,
                     byResignation: false,
                     byCaptureRace: true,
-                    captureTarget: target
+                    captureTarget: target,
+                    boardSize: boardState.size
                 ))
-                return
-            } else if boardState.whiteCaptures >= target {
-                finishGame(with: GameResult(
-                    winner: .white,
-                    blackScore: Double(boardState.blackCaptures),
-                    whiteScore: Double(boardState.whiteCaptures),
-                    komi: 0,
-                    byResignation: false,
-                    byCaptureRace: true,
-                    captureTarget: target
-                ))
+            }
+            return
+        }
+
+        // Check Preset SGF Tactical Scenario win/loss conditions!
+        if let scenario = tacticalScenario {
+            if evaluateTacticalScenarioGoal(scenario) {
                 return
             }
         }
 
         if boardState.isDoublePassEnded {
             beginDeadStoneReview(bypassUnsealedWarning: true)
+        }
+    }
+
+    /// Evaluates Phase 2 Tactical Scenario objectives after each ply. Returns true if the match ended.
+    private func evaluateTacticalScenarioGoal(_ scenario: TacticalScenario) -> Bool {
+        let human = humanColor ?? .black
+        switch scenario.goal {
+        case .captureRace:
+            return false // Handled above by standard `ruleSet == .captureRace(target)`
+        case .captureMarkedGroup(let targetSGF, let maxPlies):
+            if let pt = BoardPoint(sgf: targetSGF), boardState.stone(at: pt) != human.opposite {
+                // Target enemy anchor stone was captured!
+                finishGame(with: GameResult(
+                    winner: human,
+                    blackScore: Double(boardState.blackCaptures),
+                    whiteScore: Double(boardState.whiteCaptures),
+                    komi: 0,
+                    byResignation: false,
+                    byCaptureRace: true,
+                    captureTarget: nil,
+                    boardSize: boardSize.rawValue
+                ))
+                return true
+            }
+            if moves.count >= maxPlies {
+                finishGame(with: GameResult(
+                    winner: human.opposite,
+                    blackScore: Double(boardState.blackCaptures),
+                    whiteScore: Double(boardState.whiteCaptures),
+                    komi: 0,
+                    byResignation: false,
+                    byCaptureRace: true,
+                    captureTarget: nil,
+                    boardSize: boardSize.rawValue
+                ))
+                return true
+            }
+            return false
+
+        case .surviveAndLive(let anchorSGF, let survivePlies):
+            guard let pt = BoardPoint(sgf: anchorSGF) else { return false }
+            if boardState.stone(at: pt) != human {
+                // Our anchor dragon was captured -> loss
+                finishGame(with: GameResult(
+                    winner: human.opposite,
+                    blackScore: 0,
+                    whiteScore: 1,
+                    komi: 0,
+                    byResignation: false,
+                    byCaptureRace: true,
+                    captureTarget: nil,
+                    boardSize: boardSize.rawValue
+                ))
+                return true
+            }
+            let aliveInfo = boardState.twoEyeAliveAnalysis()
+            let anchorIdx = boardState.index(row: pt.row, col: pt.col)
+            if aliveInfo.aliveStoneIndices.contains(anchorIdx) || moves.count >= survivePlies {
+                finishGame(with: GameResult(
+                    winner: human,
+                    blackScore: 1,
+                    whiteScore: 0,
+                    komi: 0,
+                    byResignation: false,
+                    byCaptureRace: true,
+                    captureTarget: nil,
+                    boardSize: boardSize.rawValue
+                ))
+                return true
+            }
+            return false
+
+        case .endgameComeback(let maxPlies):
+            if moves.count >= maxPlies || boardState.isDoublePassEnded {
+                let dead = GoScoring.autoEstimateDeadStones(state: boardState)
+                let scored = GoScoring.score(state: boardState, rule: scoringRule, deadStoneIndices: dead)
+                finishGame(with: scored)
+                return true
+            }
+            return false
         }
     }
 
@@ -823,7 +1126,12 @@ final class GameViewModel: ObservableObject {
             }
         }
 
-        bestMoveNumber = bestIdx
+        let hasCapture = moves.contains { $0.color == perspective && !$0.capturedPoints.isEmpty }
+        if moves.count >= 6 || hasCapture {
+            bestMoveNumber = bestIdx
+        } else {
+            bestMoveNumber = nil
+        }
         if let worstIdx, worstDrop < -1.0 {
             turningPointMoveNumber = worstIdx
         } else {
@@ -866,9 +1174,13 @@ final class GameViewModel: ObservableObject {
         if didHumanWin {
             if bossIslandId != nil {
                 SoundAndHapticsManager.shared.playBossFanfare()
+                SoundAndHapticsManager.shared.playVoice(.bossVictory, delay: 0.26)
             } else {
                 SoundAndHapticsManager.shared.playVictoryFanfare()
+                SoundAndHapticsManager.shared.playVoice(.victory, delay: 0.24)
             }
+        } else {
+            SoundAndHapticsManager.shared.playVoice(.encourageLoss, delay: 0.20)
         }
 
         guard let appState else { return }
@@ -879,7 +1191,7 @@ final class GameViewModel: ObservableObject {
         switch mode {
         case .vsAI(let diff, let humanColor):
             let aiName = "\(l10n.t(diff.nameKey)) (\(diff.rankBadge))"
-            let playerLabel = isCoopMode ? l10n.t("game.coopTeamName", appState.profile.nickname) : appState.profile.nickname
+            let playerLabel = appState.profile.nickname
             if humanColor == .black {
                 blackName = playerLabel
                 whiteName = aiName
@@ -893,9 +1205,7 @@ final class GameViewModel: ObservableObject {
         }
 
         let sgf = SGFParser.export(
-            size: boardState.size,
-            komi: boardState.komi,
-            handicap: handicap,
+            initialState: stateHistory[0],
             blackName: blackName,
             whiteName: whiteName,
             result: result.sgfResultString,
@@ -916,6 +1226,9 @@ final class GameViewModel: ObservableObject {
         savedRecordId = record.id
         if let examTier {
             appState.recordExamMatchResult(tier: examTier, didWin: didHumanWin)
+        }
+        if let nodeId = campaignNodeId, didHumanWin {
+            appState.recordCampaignNodeCleared(nodeId: nodeId, stars: 3, masteryTier: .normal)
         }
         appState.saveCompletedGame(
             record,

@@ -22,7 +22,7 @@ struct PuzzlePlayView: View {
     }
 
     private var l10n: L10n { appState.l10n }
-    private let topBarHeight: CGFloat = 58
+    private let topBarHeight: CGFloat = 60
 
     private var isSolved: Bool {
         if case .solved = viewModel.status { return true }
@@ -51,6 +51,26 @@ struct PuzzlePlayView: View {
                         )
                         Spacer()
                         HStack(spacing: 8) {
+                            if !viewModel.isExamMode {
+                                GameCircleButton(
+                                    icon: viewModel.showHintText ? "lightbulb.fill" : "lightbulb",
+                                    palette: viewModel.showHintText ? .sun : .snow,
+                                    tint: viewModel.showHintText ? .white : AppTheme.inkPrimary,
+                                    size: 44
+                                ) {
+                                    if viewModel.showHintText {
+                                        viewModel.showHintText = false
+                                        viewModel.highlightedHintPoint = nil
+                                    } else {
+                                        viewModel.showHint()
+                                    }
+                                }
+                                .disabled(viewModel.status != .playing)
+                                .opacity(viewModel.status != .playing ? 0.45 : 1)
+                                .accessibilityLabel(l10n.t("puzzle.play.hint"))
+                                .accessibilityIdentifier("PuzzleTopRightHintButton")
+                            }
+
                             if !viewModel.isStarterBootcamp {
                                 GameCircleButton(
                                     icon: "arrow.triangle.2.circlepath",
@@ -60,7 +80,7 @@ struct PuzzlePlayView: View {
                                 ) {
                                     viewModel.shuffleTransform()
                                 }
-                                .accessibilityLabel(l10n.bilingual(zh: "旋转/黑白互换", en: "Rotate & Flip"))
+                                .accessibilityLabel(l10n.localized(zh: "旋转/黑白互换", en: "Rotate & Flip", ja: "回転・白黒反転", ko: "회전·흑백 반전", zhHant: "旋轉/黑白互換"))
 
                                 GameCircleButton(
                                     icon: viewModel.isExamMode ? "eye.slash.fill" : "eye.fill",
@@ -69,13 +89,8 @@ struct PuzzlePlayView: View {
                                     size: 44
                                 ) {
                                     viewModel.isExamMode.toggle()
-                                    SoundAndHapticsManager.shared.playUITap()
                                 }
-                                .accessibilityLabel(l10n.bilingual(zh: "无辅助考场模式", en: "Exam Mode"))
-                            }
-
-                            GameCircleButton(icon: "gearshape.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 44) {
-                                appState.showSettingsSheet = true
+                                .accessibilityLabel(l10n.localized(zh: "无辅助考场模式", en: "Exam Mode", ja: "補助なし試験モード", ko: "무보조 시험 모드", zhHant: "無輔助考場模式"))
                             }
                         }
                     }
@@ -96,8 +111,11 @@ struct PuzzlePlayView: View {
                                 .frame(width: boardSide, height: boardSide)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                            puzzleSidePanel
-                                .frame(width: sidebarWidth)
+                            ScrollView(showsIndicators: false) {
+                                puzzleSidePanel
+                            }
+                            .scrollBounceBehavior(.basedOnSize)
+                            .frame(width: sidebarWidth)
                         }
                     }
                 }
@@ -148,17 +166,19 @@ struct PuzzlePlayView: View {
     }
 
     private var puzzleBoard: some View {
-        let hideCrutches = appState.settings.zenDojoMode || viewModel.isExamMode
+        // Keep board crutches hidden by default on real puzzles; Starter Bootcamp lessons or top-right Hint reveal them.
+        let showCrutches = (viewModel.isStarterBootcamp || viewModel.showHintText) && !appState.settings.zenDojoMode && !viewModel.isExamMode
         return GoBoardView(
             boardState: viewModel.boardState,
             theme: appState.settings.boardTheme,
+            stoneStyle: appState.settings.stoneStyle,
             cropRegion: viewModel.effectiveCropRegion,
             showCoordinates: appState.settings.showCoordinates,
             showMoveNumbers: false,
-            highlightAtari: appState.settings.highlightAtari && !viewModel.isExamMode,
-            expressiveStones: appState.settings.expressiveStones && !hideCrutches,
-            showLiveLiberties: (appState.settings.showLiveLiberties || viewModel.isStarterBootcamp) && !hideCrutches,
-            showTwoEyeGlow: !hideCrutches,
+            highlightAtari: showCrutches && appState.settings.highlightAtari,
+            expressiveStones: showCrutches && appState.settings.expressiveStones,
+            showLiveLiberties: showCrutches && (appState.settings.showLiveLiberties || viewModel.isStarterBootcamp),
+            showTwoEyeGlow: showCrutches,
             puzzleHintPoint: viewModel.highlightedHintPoint,
             previewColor: viewModel.effectivePlayerColor,
             isInteractive: viewModel.status == .playing || (viewModel.status == .wrong && viewModel.isExploringFailure),
@@ -193,7 +213,7 @@ struct PuzzlePlayView: View {
                         .background(Capsule().fill(AppTheme.canvasBackground))
 
                     if viewModel.isExamMode {
-                        Text(l10n.bilingual(zh: "考场模式", en: "Exam"))
+                        Text(l10n.localized(zh: "考场模式", en: "Exam", ja: "試験モード", ko: "시험 모드", zhHant: "考場模式"))
                             .font(.system(size: 11, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
@@ -208,11 +228,21 @@ struct PuzzlePlayView: View {
                         .foregroundColor(AppTheme.inkSecondary)
                 }
 
-                Text(viewModel.puzzle.title(l10n))
+                Text(viewModel.isStarterBootcamp || viewModel.showHintText || isSolved
+                     ? viewModel.puzzle.title(l10n)
+                     : viewModel.puzzle.category.displayTitle(isChinese: l10n.language.isChinese))
                     .font(.system(size: 22, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
 
-                Text(viewModel.puzzle.prompt(l10n, activeColor: viewModel.effectivePlayerColor))
+                Text(viewModel.isStarterBootcamp || viewModel.showHintText || isSolved
+                     ? viewModel.puzzle.prompt(l10n, activeColor: viewModel.effectivePlayerColor)
+                     : l10n.localized(
+                        zh: viewModel.effectivePlayerColor == .black ? "黑先：请找出盘面唯一正解（如实在卡关，可点右上角 💡 查看提示）。" : "白先：请找出盘面唯一正解（如实在卡关，可点右上角 💡 查看提示）。",
+                        en: viewModel.effectivePlayerColor == .black ? "Black to play: Find the winning move (tap top-right 💡 only if stuck)." : "White to play: Find the winning move (tap top-right 💡 only if stuck).",
+                        ja: viewModel.effectivePlayerColor == .black ? "黒先：最善の一手を見つけましょう（迷った時は右上の💡をタップ）。" : "白先：最善の一手を見つけましょう（迷った時は右上の💡をタップ）。",
+                        ko: viewModel.effectivePlayerColor == .black ? "흑선: 최선의 한 수를 찾아보세요 (막힐 때만 우측 상단 💡 탭)." : "백선: 최선의 한 수를 찾아보세요 (막힐 때만 우측 상단 💡 탭).",
+                        zhHant: viewModel.effectivePlayerColor == .black ? "黑先：請找出盤面唯一正解（如實在卡關，可點右上角 💡 查看提示）。" : "白先：請找出盤面唯一正解（如實在卡關，可點右上角 💡 查看提示）。"
+                     ))
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -259,6 +289,7 @@ struct PuzzlePlayView: View {
                                 .foregroundColor(AppTheme.skyBottom)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
+                                .frame(minHeight: AppTheme.buttonFaceHeight)
                                 .background(Capsule().fill(AppTheme.skyTop.opacity(0.14)))
                             }
                             .tactileButton(scale: 0.94, sound: false)
@@ -278,9 +309,12 @@ struct PuzzlePlayView: View {
                                 .font(.system(size: 14, weight: .heavy, design: .rounded))
                                 .foregroundColor(AppTheme.coralBottom)
                         }
-                        Text(l10n.bilingual(
+                        Text(l10n.localized(
                             zh: "可在棋盘继续试下 1~3 手看失败原因，或点下方查看正解！",
-                            en: "Keep tapping the board to see why it fails, or watch the solution below!"
+                            en: "Keep tapping the board to see why it fails, or watch the solution below!",
+                            ja: "盤面で1〜3手試して失敗の理由を確認するか、下から正解図を見ましょう！",
+                            ko: "바둑판에 1~3수 더 두어 실패 이유를 보거나 아래에서 정답을 확인하세요!",
+                            zhHant: "可在棋盤繼續試下 1~3 手看失敗原因，或點下方查看正解！"
                         ))
                         .font(.system(size: 11.5, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
@@ -290,7 +324,7 @@ struct PuzzlePlayView: View {
                             Button {
                                 viewModel.playCorrectSolution()
                             } label: {
-                                Label(l10n.bilingual(zh: "演示正解变化", en: "Play Solution"), systemImage: "play.circle.fill")
+                                Label(l10n.localized(zh: "演示正解变化", en: "Play Solution", ja: "正解手順を再生", ko: "정답 수순 재생", zhHant: "演示正解變化"), systemImage: "play.circle.fill")
                                     .font(.system(size: 12.5, weight: .black, design: .rounded))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 16)
@@ -306,7 +340,7 @@ struct PuzzlePlayView: View {
                 case .playingSolution:
                     VStack(spacing: 8) {
                         ProgressView().tint(AppTheme.skyBottom)
-                        Text(l10n.bilingual(zh: "正在演示正解变化图...", en: "Playing official solution..."))
+                        Text(l10n.localized(zh: "正在演示正解变化图...", en: "Playing official solution...", ja: "正解手順を再生中...", ko: "정답 변화도를 재생하는 중...", zhHant: "正在演示正解變化圖..."))
                             .font(.system(size: 14, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.skyBottom)
                     }
@@ -346,32 +380,17 @@ struct PuzzlePlayView: View {
             Spacer(minLength: 4)
 
             VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    Button {
-                        viewModel.resetCurrentPuzzle()
-                    } label: {
-                        Label(l10n.t("puzzle.play.reset"), systemImage: "arrow.counterclockwise")
-                            .font(.system(size: 15, weight: .heavy, design: .rounded))
-                            .foregroundColor(AppTheme.inkPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
-
-                    Button {
-                        viewModel.showHint()
-                    } label: {
-                        Label(l10n.t("puzzle.play.hint"), systemImage: "lightbulb.fill")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                            .shadow(color: AppTheme.sunRim.opacity(0.45), radius: 1, y: 1.5)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
-                    .disabled(viewModel.status != .playing || viewModel.isExamMode)
-                    .opacity((viewModel.status != .playing || viewModel.isExamMode) ? 0.42 : 1)
+                Button {
+                    viewModel.resetCurrentPuzzle()
+                } label: {
+                    Label(l10n.t("puzzle.play.reset"), systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+                .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
 
                 ZStack {
                     if case .solved = viewModel.status {
@@ -391,6 +410,7 @@ struct PuzzlePlayView: View {
                                 .padding(.vertical, 15)
                             }
                             .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
+                            .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
                             .transition(.scale(scale: 0.90).combined(with: .opacity))
                         } else if viewModel.isStarterBootcamp {
                             Button {

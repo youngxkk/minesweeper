@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import UIKit
 
 struct UserProfile: Identifiable, Codable, Equatable, Sendable {
     var id: UUID = UUID()
@@ -21,8 +22,9 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
     var lastStreakDateStamp: String = ""
     /// Dual-track Go growth: real rank earned by clearing islands & defeating Island Masters (0=25K ... 6=1D).
     var certifiedRankTier: Int = 0
-    /// Cosmetic unlockables earned with Star Coins
+    /// Cosmetic unlockables earned with Star Coins or Sea Boss victories
     var unlockedThemeIds: Set<String> = ["kayaWood", "bambooJade", "midnightStar"]
+    var unlockedStoneStyleIds: Set<String> = [StoneStyle.classicSlateShell.rawValue]
     /// Authentic Go Terms & Tactics collected in the Go Codex
     var unlockedCodexIds: Set<String> = GoTermCodex.defaultUnlockedIds
 
@@ -41,7 +43,8 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         case 4: return "10K"
         case 5: return "5K"
         case 6: return "1D"
-        default: return "3D"
+        case 7: return "3D"
+        default: return "5D"
         }
     }
 
@@ -61,6 +64,7 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         lastStreakDateStamp: String = "",
         certifiedRankTier: Int = 0,
         unlockedThemeIds: Set<String> = ["kayaWood", "bambooJade", "midnightStar"],
+        unlockedStoneStyleIds: Set<String> = [StoneStyle.classicSlateShell.rawValue],
         unlockedCodexIds: Set<String> = GoTermCodex.defaultUnlockedIds
     ) {
         self.id = id
@@ -78,6 +82,7 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         self.lastStreakDateStamp = lastStreakDateStamp
         self.certifiedRankTier = certifiedRankTier
         self.unlockedThemeIds = unlockedThemeIds
+        self.unlockedStoneStyleIds = unlockedStoneStyleIds
         self.unlockedCodexIds = unlockedCodexIds
     }
 
@@ -99,6 +104,7 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         lastStreakDateStamp = try c.decodeIfPresent(String.self, forKey: .lastStreakDateStamp) ?? ""
         certifiedRankTier = try c.decodeIfPresent(Int.self, forKey: .certifiedRankTier) ?? 0
         unlockedThemeIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedThemeIds) ?? ["kayaWood", "bambooJade", "midnightStar"]
+        unlockedStoneStyleIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedStoneStyleIds) ?? [StoneStyle.classicSlateShell.rawValue]
         unlockedCodexIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedCodexIds) ?? GoTermCodex.defaultUnlockedIds
     }
 }
@@ -120,9 +126,27 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
     var defeatedBossIslandIds: Set<String> = []
     /// Starter 5x5 Bootcamp lesson completion stars
     var starterBootcampStars: [String: Int] = [:]
+    /// Campaign nodeId -> best star count (1...3) across all 4 Seas / 20 Islands / 100 Nodes
+    var campaignNodeStars: [String: Int] = [:]
+    /// Campaign nodeId -> highest mastery tier achieved (1 = Normal, 2 = Rotated/Flip, 3 = Exam Crown)
+    var campaignNodeMasteryTier: [String: Int] = [:]
+    /// Sea IDs unlocked via Placement Onboarding or Sea Skip Gate (e.g., "sea-2", "sea-3", "sea-4")
+    var unlockedSeaIds: Set<String> = []
+    /// Whether player has completed or dismissed initial placement onboarding
+    var didCompletePlacement: Bool = false
+    /// Endless Puzzle Rush high score (max consecutive/total solved in one 3-life run)
+    var bestPuzzleRushScore: Int = 0
+    /// Highest rank badge reached during Puzzle Rush (e.g. "12K", "3K", "2D")
+    var bestPuzzleRushRank: String = "25K"
+
+    var totalCampaignStars: Int {
+        campaignNodeStars.values.reduce(0, +)
+    }
 
     var totalStars: Int {
-        starsByPuzzleId.values.reduce(0, +) + starterBootcampStars.values.reduce(0, +)
+        starsByPuzzleId.values.reduce(0, +)
+            + starterBootcampStars.values.reduce(0, +)
+            + totalCampaignStars
     }
 
     var solvedCount: Int {
@@ -141,7 +165,13 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         completedJosekiIds: Set<String> = [],
         rankExamRecord: RankExamRecord = RankExamRecord(),
         defeatedBossIslandIds: Set<String> = [],
-        starterBootcampStars: [String: Int] = [:]
+        starterBootcampStars: [String: Int] = [:],
+        campaignNodeStars: [String: Int] = [:],
+        campaignNodeMasteryTier: [String: Int] = [:],
+        unlockedSeaIds: Set<String> = [],
+        didCompletePlacement: Bool = false,
+        bestPuzzleRushScore: Int = 0,
+        bestPuzzleRushRank: String = "25K"
     ) {
         self.starsByPuzzleId = starsByPuzzleId
         self.mistakeBookIds = mistakeBookIds
@@ -151,6 +181,12 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         self.rankExamRecord = rankExamRecord
         self.defeatedBossIslandIds = defeatedBossIslandIds
         self.starterBootcampStars = starterBootcampStars
+        self.campaignNodeStars = campaignNodeStars
+        self.campaignNodeMasteryTier = campaignNodeMasteryTier
+        self.unlockedSeaIds = unlockedSeaIds
+        self.didCompletePlacement = didCompletePlacement
+        self.bestPuzzleRushScore = bestPuzzleRushScore
+        self.bestPuzzleRushRank = bestPuzzleRushRank
     }
 
     init(from decoder: Decoder) throws {
@@ -164,6 +200,12 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         rankExamRecord = try c.decodeIfPresent(RankExamRecord.self, forKey: .rankExamRecord) ?? RankExamRecord()
         defeatedBossIslandIds = try c.decodeIfPresent(Set<String>.self, forKey: .defeatedBossIslandIds) ?? []
         starterBootcampStars = try c.decodeIfPresent([String: Int].self, forKey: .starterBootcampStars) ?? [:]
+        campaignNodeStars = try c.decodeIfPresent([String: Int].self, forKey: .campaignNodeStars) ?? [:]
+        campaignNodeMasteryTier = try c.decodeIfPresent([String: Int].self, forKey: .campaignNodeMasteryTier) ?? [:]
+        unlockedSeaIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedSeaIds) ?? []
+        didCompletePlacement = try c.decodeIfPresent(Bool.self, forKey: .didCompletePlacement) ?? false
+        bestPuzzleRushScore = try c.decodeIfPresent(Int.self, forKey: .bestPuzzleRushScore) ?? 0
+        bestPuzzleRushRank = try c.decodeIfPresent(String.self, forKey: .bestPuzzleRushRank) ?? "25K"
     }
 }
 
@@ -204,22 +246,169 @@ struct SavedGameRecord: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+struct PhotoJudgeRecord: Identifiable, Codable, Equatable, Sendable {
+    static let maxStoredCount = 100
+
+    let id: UUID
+    let date: Date
+    var boardSize: Int
+    var scoringRule: ScoringRule
+    var komi: Double
+    /// Compact grid: 0 = empty, 1 = black, 2 = white (length == boardSize * boardSize).
+    var grid: [Int]
+    var deadStoneIndices: [Int]
+    var winner: StoneColor
+    var margin: Double
+    var chineseZiMargin: Double
+    var blackStones: Int
+    var whiteStones: Int
+    var blackTerritory: Int
+    var whiteTerritory: Int
+    var blackWinrate: Double?
+    /// Filename of the JPEG-compressed warped board photo stored on disk.
+    var imageFilename: String?
+
+    init(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        boardSize: Int,
+        scoringRule: ScoringRule,
+        komi: Double,
+        grid: [Int],
+        deadStoneIndices: [Int] = [],
+        winner: StoneColor,
+        margin: Double,
+        chineseZiMargin: Double,
+        blackStones: Int,
+        whiteStones: Int,
+        blackTerritory: Int,
+        whiteTerritory: Int,
+        blackWinrate: Double? = nil,
+        imageFilename: String? = nil
+    ) {
+        self.id = id
+        self.date = date
+        self.boardSize = boardSize
+        self.scoringRule = scoringRule
+        self.komi = komi
+        self.grid = grid
+        self.deadStoneIndices = deadStoneIndices
+        self.winner = winner
+        self.margin = margin
+        self.chineseZiMargin = chineseZiMargin
+        self.blackStones = blackStones
+        self.whiteStones = whiteStones
+        self.blackTerritory = blackTerritory
+        self.whiteTerritory = whiteTerritory
+        self.blackWinrate = blackWinrate
+        self.imageFilename = imageFilename
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        date = try c.decodeIfPresent(Date.self, forKey: .date) ?? Date()
+        let decodedSize = try c.decodeIfPresent(Int.self, forKey: .boardSize) ?? 19
+        boardSize = decodedSize
+        scoringRule = try c.decodeIfPresent(ScoringRule.self, forKey: .scoringRule) ?? .chinese
+        komi = try c.decodeIfPresent(Double.self, forKey: .komi) ?? 7.5
+        grid = try c.decodeIfPresent([Int].self, forKey: .grid) ?? Array(repeating: 0, count: decodedSize * decodedSize)
+        deadStoneIndices = try c.decodeIfPresent([Int].self, forKey: .deadStoneIndices) ?? []
+        winner = try c.decodeIfPresent(StoneColor.self, forKey: .winner) ?? .black
+        margin = try c.decodeIfPresent(Double.self, forKey: .margin) ?? 0
+        chineseZiMargin = try c.decodeIfPresent(Double.self, forKey: .chineseZiMargin) ?? 0
+        blackStones = try c.decodeIfPresent(Int.self, forKey: .blackStones) ?? 0
+        whiteStones = try c.decodeIfPresent(Int.self, forKey: .whiteStones) ?? 0
+        blackTerritory = try c.decodeIfPresent(Int.self, forKey: .blackTerritory) ?? 0
+        whiteTerritory = try c.decodeIfPresent(Int.self, forKey: .whiteTerritory) ?? 0
+        blackWinrate = try c.decodeIfPresent(Double.self, forKey: .blackWinrate)
+        imageFilename = try c.decodeIfPresent(String.self, forKey: .imageFilename)
+    }
+
+    static func from(
+        id: UUID = UUID(),
+        date: Date = Date(),
+        boardState: GoBoardState,
+        scoringRule: ScoringRule,
+        deadStoneIndices: Set<Int>,
+        result: GameResult,
+        blackWinrate: Double? = nil,
+        imageFilename: String? = nil
+    ) -> PhotoJudgeRecord {
+        let compactGrid = boardState.grid.map { stone -> Int in
+            switch stone {
+            case .black: return 1
+            case .white: return 2
+            case nil: return 0
+            }
+        }
+        return PhotoJudgeRecord(
+            id: id,
+            date: date,
+            boardSize: boardState.size,
+            scoringRule: scoringRule,
+            komi: boardState.komi,
+            grid: compactGrid,
+            deadStoneIndices: deadStoneIndices.sorted(),
+            winner: result.winner,
+            margin: result.margin,
+            chineseZiMargin: result.chineseZiMargin,
+            blackStones: result.blackStones,
+            whiteStones: result.whiteStones,
+            blackTerritory: result.blackTerritory,
+            whiteTerritory: result.whiteTerritory,
+            blackWinrate: blackWinrate,
+            imageFilename: imageFilename
+        )
+    }
+
+    func makeBoardState() -> GoBoardState {
+        var state = GoBoardState(size: boardSize, komi: komi)
+        let limit = min(grid.count, state.grid.count)
+        for idx in 0..<limit {
+            let color: StoneColor?
+            switch grid[idx] {
+            case 1: color = .black
+            case 2: color = .white
+            default: color = nil
+            }
+            if let color {
+                state.setSetupStone(color, at: state.point(for: idx))
+            }
+        }
+        return state
+    }
+}
+
+enum StonePlacementMode: String, Codable, CaseIterable, Equatable, Sendable {
+    case doubleTap
+    case confirmButton
+}
+
 struct AppSettings: Codable, Equatable, Sendable {
     var language: AppLanguage = .system
     var boardTheme: BoardTheme = .kayaWood
-    var scoringRule: ScoringRule = .chinese
+    var stoneStyle: StoneStyle = .classicSlateShell
+    var scoringRule: ScoringRule = AppSettings.regionalDefaultScoringRule
+
+    static var regionalDefaultScoringRule: ScoringRule {
+        let preferred = Locale.preferredLanguages.first ?? "en"
+        return preferred.hasPrefix("zh") ? .chinese : .japanese
+    }
     var assistPreset: AssistPreset = .starter
     var confirmBeforePlace: Bool = true
+    var stonePlacementMode: StonePlacementMode = .doubleTap
     var showCoordinates: Bool = true
     var showMoveNumbers: Bool = false
     var highlightAtari: Bool = true
     var expressiveStones: Bool = true
     var showLiveLiberties: Bool = true
     var zenDojoMode: Bool = false
-    var antiImpulseGuard: Bool = false
+    var aiSimulatedThinkingEnabled: Bool = true
     var autoTransformPuzzles: Bool = false
     var soundEnabled: Bool = true
     var bgmEnabled: Bool = true
+    var voiceEnabled: Bool = true
     var hapticsEnabled: Bool = true
     var eyeCareMinutes: Int = 25 // 0 = off
 
@@ -237,19 +426,22 @@ struct AppSettings: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
         boardTheme = try c.decodeIfPresent(BoardTheme.self, forKey: .boardTheme) ?? .kayaWood
+        stoneStyle = try c.decodeIfPresent(StoneStyle.self, forKey: .stoneStyle) ?? .classicSlateShell
         scoringRule = try c.decodeIfPresent(ScoringRule.self, forKey: .scoringRule) ?? .chinese
         assistPreset = try c.decodeIfPresent(AssistPreset.self, forKey: .assistPreset) ?? .starter
         confirmBeforePlace = try c.decodeIfPresent(Bool.self, forKey: .confirmBeforePlace) ?? true
+        stonePlacementMode = try c.decodeIfPresent(StonePlacementMode.self, forKey: .stonePlacementMode) ?? .doubleTap
         showCoordinates = try c.decodeIfPresent(Bool.self, forKey: .showCoordinates) ?? true
         showMoveNumbers = try c.decodeIfPresent(Bool.self, forKey: .showMoveNumbers) ?? false
         highlightAtari = try c.decodeIfPresent(Bool.self, forKey: .highlightAtari) ?? true
         expressiveStones = try c.decodeIfPresent(Bool.self, forKey: .expressiveStones) ?? true
         showLiveLiberties = try c.decodeIfPresent(Bool.self, forKey: .showLiveLiberties) ?? true
         zenDojoMode = try c.decodeIfPresent(Bool.self, forKey: .zenDojoMode) ?? false
-        antiImpulseGuard = try c.decodeIfPresent(Bool.self, forKey: .antiImpulseGuard) ?? false
+        aiSimulatedThinkingEnabled = try c.decodeIfPresent(Bool.self, forKey: .aiSimulatedThinkingEnabled) ?? true
         autoTransformPuzzles = try c.decodeIfPresent(Bool.self, forKey: .autoTransformPuzzles) ?? false
         soundEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
         bgmEnabled = try c.decodeIfPresent(Bool.self, forKey: .bgmEnabled) ?? true
+        voiceEnabled = try c.decodeIfPresent(Bool.self, forKey: .voiceEnabled) ?? true
         hapticsEnabled = try c.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
         eyeCareMinutes = try c.decodeIfPresent(Int.self, forKey: .eyeCareMinutes) ?? 25
         preferredBoardSize = try c.decodeIfPresent(BoardSize.self, forKey: .preferredBoardSize) ?? .thirteen
@@ -262,10 +454,27 @@ struct AppSettings: Codable, Equatable, Sendable {
     }
 }
 
+struct PausedAIMatchSnapshot: Codable, Equatable, Sendable {
+    let boardSize: BoardSize
+    let difficulty: AIDifficulty
+    let playerColor: StoneColor
+    let handicap: Int
+    let ruleSet: GameRuleSet
+    let scoringRule: ScoringRule
+    let timeControl: TimeControl
+    let coachingStyle: AICoachingStyle
+    let moves: [GoMove]
+    let clock: GoClock
+    let blackElapsedSeconds: Int
+    let whiteElapsedSeconds: Int
+    let savedAt: Date
+}
+
 final class StorageService {
     static let shared = StorageService()
 
     private let defaults: UserDefaults
+    private let photoHistoryDirectory: URL
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -274,22 +483,49 @@ final class StorageService {
         static let familyProfiles = "starpoint.familyProfiles.v1"
         static let puzzles = "starpoint.puzzleProgress.v1"
         static let archive = "starpoint.savedGames.v1"
+        static let pausedAIMatch = "starpoint.pausedAIMatch.v1"
+        static let photoJudgeHistory = "starpoint.photoJudgeHistory.v1"
         static let settings = "starpoint.appSettings.v1"
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, photoHistoryDirectory: URL? = nil) {
         self.defaults = defaults
+        if let photoHistoryDirectory {
+            self.photoHistoryDirectory = photoHistoryDirectory
+        } else {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? FileManager.default.temporaryDirectory
+            self.photoHistoryDirectory = base
+                .appendingPathComponent("StarYiGo", isDirectory: true)
+                .appendingPathComponent("PhotoJudgeHistory", isDirectory: true)
+        }
     }
 
     func loadProfile() -> UserProfile {
-        var profile = load(UserProfile.self, forKey: Keys.profile) ?? defaultStarterProfile()
+        if var profile = load(UserProfile.self, forKey: Keys.profile) {
+            normalizeDailyCounters(&profile)
+            return profile
+        }
+        var profile: UserProfile
+        if let familyMember = load([UserProfile].self, forKey: Keys.familyProfiles)?.first {
+            profile = familyMember
+        } else {
+            profile = defaultStarterProfile()
+            // Older first launches could save placement before saving the player's identity.
+            let prefix = Keys.puzzles + "."
+            let owners = defaults.dictionaryRepresentation().keys.compactMap { key in
+                key.hasPrefix(prefix) ? UUID(uuidString: String(key.dropFirst(prefix.count))) : nil
+            }
+            if owners.count == 1 { profile.id = owners[0] }
+        }
         normalizeDailyCounters(&profile)
+        saveProfile(profile)
         return profile
     }
 
     func saveProfile(_ profile: UserProfile) {
         save(profile, forKey: Keys.profile)
-        var family = loadFamilyProfiles()
+        var family = load([UserProfile].self, forKey: Keys.familyProfiles) ?? []
         if let idx = family.firstIndex(where: { $0.id == profile.id }) {
             family[idx] = profile
         } else {
@@ -299,31 +535,47 @@ final class StorageService {
     }
 
     func loadFamilyProfiles() -> [UserProfile] {
-        var list = load([UserProfile].self, forKey: Keys.familyProfiles) ?? []
-        if list.isEmpty {
-            let current = load(UserProfile.self, forKey: Keys.profile) ?? defaultStarterProfile()
-            list = [current]
-        }
-        return list
+        if let list = load([UserProfile].self, forKey: Keys.familyProfiles), !list.isEmpty { return list }
+        return [loadProfile()]
     }
 
     func saveFamilyProfiles(_ profiles: [UserProfile]) {
         save(profiles, forKey: Keys.familyProfiles)
     }
 
-    func loadPuzzleProgress(for profileId: UUID? = nil) -> PuzzleProgressStore {
-        if let profileId,
-           let perProfile = load(PuzzleProgressStore.self, forKey: "\(Keys.puzzles).\(profileId.uuidString)") {
-            return perProfile
-        }
-        return load(PuzzleProgressStore.self, forKey: Keys.puzzles) ?? PuzzleProgressStore()
+    func loadPausedAIMatch(for profileId: UUID) -> PausedAIMatchSnapshot? {
+        load(PausedAIMatchSnapshot.self, forKey: "\(Keys.pausedAIMatch).\(profileId.uuidString)")
     }
 
-    func savePuzzleProgress(_ store: PuzzleProgressStore, for profileId: UUID? = nil) {
-        save(store, forKey: Keys.puzzles)
-        if let profileId {
-            save(store, forKey: "\(Keys.puzzles).\(profileId.uuidString)")
+    func savePausedAIMatch(_ snapshot: PausedAIMatchSnapshot?, for profileId: UUID) {
+        let key = "\(Keys.pausedAIMatch).\(profileId.uuidString)"
+        if let snapshot {
+            save(snapshot, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
         }
+    }
+
+    func loadPuzzleProgress(for profileId: UUID) -> PuzzleProgressStore {
+        let key = "\(Keys.puzzles).\(profileId.uuidString)"
+        if let progress = load(PuzzleProgressStore.self, forKey: key) {
+            return progress
+        }
+
+        // The unscoped legacy store belongs to the profile active during migration.
+        let hasScopedProgress = defaults.dictionaryRepresentation().keys.contains {
+            $0.hasPrefix("\(Keys.puzzles).")
+        }
+        guard !hasScopedProgress,
+              let legacy = load(PuzzleProgressStore.self, forKey: Keys.puzzles) else {
+            return PuzzleProgressStore()
+        }
+        save(legacy, forKey: key)
+        return legacy
+    }
+
+    func savePuzzleProgress(_ store: PuzzleProgressStore, for profileId: UUID) {
+        save(store, forKey: "\(Keys.puzzles).\(profileId.uuidString)")
     }
 
     func loadSavedGames() -> [SavedGameRecord] {
@@ -332,6 +584,66 @@ final class StorageService {
 
     func saveSavedGames(_ games: [SavedGameRecord]) {
         save(games, forKey: Keys.archive)
+    }
+
+    func loadPhotoJudgeHistory() -> [PhotoJudgeRecord] {
+        load([PhotoJudgeRecord].self, forKey: Keys.photoJudgeHistory) ?? []
+    }
+
+    func savePhotoJudgeHistory(_ records: [PhotoJudgeRecord]) {
+        save(records, forKey: Keys.photoJudgeHistory)
+    }
+
+    func savePhotoJudgeImage(_ image: UIImage, for recordId: UUID) -> String? {
+        let filename = "\(recordId.uuidString).jpg"
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: photoHistoryDirectory, withIntermediateDirectories: true)
+        } catch {
+            return nil
+        }
+
+        let resized = downscaledPhotoImage(image, maxDimension: 720)
+        guard let data = resized.jpegData(compressionQuality: 0.72) else { return nil }
+        let fileURL = photoHistoryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: fileURL, options: [.atomic])
+            return filename
+        } catch {
+            return nil
+        }
+    }
+
+    func loadPhotoJudgeImage(filename: String?) -> UIImage? {
+        guard let filename, !filename.isEmpty else { return nil }
+        let fileURL = photoHistoryDirectory.appendingPathComponent(filename)
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        return UIImage(data: data)
+    }
+
+    func deletePhotoJudgeImage(filename: String?) {
+        guard let filename, !filename.isEmpty else { return }
+        let fileURL = photoHistoryDirectory.appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    private func downscaledPhotoImage(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return image }
+        let ratio = min(1.0, maxDimension / max(size.width, size.height))
+        if ratio >= 0.999 && image.imageOrientation == .up {
+            return image
+        }
+        let target = CGSize(
+            width: max(1, (size.width * ratio).rounded()),
+            height: max(1, (size.height * ratio).rounded())
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
     }
 
     func loadSettings() -> AppSettings {

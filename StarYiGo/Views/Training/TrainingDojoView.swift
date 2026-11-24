@@ -35,7 +35,7 @@ struct TrainingDojoView: View {
     private var isZh: Bool { l10n.language.isChinese }
 
     private var filteredDojoPuzzles: [GoPuzzle] {
-        DojoPuzzleBank.puzzles(category: selectedCategory, rankBand: selectedRankBand)
+        DojoPuzzleBank.puzzles(category: selectedCategory, rankBand: selectedRankBand, includeExpandedPack: true)
     }
 
     var body: some View {
@@ -52,7 +52,7 @@ struct TrainingDojoView: View {
                             .font(.system(size: 14, weight: .heavy, design: .rounded))
                             .foregroundColor(AppTheme.inkPrimary)
                             .padding(.horizontal, 12)
-                            .frame(minHeight: 44)
+                            .frame(minHeight: AppTheme.buttonFaceHeight)
                     }
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: paperPalette, rimHeight: 3))
 
@@ -60,16 +60,15 @@ struct TrainingDojoView: View {
                         Text(isZh ? "围棋道场" : "Go Training Dojo")
                             .font(.system(size: 20, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text(isZh ? "320+ 题库 · 定式 · 专项训练 · 考级室" : "320+ Puzzles · Joseki · Drills · Rank Exams")
+                        Text(isZh ? "\(DojoPuzzleBank.fullCatalog.count)+ 题库 · 定式破招 · 专项训练 · 考级室" : "\(DojoPuzzleBank.fullCatalog.count)+ Puzzles · Joseki · Drills · Rank Exams")
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
 
-                    GameCircleButton(icon: "gearshape.fill", palette: paperPalette, tint: AppTheme.inkPrimary, size: 46) {
-                        appState.showSettingsSheet = true
-                    }
+                    Color.clear
+                        .frame(width: 72, height: 1)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 14)
@@ -77,10 +76,10 @@ struct TrainingDojoView: View {
                 // Top 5 Section Tabs
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        sectionTab(.tsumego, title: isZh ? "分级题库 (320)" : "Tsumego (320)", icon: "square.grid.2x2.fill")
+                        sectionTab(.tsumego, title: isZh ? "分级题库 (\(DojoPuzzleBank.fullCatalog.count))" : "Tsumego (\(DojoPuzzleBank.fullCatalog.count))", icon: "square.grid.2x2.fill")
                         sectionTab(.srsMistakes, title: isZh ? "SRS 错题 (\(appState.puzzleProgress.srsMistakeItems.count))" : "SRS Review (\(appState.puzzleProgress.srsMistakeItems.count))", icon: "bookmark.fill")
-                        sectionTab(.joseki, title: isZh ? "定式课堂" : "Joseki Tree", icon: "arrow.triangle.branch")
-                        sectionTab(.drills, title: isZh ? "四大专项小练" : "4 Mini-Drills", icon: "bolt.circle.fill")
+                        sectionTab(.joseki, title: isZh ? "定式与破招" : "Joseki Tree", icon: "arrow.triangle.branch")
+                        sectionTab(.drills, title: isZh ? "五大专项小练" : "5 Mini-Drills", icon: "bolt.circle.fill")
                         sectionTab(.exams, title: isZh ? "星弈考级室" : "Rank Exams", icon: "rosette")
                     }
                     .padding(.horizontal, 24)
@@ -169,7 +168,7 @@ struct TrainingDojoView: View {
                 .font(.system(size: 13.5, weight: .black, design: .rounded))
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
-                .frame(minHeight: 44)
+                .frame(minHeight: AppTheme.buttonFaceHeight)
                 .background(Capsule().fill(active ? selectionTint : .white))
         }
         .tactileButton(scale: 0.97, sound: false)
@@ -194,6 +193,7 @@ struct TrainingDojoView: View {
                                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
+                                .frame(minHeight: AppTheme.buttonFaceHeight)
                                 .background(Capsule().fill(selected ? selectionTint : .white))
                         }
                         .tactileButton(scale: 0.96, sound: false)
@@ -235,6 +235,7 @@ struct TrainingDojoView: View {
                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
+                .frame(minHeight: AppTheme.buttonFaceHeight)
                 .background(Capsule().fill(selected ? selectionTint : .white))
         }
         .tactileButton(scale: 0.96, sound: false)
@@ -281,7 +282,7 @@ struct TrainingDojoView: View {
             .padding(18)
             .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: paperPalette, cornerRadius: 22, rimHeight: 3, whiteBorderWidth: 2))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: paperPalette, cornerRadius: 22, rimHeight: 3, whiteBorderWidth: 2, pressStyle: .card))
     }
 
     // MARK: - 2. SRS Spaced-Repetition Mistake Book + Personal Game Blunders
@@ -345,7 +346,7 @@ struct TrainingDojoView: View {
                                 .padding(14)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 4, whiteBorderWidth: 2.5))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 4, whiteBorderWidth: 2.5, pressStyle: .card))
                         }
                     }
                 }
@@ -357,7 +358,7 @@ struct TrainingDojoView: View {
 
     private var josekiSection: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 420), spacing: 16)], spacing: 16) {
-            ForEach(JosekiLibrary.allCourses) { course in
+            ForEach(JosekiLibrary.allCatalogCourses) { course in
                 let done = appState.puzzleProgress.completedJosekiIds.contains(course.id)
                 Button {
                     appState.navigationPath.append(.josekiTrainer(courseId: course.id))
@@ -388,7 +389,7 @@ struct TrainingDojoView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
             }
         }
     }
@@ -400,7 +401,8 @@ struct TrainingDojoView: View {
             .speedLiberties: .coral,
             .ladderReading: .sky,
             .countingQuiz: .sun,
-            .openingPicker: .mint
+            .openingPicker: .mint,
+            .blunderSpotter: .grape
         ]
 
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 440), spacing: 16)], spacing: 16) {
@@ -430,7 +432,7 @@ struct TrainingDojoView: View {
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 28, rimHeight: 6, whiteBorderWidth: 3.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 28, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
             }
         }
     }

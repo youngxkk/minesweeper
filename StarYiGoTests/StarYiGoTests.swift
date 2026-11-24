@@ -131,9 +131,7 @@ struct StarYiGoEngineTests {
             GoMove(moveNumber: 3, color: .black, action: .pass)
         ]
         let sgf = SGFParser.export(
-            size: 9,
-            komi: 5.5,
-            handicap: 0,
+            initialState: GoBoardState(size: 9, komi: 5.5),
             blackName: "Player",
             whiteName: "Fox",
             result: "B+3.5",
@@ -581,6 +579,340 @@ struct StarYiGoEngineTests {
             for pid in spec.examPuzzleIds {
                 #expect(DojoPuzzleBank.findPuzzle(withId: pid) != nil)
             }
+        }
+    }
+
+    // MARK: - Campaign Overhaul Tests (Phases 1 + 2 + 3: 4 Seas, 20 Islands, 1,100+ JSON Pack, Scenarios, Rush & Ghosts)
+
+    @Test func immediateCaptureLessonsMeetTheirGoalsInEveryPackOrientation() throws {
+        // The expected captures and size of the friendly chain to rescue come from the lesson prompts.
+        let lessons: [(id: String, captures: Int, rescueSize: Int?)] = [
+            ("pk-cap-01", 1, nil), ("pk-cap-02", 2, nil), ("pk-cap-03", 3, nil),
+            ("pk-cap-05", 1, 1), ("pk-cap-15", 1, 3), ("pk-ex-01", 2, nil),
+            ("pk-ex-02", 1, 1), ("pk-ex-04", 3, nil), ("pk-ex-10", 1, 1)
+        ]
+        for lesson in lessons {
+            let variants = PuzzlePackLoader.expandedPackPuzzles.filter { $0.id == lesson.id || $0.id.hasPrefix(lesson.id + "-") }
+            #expect(variants.count == 6)
+            for puzzle in variants {
+                let board = puzzle.initialBoardState()
+                let root = try #require(puzzle.parsedRoot())
+                let answers = root.children.filter { GoPuzzle.isCorrectBranch($0) }
+                #expect(!answers.isEmpty)
+                for answer in answers {
+                    let move = try #require(answer.move)
+                    #expect(move.color == board.currentTurn)
+                    let outcome = try board.applying(action: move.action).get()
+                    #expect(outcome.capturedPoints.count == lesson.captures, "\(puzzle.id)")
+                    if let size = lesson.rescueSize {
+                        let rescued = board.allGroups().contains { group in
+                            guard group.color == move.color, group.stones.count == size,
+                                  group.liberties.count == 1, let anchor = group.stones.first,
+                                  let after = outcome.nextState.groupAndLiberties(at: anchor) else { return false }
+                            return after.color == move.color && after.liberties.count >= 2
+                        }
+                        #expect(rescued, "\(puzzle.id)")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func reviewSupportsLegacyHandicapAndExplicitSetup() throws {
+        let standard = GoBoardState(size: 9, komi: 0.5, handicap: 2)
+        let legacy = try #require(SGFParser.parse("(;SZ[9]HA[2])"))
+        #expect(legacy.initialBoard(size: 9, komi: 0.5, handicap: 2) == standard)
+        let saved = SGFParser.export(initialState: standard, blackName: "B", whiteName: "W",
+                                     result: nil, date: Date(), moves: [])
+        let root = try #require(SGFParser.parse(saved))
+        #expect(root.addedBlackPoints.count == 2)
+        #expect(root.initialBoard(size: 9, komi: 0.5, handicap: 2) == standard)
+        let custom = try #require(SGFParser.parse("(;SZ[9]HA[2]PL[B]AB[aa][ab]AW[hh])"))
+        let board = custom.initialBoard(size: 9, komi: 0.5, handicap: 2)
+        #expect(board.grid.compactMap { $0 }.count == 3)
+        #expect(board.currentTurn == .black)
+        #expect(board.stone(at: BoardPoint(row: 7, col: 7)) == .white)
+    }
+
+    @Test func campaignFourSeasTwentyIslandsAndJsonPackAreValid() throws {
+        // 1. External JSON pack loads and expands into 1,000+ mathematically valid puzzles (30K -> 5D)
+        let templates = PuzzlePackLoader.jsonTemplates
+        #expect(templates.count >= 130, "Expected 130+ verified JSON templates, got \(templates.count)")
+        let catalog = PuzzlePackLoader.fullCatalog
+        #expect(catalog.count >= 1000, "Expected 1,000+ expanded puzzles, got \(catalog.count)")
+        #expect(Set(catalog.map(\.id)).count == catalog.count)
+
+        for puzzle in templates {
+            let root = try #require(SGFParser.parse(puzzle.sgf))
+            let initial = puzzle.initialBoardState()
+            for g in initial.allGroups() {
+                #expect(!g.liberties.isEmpty, "Setup group 0 liberties in \(puzzle.id)")
+            }
+            #expect(GoPuzzle.firstCorrectMove(from: root) != nil, "No hint in \(puzzle.id)")
+            var foundCorrect = false
+            func walk(_ node: SGFNode, _ state: GoBoardState) {
+                if let c = node.comment?.uppercased(), c.contains("CORRECT") { foundCorrect = true }
+                for ch in node.children {
+                    guard let mv = ch.move else { continue }
+                    guard case .success(let out) = state.applying(action: mv.action, color: mv.color) else {
+                        Issue.record("Illegal JSON puzzle move in \(puzzle.id)")
+                        return
+                    }
+                    walk(ch, out.nextState)
+                }
+            }
+            walk(root, initial)
+            #expect(foundCorrect, "Missing CORRECT leaf in \(puzzle.id)")
+        }
+
+        // 2. Verify 5 Regions × 5 Stages = 25 Stages, 125 Campaign Nodes + 25 Bosses reference valid assets
+        #expect(StarYiCampaign.allSeas.count == 5)
+        #expect(Set(StarYiCampaign.allSeas.map(\.mapImageName)).count == 5, "Every Region must use its own unique map artwork")
+        #expect(StarYiCampaign.allIslands.count == 25)
+        #expect(StarYiCampaign.allNodes.count == 125)
+        #expect(Set(StarYiCampaign.allNodes.map(\.id)).count == 125)
+
+        for sea in StarYiCampaign.allSeas {
+            #expect(sea.islands.count == 5)
+            #expect(sea.skipGatePuzzleIds.count == 5)
+            for gateId in sea.skipGatePuzzleIds {
+                #expect(DojoPuzzleBank.findPuzzle(withId: gateId) != nil, "Invalid Skip Gate puzzle \(gateId)")
+            }
+            for island in sea.islands {
+                #expect(island.nodes.count == 5)
+                for node in island.nodes {
+                    switch node.kind {
+                    case .puzzleGauntlet(let pids, _):
+                        #expect(pids.count >= 3, "Node \(node.id) should have a multi-puzzle gauntlet")
+                        for pid in pids {
+                            #expect(DojoPuzzleBank.findPuzzle(withId: pid) != nil, "Missing puzzle \(pid) in \(node.id)")
+                        }
+                    case .josekiTrial(let courseId):
+                        #expect(JosekiLibrary.course(withId: courseId) != nil, "Missing joseki \(courseId) in \(node.id)")
+                    case .tacticalScenario(let scenarioId):
+                        #expect(TacticalScenariosLibrary.scenario(withId: scenarioId) != nil, "Missing scenario \(scenarioId) in \(node.id)")
+                    case .miniDrill(_, _, let count):
+                        #expect(count >= 2)
+                    }
+                }
+            }
+        }
+
+        // 3. Verify all 12 Preset SGF Tactical Scenarios have legal initial setups (>= 1 liberty) & marked stones
+        #expect(TacticalScenariosLibrary.allScenarios.count == 12)
+        for scenario in TacticalScenariosLibrary.allScenarios {
+            let state = scenario.makeInitialState()
+            for g in state.allGroups() {
+                #expect(!g.liberties.isEmpty, "Scenario \(scenario.id) setup has 0-liberty group")
+            }
+            if let marked = scenario.markedPoint {
+                #expect(state.stone(at: marked) != nil, "Scenario \(scenario.id) marked point has no stone")
+            }
+        }
+
+        // 4. Verify Blunder Spotter mini-drill & Anti-Trick Joseki courses
+        #expect(GoMiniDrillsLibrary.blunderDrills.count == 6)
+        for item in GoMiniDrillsLibrary.blunderDrills {
+            let st = item.makeState()
+            #expect(item.blunderPoint != nil)
+            #expect(!item.correctPoints.isEmpty)
+            for cp in item.correctPoints {
+                guard case .success = st.applying(action: .place(cp), color: .black) else {
+                    Issue.record("Blunder fix \(cp) is illegal in \(item.id)")
+                    continue
+                }
+            }
+        }
+        #expect(JosekiLibrary.trickMoveCourses.count == 2)
+        for course in JosekiLibrary.trickMoveCourses {
+            let root = try #require(SGFParser.parse(course.sgfZh))
+            var st = GoBoardState(size: course.boardSize, komi: 7.5, startingTurn: course.playerColor)
+            for pt in root.addedBlackPoints { st.setSetupStone(.black, at: pt) }
+            for pt in root.addedWhitePoints { st.setSetupStone(.white, at: pt) }
+            st.resetPositionHistoryToCurrent()
+            func walkT(_ n: SGFNode, _ s: GoBoardState) {
+                for ch in n.children {
+                    guard let mv = ch.move else { continue }
+                    guard case .success(let out) = s.applying(action: mv.action, color: mv.color) else {
+                        Issue.record("Illegal trick-move Joseki move in \(course.id)")
+                        return
+                    }
+                    walkT(ch, out.nextState)
+                }
+            }
+            walkT(root, st)
+        }
+
+        // 5. Verify Sea Skip Gate, Boss Unlocking, SRS Ghost Mapping, Puzzle Rush & 10 AI Tiers
+        #expect(AIDifficulty.allCases.count == 10)
+        var progress = PuzzleProgressStore()
+        let sea1 = StarYiCampaign.allSeas[0]
+        let sea2 = StarYiCampaign.allSeas[1]
+        #expect(StarYiCampaign.isSeaUnlocked(sea1, progress: progress))
+        #expect(!StarYiCampaign.isSeaUnlocked(sea2, progress: progress))
+
+        // Unlocking Sea 2 via Skip Gate opens Sea 2 immediately
+        progress.unlockedSeaIds.insert(sea2.id)
+        #expect(StarYiCampaign.isSeaUnlocked(sea2, progress: progress))
+        #expect(StarYiCampaign.unlockState(for: sea2.islands[0], progress: progress) == .active)
+
+        // SRS due mistake maps as a Ghost onto the matching island
+        let sampleNode = sea2.islands[0].nodes[0]
+        let samplePuzzleId = try #require(sampleNode.puzzleIds.first)
+        progress.srsMistakeItems.append(SRSMistakeItem.initial(puzzleId: samplePuzzleId))
+        let ghosts = StarYiCampaign.dueMistakeGhosts(for: sea2.islands[0], progress: progress)
+        #expect(!ghosts.isEmpty)
+
+        // Puzzle Rush monotonically climbs from easier (higher rankOrderValue) to harder (lower rankOrderValue)
+        let rushSeq = PuzzlePackLoader.generatePuzzleRushSequence()
+        #expect(rushSeq.count >= 190)
+        #expect(rushSeq.first!.rankOrderValue >= 25)
+        #expect(rushSeq.last!.rankOrderValue <= -3)
+    }
+
+    @Test func nintendoGlobalFlagshipFeaturesAreValid() throws {
+        // 1. Stone Styles & Boss Rewards + 5-Language Localization
+        #expect(StoneStyle.allCases.count == 4)
+        let allLangs: [AppLanguage] = [.zhHans, .zhHant, .en, .ja, .ko]
+        for lang in allLangs {
+            let l10n = L10n(language: lang)
+            for style in StoneStyle.allCases {
+                #expect(!style.displayName(l10n).isEmpty)
+                #expect(!style.unlockHint(l10n).isEmpty)
+            }
+            for sea in StarYiCampaign.allSeas {
+                #expect(!sea.localizedName(l10n).isEmpty)
+                for island in sea.islands {
+                    #expect(!island.localizedName(l10n).isEmpty)
+                }
+            }
+            for category in PuzzleCategory.allCases {
+                #expect(!category.localizedTitle(l10n).isEmpty)
+            }
+            for sticker in GoSticker.allStickers {
+                #expect(!sticker.text(l10n).isEmpty)
+            }
+        }
+
+        // 2. All 20 Island Silent Visual Micro-Demos parse and execute legally
+        for island in StarYiCampaign.allIslands {
+            let spec = IslandMicroDemos.spec(for: island.id)
+            let root = try #require(SGFParser.parse(spec.sgf))
+            var st = GoBoardState(size: spec.boardSize, komi: 7.5, startingTurn: .black)
+            for pt in root.addedBlackPoints { st.setSetupStone(.black, at: pt) }
+            for pt in root.addedWhitePoints { st.setSetupStone(.white, at: pt) }
+            st.resetPositionHistoryToCurrent()
+
+            var node = root
+            var moveCount = 0
+            while let next = node.children.first, let mv = next.move {
+                let res = st.applying(action: mv.action, color: mv.color)
+                guard case .success(let out) = res else {
+                    Issue.record("Illegal micro-demo move in \(island.id)")
+                    break
+                }
+                st = out.nextState
+                node = next
+                moveCount += 1
+            }
+            #expect(moveCount >= 1)
+        }
+
+        // 3. Built-in Offline Spatial Neural Policy-Value Net produces normalized policy & bounded winrate
+        var board = GoBoardState(size: 9)
+        board.setSetupStone(.black, at: BoardPoint(row: 2, col: 2))
+        board.setSetupStone(.white, at: BoardPoint(row: 6, col: 6))
+        board.setSetupStone(.black, at: BoardPoint(row: 2, col: 6))
+        board.setSetupStone(.white, at: BoardPoint(row: 6, col: 2))
+        board.resetPositionHistoryToCurrent()
+
+        let eval = StarYiNeuralPolicyValueNet.evaluate(state: board, mover: .black)
+        #expect(eval.blackWinrate >= 0.02 && eval.blackWinrate <= 0.98)
+        #expect(eval.moverWinrate >= 0.02 && eval.moverWinrate <= 0.98)
+        #expect(!eval.topPriors.isEmpty)
+        let probSum = eval.policy.reduce(0, +)
+        #expect(abs(probSum - 1.0) < 0.01)
+
+        // 4. Living Room Handicap Balance Scale across 30K -> 5D
+        let r30k = try #require(GoRankOption.presets.first { $0.id == "30K" })
+        let r15k = try #require(GoRankOption.presets.first { $0.id == "15K" })
+        let r1d = try #require(GoRankOption.presets.first { $0.id == "1D" })
+        let evenRec = HandicapBalanceCalculator.recommend(player1: r15k, player2: r15k, preferredBoardSize: .nineteen)
+        #expect(evenRec.handicapStones == 0)
+        let mismatchRec = HandicapBalanceCalculator.recommend(player1: r15k, player2: r1d, preferredBoardSize: .nineteen)
+        #expect(mismatchRec.handicapStones >= 4)
+        #expect(mismatchRec.blackIsPlayer1 == true)
+        let starterRec = HandicapBalanceCalculator.recommend(player1: r30k, player2: r15k, preferredBoardSize: .seven)
+        #expect(starterRec.ruleSet.isCaptureRace)
+
+        // 5. Go Sailor Passport 6-Axis Radar Calculator
+        let axes = GoRadarCalculator.computeAxes(progress: PuzzleProgressStore())
+        #expect(axes.count == PuzzleCategory.allCases.count)
+        for axis in axes {
+            #expect(axis.value >= 0.15 && axis.value <= 1.0)
+        }
+    }
+
+    @Test func campaignSequentialIslandAndSeaUnlockProgression() throws {
+        var progress = PuzzleProgressStore()
+        let allIslands = StarYiCampaign.allIslands
+        #expect(allIslands.count == 25)
+
+        // Initially only Island 1 (s1-reef) is active; all subsequent islands are locked
+        #expect(StarYiCampaign.unlockState(for: allIslands[0], progress: progress) == .active)
+        for island in allIslands.dropFirst() {
+            #expect(StarYiCampaign.unlockState(for: island, progress: progress) == .locked)
+        }
+
+        // Walk through all 20 islands across all 4 seas, clearing each stage with just 1 star (no boss defeat required)
+        for (idx, island) in allIslands.enumerated() {
+            #expect(StarYiCampaign.unlockState(for: island, progress: progress) == .active, "Island \(island.id) should be active")
+            #expect(!StarYiCampaign.isBossUnlocked(for: island, progress: progress))
+
+            for (nodeIdx, node) in island.nodes.enumerated() {
+                #expect(StarYiCampaign.nodeState(at: nodeIdx, in: island, progress: progress) == .active)
+                progress.campaignNodeStars[node.id] = 1
+                #expect(StarYiCampaign.nodeState(at: nodeIdx, in: island, progress: progress) == .cleared(stars: 1))
+
+                if nodeIdx + 1 < island.nodes.count {
+                    #expect(StarYiCampaign.nodeState(at: nodeIdx + 1, in: island, progress: progress) == .active)
+                    #expect(!StarYiCampaign.isIslandCleared(island, progress: progress))
+                }
+            }
+
+            // Clearing all 5 stages automatically clears the island, unlocks its Boss, and unlocks the next island & sea
+            #expect(StarYiCampaign.isIslandCleared(island, progress: progress))
+            #expect(StarYiCampaign.unlockState(for: island, progress: progress) == .cleared)
+            #expect(StarYiCampaign.isBossUnlocked(for: island, progress: progress))
+
+            if idx + 1 < allIslands.count {
+                let next = allIslands[idx + 1]
+                let nextSea = try #require(StarYiCampaign.sea(withId: next.seaId))
+                #expect(StarYiCampaign.isSeaUnlocked(nextSea, progress: progress), "Sea \(nextSea.id) should auto-unlock after clearing \(island.id)")
+                #expect(StarYiCampaign.unlockState(for: next, progress: progress) == .active, "Island \(next.id) should auto-unlock after clearing \(island.id)")
+            }
+        }
+    }
+
+    @Test func aiDeepReviewOpeningSymmetryAndScoreCalibration() async throws {
+        let engine = LocalMCTSGoEngine()
+        let initial = GoBoardState(size: 19, komi: 7.5)
+        let q16 = BoardPoint(row: 3, col: 15)
+        let d4 = BoardPoint(row: 15, col: 3)
+        let moves = [
+            GoMove(moveNumber: 1, color: .black, action: .place(q16), capturedPoints: []),
+            GoMove(moveNumber: 2, color: .white, action: .place(d4), capturedPoints: [])
+        ]
+
+        let report = await engine.analyzeGame(initialState: initial, moves: moves)
+        #expect(report.reviewedMoves.count == 2)
+        let move1 = try #require(report.reviewedMoves.first)
+        // Move 1 on an empty 19x19 board at Q16 must never produce +353.5 pts or be diagnosed as a mistake vs symmetric D4
+        #expect(abs(move1.blackScoreLeadAfter) < 15.0, "Move 1 scoreLead should be calibrated, got \(move1.blackScoreLeadAfter)")
+        #expect(move1.quality == .good || move1.quality == .brilliant, "Empty-board star point Q16 must not be marked as a mistake")
+        #expect(move1.moverScoreDrop == 0.0)
+        for lead in report.scoreLeadHistory {
+            #expect(abs(lead) < 25.0, "Opening score lead should stay realistic, got \(lead)")
         }
     }
 }

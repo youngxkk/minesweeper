@@ -156,6 +156,7 @@ final class PuzzleViewModel: ObservableObject {
         showHintText = true
         highlightedHintPoint = GoPuzzle.firstCorrectMove(from: node)
         SoundAndHapticsManager.shared.playHint()
+        SoundAndHapticsManager.shared.playVoice(.hint, delay: 0.08)
     }
 
     /// Plays the official correct Principal Variation step-by-step on the board so kids see the exact solution!
@@ -204,6 +205,7 @@ final class PuzzleViewModel: ObservableObject {
             illegalFlashPoint = point
             illegalEventID = UUID()
             SoundAndHapticsManager.shared.playKoBounce()
+            SoundAndHapticsManager.shared.playVoice(.illegalMove, delay: 0.08, cooldown: 1.5)
             return
         }
 
@@ -391,6 +393,7 @@ final class PuzzleViewModel: ObservableObject {
         }
         status = .solved(stars: stars)
         SoundAndHapticsManager.shared.playSuccess()
+        SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.12)
         unlockedCodexEntry = appState?.recordPuzzleSolved(
             puzzleId: puzzle.id,
             stars: stars,
@@ -409,6 +412,7 @@ final class PuzzleViewModel: ObservableObject {
         }
         status = .wrong
         SoundAndHapticsManager.shared.playWrong()
+        SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
         appState?.recordPuzzleMistake(puzzleId: puzzle.id, isStarterBootcamp: isStarterBootcamp)
     }
 }

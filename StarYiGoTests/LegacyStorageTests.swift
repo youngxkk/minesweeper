@@ -3,6 +3,36 @@ import Testing
 @testable import StarYiGo
 
 struct LegacyStorageTests {
+    @Test @MainActor func firstPlacementBelongsToTheSamePlayerAfterRelaunch() throws {
+        let suite = "StarYiGoTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let app = AppState(storage: StorageService(defaults: defaults))
+        let owner = app.profile.id
+        #expect(app.familyProfiles.map(\.id) == [owner])
+        let beginner = try #require(StarYiCampaign.placementOptions.first { $0.recommendedRankTier == 0 })
+        app.applyPlacementChoice(beginner)
+        let reopened = AppState(storage: StorageService(defaults: defaults))
+        #expect(reopened.profile.id == owner)
+        #expect(reopened.familyProfiles.map(\.id) == [owner])
+        #expect(reopened.puzzleProgress.didCompletePlacement)
+        #expect(reopened.puzzleProgress.unlockedSeaIds.contains(beginner.targetSeaId))
+    }
+
+    @Test func recoversPlacementSavedBeforeTheFirstProfile() throws {
+        let suite = "StarYiGoTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let storage = StorageService(defaults: defaults)
+        let owner = UUID()
+        var progress = PuzzleProgressStore()
+        progress.didCompletePlacement = true
+        storage.savePuzzleProgress(progress, for: owner)
+        #expect(storage.loadFamilyProfiles().map(\.id) == [owner])
+        #expect(storage.loadProfile().id == owner)
+        #expect(storage.loadPuzzleProgress(for: owner) == progress)
+    }
+
     @Test func readsVersionOneArchiveAndOlderSettings() throws {
         let suite = "StarYiGoTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))
@@ -41,5 +71,40 @@ struct LegacyStorageTests {
         #expect(settings.preferredBoardSize == AppSettings().preferredBoardSize)
         storage.saveSavedGames([record])
         #expect(StorageService(defaults: defaults).loadSavedGames() == [record])
+    }
+
+    @Test @MainActor func migratesLegacyProgressToTheOriginalFamilyMember() throws {
+        let suite = "StarYiGoTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let first = #"{"id":"58BEE259-4DCF-4D87-AEFA-9ABF5968EC75","nickname":"First","xp":60}"#
+        let second = #"{"id":"08AB7BC4-EA0A-47AE-A9FE-92099E572F3E","nickname":"Second","xp":20}"#
+        defaults.set(Data(first.utf8), forKey: "starpoint.userProfile.v1")
+        defaults.set(Data("[\(first),\(second)]".utf8), forKey: "starpoint.familyProfiles.v1")
+        defaults.set(Data(#"{"starsByPuzzleId":{"legacy-puzzle":3},"mistakeBookIds":["review-me"]}"#.utf8),
+                     forKey: "starpoint.puzzleProgress.v1")
+
+        let storage = StorageService(defaults: defaults)
+        let app = AppState(storage: storage)
+        let original = app.profile
+        #expect(original.nickname == "First")
+        #expect(original.xp == 60)
+        #expect(app.familyProfiles.count == 2)
+        #expect(app.puzzleProgress.starsByPuzzleId["legacy-puzzle"] == 3)
+        #expect(app.puzzleProgress.mistakeBookIds == ["review-me"])
+
+        let other = try #require(app.familyProfiles.first { $0.id != original.id })
+        app.switchProfile(to: other)
+        #expect(app.puzzleProgress == PuzzleProgressStore())
+        var otherProgress = PuzzleProgressStore()
+        otherProgress.starsByPuzzleId["other-puzzle"] = 2
+        storage.savePuzzleProgress(otherProgress, for: other.id)
+
+        let reopened = AppState(storage: StorageService(defaults: defaults))
+        #expect(reopened.profile.id == other.id)
+        #expect(reopened.puzzleProgress == otherProgress)
+        reopened.switchProfile(to: original)
+        #expect(reopened.puzzleProgress.starsByPuzzleId == ["legacy-puzzle": 3])
     }
 }

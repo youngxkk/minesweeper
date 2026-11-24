@@ -181,7 +181,8 @@ struct GameArchiveView: View {
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 15))
                                 .foregroundColor(AppTheme.coralBottom)
-                                .padding(6)
+                                .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
+                                .contentShape(Rectangle())
                         }
                         .tactileButton(scale: 0.9)
                     } else {
@@ -194,7 +195,7 @@ struct GameArchiveView: View {
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 3))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
         .accessibilityIdentifier("ArchiveGameRecord")
     }
 }

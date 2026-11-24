@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var newKidName = ""
     @State private var newKidAvatar = "🐼"
     @State private var unlockMessage: String? = nil
+    @FocusState private var isNewKidNameFocused: Bool
 
     private let avatarChoices = ["🦊", "🐼", "🐰", "🐉", "🦢", "🐯", "🦁", "🦉", "🌟", "🎋"]
     private let eyeCareOptions = [0, 15, 25, 40]
@@ -35,17 +36,8 @@ struct SettingsView: View {
 
                     Spacer()
 
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text(l10n.t("common.done"))
-                            .font(.system(size: 16, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                            .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 10)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    Color.clear
+                        .frame(width: 94, height: 44)
                 }
                 .padding(.horizontal, 28)
                 .padding(.top, 16)
@@ -59,6 +51,7 @@ struct SettingsView: View {
                                 profileCard
                                 languageCard
                                 boardThemeCard
+                                scoringRuleCard
                                 assistsCard
                                 audioAndEyeCareCard
                                 aboutFooterCard
@@ -75,6 +68,7 @@ struct SettingsView: View {
                                 .frame(maxWidth: .infinity)
 
                                 VStack(spacing: 18) {
+                                    scoringRuleCard
                                     assistsCard
                                     audioAndEyeCareCard
                                     aboutFooterCard
@@ -89,18 +83,199 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            if showAddKidSheet {
+                addKidProfileOverlay
+            }
         }
-        .alert(l10n.t("settings.profile.addKidTitle"), isPresented: $showAddKidSheet) {
-            TextField(l10n.t("settings.profile.nickname"), text: $newKidName)
-            Button(l10n.t("common.ok")) {
-                appState.addFamilyProfile(nickname: newKidName, avatarEmoji: newKidAvatar)
-                newKidName = ""
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: showAddKidSheet)
+    }
+
+    private var addKidProfileOverlay: some View {
+        ZStack {
+            Color(red: 0.05, green: 0.11, blue: 0.22)
+                .opacity(0.56)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    dismissAddKidModal()
+                }
+                .transition(.opacity)
+
+            VStack(spacing: 16) {
+                StarYiMascotView(emojiKey: newKidAvatar, size: 68, mood: .happy)
+                    .shadow(color: AppTheme.skyBottom.opacity(0.24), radius: 10, y: 4)
+
+                VStack(spacing: 6) {
+                    Text(l10n.t("settings.profile.addKidTitle"))
+                        .font(.system(size: 21, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .multilineTextAlignment(.center)
+
+                    Text(l10n.t("settings.profile.addKidHint"))
+                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.inkSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Branded rounded nickname field
+                TextField(l10n.t("settings.profile.nickname"), text: $newKidName)
+                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                    .foregroundColor(AppTheme.inkPrimary)
+                    .multilineTextAlignment(.center)
+                    .focused($isNewKidNameFocused)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        confirmAddKidProfile()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(AppTheme.canvasBackground)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(
+                                isNewKidNameFocused ? AppTheme.skyBottom : AppTheme.skyTop.opacity(0.25),
+                                lineWidth: isNewKidNameFocused ? 2.5 : 1.5
+                            )
+                    )
+
+                // Mascot avatar picker
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(avatarChoices, id: \.self) { emoji in
+                            addKidAvatarButton(emoji: emoji)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 4)
+                }
+
+                // Glossy Cancel / OK buttons matching GameDialogModifier
+                HStack(spacing: 12) {
+                    Button {
+                        SoundAndHapticsManager.shared.playUITap(weight: .light)
+                        dismissAddKidModal()
+                    } label: {
+                        Text(l10n.t("common.cancel"))
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundColor(AppTheme.inkPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 13)
+                    }
+                    .buttonStyle(
+                        GlossyCapsuleButtonStyle(
+                            palette: .snow,
+                            cornerRadius: 999,
+                            rimHeight: 5,
+                            whiteBorderWidth: 3,
+                            playTapSound: false
+                        )
+                    )
+
+                    Button {
+                        SoundAndHapticsManager.shared.playUITap()
+                        confirmAddKidProfile()
+                    } label: {
+                        Text(l10n.t("common.ok"))
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                            .shadow(color: AppTheme.mintRim.opacity(0.5), radius: 1.5, y: 1.5)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 13)
+                    }
+                    .buttonStyle(
+                        GlossyCapsuleButtonStyle(
+                            palette: .mint,
+                            cornerRadius: 999,
+                            rimHeight: 5,
+                            whiteBorderWidth: 3,
+                            playTapSound: false
+                        )
+                    )
+                }
+                .padding(.top, 4)
             }
-            Button(l10n.t("common.cancel"), role: .cancel) {
-                newKidName = ""
+            .padding(.horizontal, 24)
+            .padding(.vertical, 24)
+            .frame(maxWidth: 430)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white, Color(red: 0.95, green: 0.98, blue: 1.0)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .shadow(color: Color(red: 0.04, green: 0.14, blue: 0.30).opacity(0.35), radius: 24, y: 12)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .strokeBorder(.white, lineWidth: 4)
+            )
+            .padding(.horizontal, 24)
+            .transition(.scale(scale: 0.86).combined(with: .opacity))
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    isNewKidNameFocused = true
+                }
             }
-        } message: {
-            Text(l10n.t("settings.profile.addKidHint"))
+        }
+        .zIndex(900)
+    }
+
+    private func addKidAvatarButton(emoji: String) -> some View {
+        let selected = newKidAvatar == emoji
+        return Button {
+            SoundAndHapticsManager.shared.playUITap(weight: .light)
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.72)) {
+                newKidAvatar = emoji
+            }
+        } label: {
+            StarYiMascotView(
+                emojiKey: emoji,
+                size: 40,
+                mood: selected ? .proud : .happy,
+                showRing: selected
+            )
+            .padding(3)
+            .background(
+                Circle()
+                    .fill(selected ? AppTheme.skyTop.opacity(0.18) : Color.clear)
+            )
+            .overlay(
+                Circle()
+                    .strokeBorder(selected ? AppTheme.skyBottom : Color.clear, lineWidth: 2.5)
+            )
+            .scaleEffect(selected ? 1.08 : 0.94)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func dismissAddKidModal() {
+        isNewKidNameFocused = false
+        newKidName = ""
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+            showAddKidSheet = false
+        }
+    }
+
+    private func confirmAddKidProfile() {
+        isNewKidNameFocused = false
+        appState.addFamilyProfile(nickname: newKidName, avatarEmoji: newKidAvatar)
+        newKidName = ""
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+            showAddKidSheet = false
         }
     }
 
@@ -109,12 +284,15 @@ struct SettingsView: View {
             HStack {
                 sectionHeader(l10n.t("settings.section.profile"), icon: "person.crop.circle.fill", color: AppTheme.skyBottom)
                 Spacer()
-                Text("🪙 \(appState.profile.starCoins)")
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.sunBottom)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(AppTheme.softGoldBg))
+                HStack(spacing: 5) {
+                    StarCoinBadgeView(size: 15)
+                    Text("\(appState.profile.starCoins)")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.sunBottom)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(AppTheme.softGoldBg))
             }
 
             // Multi-kid Family Profile Switcher (siblings sharing one iPad!)
@@ -126,7 +304,7 @@ struct SettingsView: View {
                             appState.switchProfile(to: kid)
                         } label: {
                             HStack(spacing: 6) {
-                                Text(kid.avatarEmoji)
+                                StarYiMascotView(emojiKey: kid.avatarEmoji, size: 22, showRing: false)
                                 Text(kid.nickname)
                                     .font(.system(size: 12, weight: .black, design: .rounded))
                                     .lineLimit(1)
@@ -134,6 +312,7 @@ struct SettingsView: View {
                             .foregroundColor(isActive ? .white : AppTheme.inkPrimary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
+                            .frame(minHeight: AppTheme.buttonFaceHeight)
                             .background(
                                 Capsule().fill(
                                     isActive
@@ -154,6 +333,7 @@ struct SettingsView: View {
                             .foregroundColor(AppTheme.mintBottom)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
+                            .frame(minHeight: AppTheme.buttonFaceHeight)
                             .background(Capsule().fill(AppTheme.mintTop.opacity(0.16)))
                     }
                     .tactileButton(scale: 0.94)
@@ -188,18 +368,14 @@ struct SettingsView: View {
                         Button {
                             appState.updateProfile { $0.avatarEmoji = emoji }
                         } label: {
-                            Text(emoji)
-                                .font(.system(size: 24))
-                                .frame(width: 44, height: 44)
-                                .background(
-                                    Circle().fill(
-                                        selected
-                                        ? AnyShapeStyle(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
-                                        : AnyShapeStyle(AppTheme.canvasBackground)
-                                    )
-                                )
-                                .overlay(Circle().strokeBorder(selected ? Color.white : Color.clear, lineWidth: 2.5))
-                                .shadow(color: selected ? AppTheme.sunBottom.opacity(0.35) : .clear, radius: 6, y: 2)
+                            StarYiMascotView(
+                                emojiKey: emoji,
+                                size: AppTheme.buttonFaceHeight,
+                                mood: selected ? .proud : .happy,
+                                showRing: selected
+                            )
+                            .overlay(Circle().strokeBorder(selected ? AppTheme.sunTop : Color.clear, lineWidth: 2.5))
+                            .shadow(color: selected ? AppTheme.sunBottom.opacity(0.35) : .clear, radius: 6, y: 2)
                         }
                         .tactileButton(scale: 0.90)
                     }
@@ -283,7 +459,8 @@ struct SettingsView: View {
                                     HStack(spacing: 3) {
                                         Image(systemName: "lock.fill")
                                             .font(.system(size: 10, weight: .black))
-                                        Text("🪙\(theme.unlockCoinCost)")
+                                        StarCoinBadgeView(size: 12)
+                                        Text("\(theme.unlockCoinCost)")
                                             .font(.system(size: 11, weight: .black, design: .rounded))
                                     }
                                     .foregroundColor(.white)
@@ -299,7 +476,92 @@ struct SettingsView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .tactileButton(scale: 0.94)
+                    .tactileCard()
+                }
+            }
+
+            Divider()
+
+            Text(l10n.localized(zh: "收藏级棋子皮肤", en: "Collectible Stone Finishes", ja: "碁石コレクション", ko: "바둑돌 스킨", zhHant: "收藏級棋子皮膚"))
+                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                .foregroundColor(AppTheme.inkSecondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+                ForEach(StoneStyle.allCases, id: \.self) { style in
+                    stoneStyleButton(style)
+                }
+            }
+        }
+        .warmCard(cornerRadius: 24, padding: 18)
+    }
+
+    private func stoneStyleButton(_ style: StoneStyle) -> some View {
+        let unlocked = appState.isStoneStyleUnlocked(style)
+        let selected = appState.settings.stoneStyle == style
+        return Button {
+            if unlocked {
+                unlockMessage = nil
+                appState.updateSettings { $0.stoneStyle = style }
+                SoundAndHapticsManager.shared.playStonePlace(at: BoardPoint(row: 4, col: 4), boardSize: 9, isAtari: false)
+            } else if appState.unlockStoneStyle(style) {
+                unlockMessage = nil
+            } else {
+                unlockMessage = style.unlockHint(l10n)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(style.badgeEmoji)
+                    .font(.system(size: 15))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(style.displayName(l10n))
+                        .font(.system(size: 11.5, weight: .black, design: .rounded))
+                        .foregroundColor(selected ? .white : AppTheme.inkPrimary)
+                        .lineLimit(1)
+                    if !unlocked {
+                        HStack(spacing: 3) {
+                            StarCoinBadgeView(size: 11)
+                            Text("\(style.unlockCoinCost)")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundColor(selected ? .white.opacity(0.9) : AppTheme.sunBottom)
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 16, rimHeight: 3, whiteBorderWidth: 2))
+    }
+
+    private var scoringRuleCard: some View {
+        let isZh = l10n.language.isChinese
+        return VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                l10n.localized(
+                    zh: "终局计分规则",
+                    en: "Scoring Ruleset",
+                    ja: "終局計算ルール",
+                    ko: "종국 계가 규칙",
+                    zhHant: "終局計分規則"
+                ),
+                icon: "checkmark.seal.fill",
+                color: AppTheme.skyBottom
+            )
+
+            HStack(spacing: 8) {
+                ForEach(ScoringRule.allCases) { rule in
+                    let selected = appState.settings.scoringRule == rule
+                    Button {
+                        appState.updateSettings { $0.scoringRule = rule }
+                    } label: {
+                        Text(rule == .chinese ? (isZh ? "中国数子法" : "Chinese Area") : (isZh ? "日韩数目法" : "Japanese Terr."))
+                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .foregroundColor(selected ? .white : AppTheme.inkPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 9)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2))
                 }
             }
         }
@@ -310,28 +572,6 @@ struct SettingsView: View {
         let isZh = l10n.language.isChinese
         return VStack(alignment: .leading, spacing: 11) {
             sectionHeader(l10n.t("settings.section.assists"), icon: "sparkles", color: AppTheme.mintBottom)
-
-            // P0: Scoring Rule (Chinese Area vs Japanese Territory)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(isZh ? "终局计分规则" : "Scoring Ruleset")
-                    .font(.system(size: 12.5, weight: .heavy, design: .rounded))
-                    .foregroundColor(AppTheme.inkSecondary)
-                HStack(spacing: 8) {
-                    ForEach(ScoringRule.allCases) { rule in
-                        let selected = appState.settings.scoringRule == rule
-                        Button {
-                            appState.updateSettings { $0.scoringRule = rule }
-                        } label: {
-                            Text(rule == .chinese ? (isZh ? "中国数子法" : "Chinese Area") : (isZh ? "日韩数目法" : "Japanese Terr."))
-                                .font(.system(size: 12, weight: .black, design: .rounded))
-                                .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 8)
-                        }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2))
-                    }
-                }
-            }
 
             // P2: Assist Graduation Ladder ("脱拐辅助阶梯")
             VStack(alignment: .leading, spacing: 6) {
@@ -356,8 +596,11 @@ struct SettingsView: View {
                 set: { v in appState.updateSettings { $0.showLiveLiberties = v; $0.assistPreset = .custom } }
             ))
             gameToggleRow(l10n.t("settings.assist.confirmMove"), isOn: Binding(
-                get: { appState.settings.confirmBeforePlace },
-                set: { v in appState.updateSettings { $0.confirmBeforePlace = v } }
+                get: { appState.settings.stonePlacementMode == .confirmButton },
+                set: { v in appState.updateSettings {
+                    $0.stonePlacementMode = v ? .confirmButton : .doubleTap
+                    $0.confirmBeforePlace = v
+                } }
             ))
             gameToggleRow(l10n.t("settings.assist.coordinates"), isOn: Binding(
                 get: { appState.settings.showCoordinates },
@@ -370,10 +613,6 @@ struct SettingsView: View {
             gameToggleRow(l10n.t("settings.assist.atari"), isOn: Binding(
                 get: { appState.settings.highlightAtari },
                 set: { v in appState.updateSettings { $0.highlightAtari = v; $0.assistPreset = .custom } }
-            ))
-            gameToggleRow(isZh ? "防随手冷静保护（防秒拍）" : "Anti-Impulse Calm Guard", isOn: Binding(
-                get: { appState.settings.antiImpulseGuard },
-                set: { v in appState.updateSettings { $0.antiImpulseGuard = v } }
             ))
             gameToggleRow(isZh ? "做题自动随机旋转/黑白互换" : "Auto-Rotate & Flip Puzzles", isOn: Binding(
                 get: { appState.settings.autoTransformPuzzles },
@@ -412,6 +651,15 @@ struct SettingsView: View {
             gameToggleRow(l10n.t("settings.feedback.sound"), isOn: Binding(
                 get: { appState.settings.soundEnabled },
                 set: { v in appState.updateSettings { $0.soundEnabled = v } }
+            ))
+            gameToggleRow(l10n.t("settings.feedback.voice"), isOn: Binding(
+                get: { appState.settings.voiceEnabled },
+                set: { v in
+                    appState.updateSettings { $0.voiceEnabled = v }
+                    if v {
+                        SoundAndHapticsManager.shared.playVoice(.welcome)
+                    }
+                }
             ))
             gameToggleRow(l10n.t("settings.feedback.haptics"), isOn: Binding(
                 get: { appState.settings.hapticsEnabled },
@@ -452,13 +700,9 @@ struct SettingsView: View {
             Text(l10n.t("settings.about.offlineNote"))
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.inkSecondary)
-            Text(
-                l10n.language.isChinese
-                ? (CoreMLGoAIEngine.shared.isNeuralModelLoaded ? "对弈引擎：神经网络 + 多层蒙特卡洛搜索" : "对弈引擎：星弈多层搜索 + 战术阅读")
-                : "AI Engine: \(CoreMLGoAIEngine.shared.engineName)"
-            )
-            .font(.system(size: 11, weight: .bold, design: .rounded))
-            .foregroundColor(AppTheme.skyBottom)
+            Text(CoreMLGoAIEngine.shared.activeEngineBadge(l10n))
+                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                .foregroundColor(AppTheme.skyBottom)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .warmCard(cornerRadius: 24, padding: 18)
@@ -481,6 +725,60 @@ struct SettingsView: View {
                 .font(.system(size: 13.5, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.inkPrimary)
         }
-        .tint(AppTheme.mintBottom)
+        .toggleStyle(GameSwitchToggleStyle())
+    }
+}
+
+private struct GameSwitchToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.label
+            Spacer(minLength: 8)
+            Button {
+                SoundAndHapticsManager.shared.playUITap(weight: .light)
+                withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
+                    configuration.isOn.toggle()
+                }
+            } label: {
+                ZStack {
+                    Capsule()
+                        .fill(
+                            configuration.isOn
+                                ? LinearGradient(
+                                    colors: [AppTheme.mintTop, AppTheme.mintBottom],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                : LinearGradient(
+                                    colors: [
+                                        Color(red: 0.72, green: 0.76, blue: 0.82),
+                                        Color(red: 0.62, green: 0.67, blue: 0.74)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                        )
+                        .frame(width: 52, height: 31)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    configuration.isOn
+                                        ? AppTheme.mintRim.opacity(0.50)
+                                        : Color(red: 0.46, green: 0.52, blue: 0.60).opacity(0.65),
+                                    lineWidth: 1.5
+                                )
+                        )
+
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 25, height: 25)
+                        .shadow(color: Color.black.opacity(0.22), radius: 2.5, x: 0, y: 1.5)
+                        .offset(x: configuration.isOn ? 10.5 : -10.5)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(configuration.isOn ? "On" : "Off")
+        }
     }
 }

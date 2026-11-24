@@ -8,6 +8,7 @@ import SwiftUI
 struct JosekiTrainerView: View {
     @EnvironmentObject var appState: AppState
     let course: JosekiCourse
+    var campaignNodeId: String? = nil
 
     enum Mode: String, CaseIterable {
         case learn
@@ -26,8 +27,9 @@ struct JosekiTrainerView: View {
     private var l10n: L10n { appState.l10n }
     private var isZh: Bool { l10n.language.isChinese }
 
-    init(course: JosekiCourse) {
+    init(course: JosekiCourse, campaignNodeId: String? = nil) {
         self.course = course
+        self.campaignNodeId = campaignNodeId
         _boardState = State(initialValue: GoBoardState(size: course.boardSize, komi: 7.5, startingTurn: course.playerColor))
     }
 
@@ -265,6 +267,7 @@ struct JosekiTrainerView: View {
             stepInto(child: matched)
         } else if mode == .quiz {
             SoundAndHapticsManager.shared.playWrong()
+            SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
             quizWrongMessage = isZh ? "这步偏离了定式要点！试试紧贴角部或切换「演示学习」查看分支。" : "Off-joseki move! Try closer to the corner or switch to Learn mode to see the branches."
         }
     }
@@ -280,12 +283,17 @@ struct JosekiTrainerView: View {
         let upperC = (child.comment ?? "").uppercased()
         if upperC.contains("WRONG") {
             SoundAndHapticsManager.shared.playWrong()
+            SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
             return
         }
         if upperC.contains("CORRECT") || child.children.isEmpty {
             isQuizCompleted = true
             appState.markJosekiCompleted(course.id)
+            if let nodeId = campaignNodeId {
+                appState.recordCampaignNodeCleared(nodeId: nodeId, stars: 3, masteryTier: .normal)
+            }
             SoundAndHapticsManager.shared.playSuccess()
+            SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.14)
             return
         }
 

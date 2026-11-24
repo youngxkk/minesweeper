@@ -44,14 +44,18 @@ struct RootNavigationView: View {
                         case .playGame:
                             if let vm = appState.activeGameViewModel {
                                 GamePlayView(viewModel: vm)
+                                    .id(ObjectIdentifier(vm))
                             } else {
                                 HomeView()
                             }
                         case .puzzleHub(let initialMistakesOnly):
                             PuzzleHubView(initialMistakesOnly: initialMistakesOnly)
                         case .islandDetail(let islandId):
-                            if let island = StarYiIslands.island(withId: islandId) {
-                                IslandDetailView(island: island)
+                            if let campaignIsland = StarYiCampaign.island(withId: islandId) {
+                                IslandDetailView(campaignIsland: campaignIsland)
+                            } else if let legacy = StarYiIslands.island(withId: islandId),
+                                      let fallback = StarYiCampaign.allIslands.first {
+                                IslandDetailView(campaignIsland: StarYiCampaign.island(withId: legacy.id) ?? fallback)
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
@@ -62,6 +66,45 @@ struct RootNavigationView: View {
                                     appState: appState,
                                     isDailyChallenge: isDailyChallenge,
                                     isStarterBootcamp: isStarterBootcamp
+                                )
+                            } else {
+                                PuzzleHubView(initialMistakesOnly: false)
+                            }
+                        case .puzzleGauntlet(let nodeId, let masteryTier):
+                            if let node = StarYiCampaign.node(withId: nodeId),
+                               case .puzzleGauntlet(let ids, let forceExam) = node.kind {
+                                let list = ids.compactMap { appState.findAnyPuzzle(withId: $0) }
+                                let effectiveTier: StageMasteryTier = forceExam ? max(masteryTier, .examCrown) : masteryTier
+                                PuzzleGauntletView(
+                                    titleZh: node.titleZh,
+                                    titleEn: node.titleEn,
+                                    puzzles: list.isEmpty ? [BuiltInPuzzleLibrary.allPuzzles[0]] : list,
+                                    campaignNodeId: node.id,
+                                    masteryTier: effectiveTier,
+                                    isGhostBuster: false
+                                )
+                            } else {
+                                PuzzleHubView(initialMistakesOnly: false)
+                            }
+                        case .puzzleRush:
+                            PuzzleRushView()
+                        case .seaSkipGate(let seaId):
+                            if let sea = StarYiCampaign.sea(withId: seaId) {
+                                SeaSkipGateView(sea: sea)
+                            } else {
+                                PuzzleHubView(initialMistakesOnly: false)
+                            }
+                        case .srsGhostBuster(let islandId):
+                            if let island = StarYiCampaign.island(withId: islandId) {
+                                let ghosts = StarYiCampaign.dueMistakeGhosts(for: island, progress: appState.puzzleProgress)
+                                let list = ghosts.compactMap { appState.findAnyPuzzle(withId: $0.puzzleId) }
+                                PuzzleGauntletView(
+                                    titleZh: "\(island.nameZh) · 错题幽灵战",
+                                    titleEn: "\(island.nameEn) · Ghost Buster",
+                                    puzzles: list.isEmpty ? [BuiltInPuzzleLibrary.allPuzzles[0]] : list,
+                                    campaignNodeId: nil,
+                                    masteryTier: .transformed,
+                                    isGhostBuster: true
                                 )
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
@@ -78,14 +121,19 @@ struct RootNavigationView: View {
                             }
                         case .trainingDojo:
                             TrainingDojoView()
-                        case .josekiTrainer(let courseId):
+                        case .josekiTrainer(let courseId, let campaignNodeId):
                             if let course = JosekiLibrary.course(withId: courseId) {
-                                JosekiTrainerView(course: course)
+                                JosekiTrainerView(course: course, campaignNodeId: campaignNodeId)
                             } else {
                                 TrainingDojoView()
                             }
-                        case .miniDrill(let kind):
-                            GoMiniDrillPlayView(kind: kind)
+                        case .miniDrill(let kind, let campaignNodeId, let startOffset, let targetCount):
+                            GoMiniDrillPlayView(
+                                kind: kind,
+                                campaignNodeId: campaignNodeId,
+                                startOffset: startOffset,
+                                targetQuestionCount: targetCount
+                            )
                         case .rankExamHall:
                             RankExamHallView()
                         case .rankExamTest(let tier):
@@ -94,6 +142,10 @@ struct RootNavigationView: View {
                             } else {
                                 RankExamHallView()
                             }
+                        case .passport:
+                            GoPassportView()
+                        case .photoJudge:
+                            PhotoBoardJudgeView()
                         }
                     }
             }
@@ -140,10 +192,15 @@ struct RootNavigationView: View {
                 .environmentObject(appState)
                 .environment(\.locale, appState.settings.language.locale)
         }
-        .alert(l10n.t("settings.eyecare.alertTitle"), isPresented: $appState.showEyeCareAlert) {
-            Button(l10n.t("settings.eyecare.keepPlaying")) {}
-        } message: {
-            Text(l10n.t("settings.eyecare.alertMessage", appState.settings.eyeCareMinutes))
-        }
+        .gameDialog(
+            isPresented: $appState.showEyeCareAlert,
+            title: l10n.t("settings.eyecare.alertTitle"),
+            message: l10n.t("settings.eyecare.alertMessage", appState.settings.eyeCareMinutes),
+            icon: "eye.fill",
+            accentPalette: .mint,
+            actions: [
+                .primary(l10n.t("settings.eyecare.keepPlaying"), palette: .mint)
+            ]
+        )
     }
 }

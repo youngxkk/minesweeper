@@ -1,2 +1,3 @@
 "CFBundleDisplayName" = "StarYi Go";
 "CFBundleName" = "StarYi Go";
+"NSCameraUsageDescription" = "Used to photograph your Go board and judge win/loss completely offline on this device.";

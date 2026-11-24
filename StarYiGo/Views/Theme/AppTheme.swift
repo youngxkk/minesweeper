@@ -5,7 +5,14 @@
 
 import SwiftUI
 
+extension EnvironmentValues {
+    @Entry var minimumButtonFaceHeight: CGFloat = AppTheme.buttonFaceHeight
+}
+
 enum AppTheme {
+    static let buttonFaceHeight: CGFloat = 51
+    static let boardActionFaceHeight: CGFloat = 60
+
     // Crisp, bright, modern Nintendo Switch Sports / Mario Party surface palette
     static let canvasTop = Color(red: 0.93, green: 0.97, blue: 1.00)           // Bright airy sky tint
     static let canvasBottom = Color(red: 0.97, green: 0.96, blue: 1.00)        // Soft cloud lavender-white
@@ -142,26 +149,69 @@ enum AppTheme {
     }
 }
 
+/// Authored motion tokens inspired by physical damped springs (benjitaylor/skills):
+/// critically damped on press-down (crisp, zero overshoot), lightly underdamped on release (~4% tactile bounce).
+enum MotionToken {
+    /// Crisp critically-damped press-down (zeta = 1.0 feel, zero overshoot)
+    static let pressDown: Animation = .spring(duration: 0.095, bounce: 0.0)
+    /// Snappy small/medium button release (~4% overshoot)
+    static let buttonRelease: Animation = .spring(response: 0.22, dampingFraction: 0.64)
+    /// Confident large hero / entrance button release
+    static let heroRelease: Animation = .spring(response: 0.26, dampingFraction: 0.72)
+    /// Grounded card release (tactile without wobbling)
+    static let cardRelease: Animation = .spring(response: 0.27, dampingFraction: 0.76)
+    /// Inner icon/mascot micro-parallax release (slightly livelier than outer shell)
+    static let innerParallaxRelease: Animation = .spring(response: 0.25, dampingFraction: 0.60)
+    /// Calm arrival curve for staggered cards and popovers
+    static let cardEntrance: Animation = .spring(response: 0.42, dampingFraction: 0.82)
+    /// Stagger interval between grouped items (40–80ms)
+    static let itemStagger: Double = 0.055
+    /// Stagger interval between grid cards (80–120ms)
+    static let gridStagger: Double = 0.085
+}
+
 /// Bouncy Nintendo Switch tactile press feedback for cards and non-beveled elements.
 struct TactileButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var pressedScale: CGFloat = 0.94
+    var pressOffsetY: CGFloat = 0
     var playTapSound: Bool = true
+    var hapticWeight: UITapWeight = .standard
+    var releaseAnimation: Animation = MotionToken.buttonRelease
 
     func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
         configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? pressedScale : 1.0)
-            .brightness(configuration.isPressed ? 0.03 : 0.0)
+            .scaleEffect(pressed && !reduceMotion ? pressedScale : 1.0)
+            .offset(y: pressed && !reduceMotion ? pressOffsetY : 0)
+            .brightness(pressed ? -0.025 : 0.0)
             .animation(
-                reduceMotion ? nil : (configuration.isPressed ? .easeOut(duration: 0.07) : .spring(response: 0.22, dampingFraction: 0.74)),
-                value: configuration.isPressed
+                reduceMotion ? nil : (pressed ? MotionToken.pressDown : releaseAnimation),
+                value: pressed
             )
-            .onChange(of: configuration.isPressed) { _, isPressed in
+            .onChange(of: pressed) { _, isPressed in
                 if isPressed && playTapSound {
-                    SoundAndHapticsManager.shared.playUITap()
+                    SoundAndHapticsManager.shared.playUITap(weight: hapticWeight)
                 }
             }
+    }
+}
+
+/// Calm staggered entrance modifier (inspired by benjitaylor/skills choreography timing).
+struct StaggeredEntranceModifier: ViewModifier {
+    let appeared: Bool
+    let delay: Double
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared || reduceMotion ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : 12)
+            .animation(
+                reduceMotion ? nil : MotionToken.cardEntrance.delay(delay),
+                value: appeared
+            )
     }
 }
 
@@ -196,7 +246,26 @@ extension View {
         modifier(WarmCardModifier(cornerRadius: cornerRadius, padding: padding))
     }
 
+    func tactileCard(sound: Bool = true) -> some View {
+        buttonStyle(
+            TactileButtonStyle(
+                pressedScale: 0.978,
+                pressOffsetY: 2.0,
+                playTapSound: sound,
+                hapticWeight: .card,
+                releaseAnimation: MotionToken.cardRelease
+            )
+        )
+    }
+
     func tactileButton(scale: CGFloat = 0.94, sound: Bool = true) -> some View {
-        buttonStyle(TactileButtonStyle(pressedScale: scale, playTapSound: sound))
+        buttonStyle(
+            TactileButtonStyle(
+                pressedScale: scale,
+                playTapSound: sound,
+                hapticWeight: .light,
+                releaseAnimation: MotionToken.buttonRelease
+            )
+        )
     }
 }

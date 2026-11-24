@@ -1,0 +1,3 @@
+"CFBundleDisplayName" = "별이 바둑";
+"CFBundleName" = "별이 바둑";
+"NSCameraUsageDescription" = "바둑판을 촬영하여 기기 내에서 완전히 오프라인으로 돌을 인식하고 승패를 판정하는 데 사용합니다.";

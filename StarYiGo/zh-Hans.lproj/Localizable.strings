@@ -2,8 +2,8 @@
 "app.name" = "星弈围棋";
 "app.subtitle" = "对弈 · 闯关 · 成长";
 "home.hero.poeticSubtitle" = "STARYI GO · 手谈弈境";
-"home.hero.playSubtitle" = "一键开局 · 纯离线分级陪练";
-"home.hero.questSubtitle" = "探索五大星弈岛屿 · 挑战守关大师";
+"home.hero.playSubtitle" = "和动物小伙伴下一盘";
+"home.hero.questSubtitle" = "做题闯关拿星星 · 解锁五大世界";
 "home.hero.matchOptions" = "对局设置";
 "home.starterCamp" = "5路启蒙营";
 
@@ -14,7 +14,7 @@
 "home.totalStars" = "%d 颗星";
 "home.totalWins" = "%d 胜局";
 "home.aiCard.title" = "AI 对弈";
-"home.aiCard.subtitle" = "纯离线分级陪练，从 25K 萌新到 1D 进阶";
+"home.aiCard.subtitle" = "和动物小伙伴下棋，从 25K 一步步变强";
 "home.aiCard.boardSize" = "棋盘";
 "home.aiCard.opponent" = "对手";
 "home.aiCard.playAs" = "执棋";
@@ -22,12 +22,12 @@
 "home.aiCard.ruleMode" = "玩法规则";
 "home.aiCard.start" = "AI 对弈";
 "home.aiCard.resume" = "继续对局";
-"home.puzzleCard.title" = "星弈闯关";
-"home.puzzleCard.subtitle" = "五大岛屿手筋与死活冒险";
+"home.puzzleCard.title" = "星弈大冒险";
+"home.puzzleCard.subtitle" = "五大世界手筋与死活冒险";
 "home.puzzleCard.solved" = "已通关 %d / %d";
 "home.puzzleCard.continue" = "扬帆闯关";
 "home.puzzleCard.mistakes" = "错题本 (%d)";
-"home.dailyCard.title" = "每日一题";
+"home.dailyCard.title" = "每日任务";
 "home.dailyCard.subtitle" = "今日限定妙手挑战";
 "home.dailyCard.done" = "今日已完成！";
 "home.twoPlayerCard.title" = "双人棋桌";
@@ -72,7 +72,6 @@
 /* Islands Adventure Map */
 "islands.title" = "星弈群岛";
 "islands.bossDuel" = "挑战岛屿大师";
-"islands.bossCoop" = "亲子联棋";
 "islands.bossSubtitle" = "9路实战检验 · 对战%@ (%@)";
 "islands.chapterProgress" = "已通关 %d / %d";
 "islands.worldNumber" = "第 %d 岛";
@@ -127,12 +126,20 @@
 "ai.rabbit.desc" = "积极进攻，适合锻炼局部对杀手感";
 "ai.fox.name" = "机敏狐狸";
 "ai.fox.desc" = "懂得打吃、切断与占角，颇具趣味";
+"ai.deer.name" = "林间灵鹿";
+"ai.deer.desc" = "棋风轻灵舒展，擅长连结与局部死活";
 "ai.panda.name" = "沉稳熊猫";
 "ai.panda.desc" = "注重棋形与围空，布局沉着稳健";
 "ai.crane.name" = "清风白鹤";
 "ai.crane.desc" = "局部计算深入，攻守更加均衡";
+"ai.tiger.name" = "猛虎教头";
+"ai.tiger.desc" = "力量凶猛犀利，擅长中盘进攻与对杀";
 "ai.dragon.name" = "星弈青龙";
-"ai.dragon.desc" = "强力离线 MCTS 对手，迎接真正挑战";
+"ai.dragon.desc" = "强力离线 MCTS 对手，迎接初段挑战";
+"ai.phoenix.name" = "赤焰朱雀";
+"ai.phoenix.desc" = "三段深度计算大师，官子敏锐精准";
+"ai.kirin.name" = "玉角麒麟";
+"ai.kirin.desc" = "五段终极守关大师，离线最强算力";
 
 /* Generic + Character-Specific Companion Dialogues */
 "companion.greet" = "请多指教！我们来下一盘好玩的棋吧！";
@@ -169,6 +176,11 @@
 "companion.dragon.playerBigCapture" = "惊人的计算力！！青龙也要认真起来了！";
 "companion.dragon.playerWin" = "不可思议！你已通过星辰之巅的终极试炼！";
 
+"companion.deer.greet" = "林风微拂，请多指教！看看谁的棋形更舒展吧！";
+"companion.tiger.greet" = "吼！敢来挑战猛虎教头，先守住你的断点再说！";
+"companion.phoenix.greet" = "业余三段之试炼开启！每一目官子都不能松懈！";
+"companion.kirin.greet" = "欢迎来到麒麟星辰殿！请落子，让我见识真正的高段风采！";
+
 /* Game Play */
 "game.title.vsAI" = "对战 %@";
 "game.title.twoPlayer" = "双人棋桌";
@@ -189,13 +201,9 @@
 "game.action.resign" = "认输";
 "game.action.newGame" = "新开一局";
 "game.action.tabletop" = "面对面模式";
-"game.action.coopToggle" = "亲子联棋模式（轮流合作）";
 "game.action.confirmPlace" = "确认落子";
 "game.action.cancelPlace" = "取消";
 "game.tabletop.kidAssist" = "儿童护航";
-"game.coop.kidTurn" = "亲子联棋 · 轮到小棋士落子！";
-"game.coop.parentTurn" = "亲子联棋 · 轮到家长搭档落子！";
-"game.coopTeamName" = "%@ 亲子战队";
 "game.deadStones.title" = "终局死子确认";
 "game.deadStones.hint" = "已自动标出死子（红叉）。点击任意棋块可切换死活，确认后精准数子！";
 "game.deadStones.confirm" = "确认数子";
@@ -307,6 +315,7 @@
 "settings.section.feedback" = "音乐、音效与触感";
 "settings.feedback.bgm" = "海岛五声木琴背景音乐";
 "settings.feedback.sound" = "落子木声与五声提示音";
+"settings.feedback.voice" = "童声语音鼓励";
 "settings.feedback.haptics" = "触感震动反馈";
 "settings.section.eyecare" = "护眼时长提醒";
 "settings.eyecare.off" = "关闭";
