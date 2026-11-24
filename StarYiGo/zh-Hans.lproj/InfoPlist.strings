@@ -1,2 +1,3 @@
 "CFBundleDisplayName" = "星弈围棋";
 "CFBundleName" = "星弈围棋";
+"NSCameraUsageDescription" = "用于拍摄围棋棋盘照片，并在设备本地完全离线识别棋子与判定胜负。";

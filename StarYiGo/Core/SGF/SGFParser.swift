@@ -69,6 +69,21 @@ final class SGFNode: Sendable {
         if pl == "W" { return .white }
         return nil
     }
+
+    func initialBoard(size: Int, komi: Double, handicap: Int) -> GoBoardState {
+        let black = addedBlackPoints
+        let white = addedWhitePoints
+        let hasSetup = !black.isEmpty || !white.isEmpty
+        var board = GoBoardState(
+            size: size, komi: komi, handicap: hasSetup ? 0 : handicap,
+            startingTurn: startingPlayer ?? (handicap >= 2 ? .white : .black)
+        )
+        board.handicap = handicap
+        for pt in black { board.setSetupStone(.black, at: pt) }
+        for pt in white { board.setSetupStone(.white, at: pt) }
+        board.resetPositionHistoryToCurrent()
+        return board
+    }
 }
 
 enum SGFParser {
@@ -198,9 +213,7 @@ enum SGFParser {
 
     /// Exports a played game into a standard FF[4] SGF string.
     static func export(
-        size: Int,
-        komi: Double,
-        handicap: Int,
+        initialState: GoBoardState,
         blackName: String,
         whiteName: String,
         result: String?,
@@ -218,19 +231,23 @@ enum SGFParser {
 
         var parts: [String] = []
         parts.append("(;GM[1]FF[4]CA[UTF-8]AP[StarYi Go:1.0]")
-        parts.append("SZ[\(size)]")
-        parts.append(String(format: "KM[%.1f]", komi))
+        parts.append("SZ[\(initialState.size)]")
+        parts.append(String(format: "KM[%.1f]", initialState.komi))
         parts.append("DT[\(dateStr)]")
         parts.append("PB[\(escape(blackName))]")
         parts.append("PW[\(escape(whiteName))]")
         if let result, !result.isEmpty {
             parts.append("RE[\(escape(result))]")
         }
-        if handicap >= 2 {
-            parts.append("HA[\(handicap)]")
-            let hPoints = GoBoardState.handicapPoints(size: size, count: handicap)
-            let ab = hPoints.map { "[\($0.sgfCoordinate)]" }.joined()
-            parts.append("AB\(ab)")
+        if initialState.handicap >= 2 {
+            parts.append("HA[\(initialState.handicap)]")
+        }
+        parts.append("PL[\(initialState.currentTurn.sgfTag)]")
+        for color in [StoneColor.black, .white] {
+            let stones = initialState.grid.indices.filter { initialState.grid[$0] == color }
+            if !stones.isEmpty {
+                parts.append("A\(color.sgfTag)" + stones.map { "[\(initialState.point(for: $0).sgfCoordinate)]" }.joined())
+            }
         }
 
         for move in moves {

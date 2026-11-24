@@ -14,6 +14,7 @@ enum MiniDrillKind: String, CaseIterable, Identifiable, Sendable {
     case ladderReading
     case countingQuiz
     case openingPicker
+    case blunderSpotter
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum MiniDrillKind: String, CaseIterable, Identifiable, Sendable {
         case .ladderReading: return "stairs"
         case .countingQuiz: return "sum"
         case .openingPicker: return "map.fill"
+        case .blunderSpotter: return "ant.fill"
         }
     }
 
@@ -32,6 +34,7 @@ enum MiniDrillKind: String, CaseIterable, Identifiable, Sendable {
         case .ladderReading: return isChinese ? "征子盲算 · 成不成？" : "Ladder Blind Reading"
         case .countingQuiz: return isChinese ? "目数与形势判断" : "Counting & Territory Quiz"
         case .openingPicker: return isChinese ? "布局选大场 A/B/C" : "Opening Big-Point Picker"
+        case .blunderSpotter: return isChinese ? "棋谱捉虫 · 改恶手" : "Blunder Spotter & Fix"
         }
     }
 
@@ -41,6 +44,7 @@ enum MiniDrillKind: String, CaseIterable, Identifiable, Sendable {
         case .ladderReading: return isChinese ? "不落子先心算！判断征子能否成立，再看动态验证！" : "Read the ladder in your head — check for ladder breakers before playing!"
         case .countingQuiz: return isChinese ? "估算残局黑白谁领先、差几目，告别不会数子！" : "Estimate who leads on the board, then see the exact territory breakdown!"
         case .openingPicker: return isChinese ? "三选一找出金角银边大场与急所，培养大局观！" : "Pick the biggest opening move among A / B / C to build whole-board sense!"
+        case .blunderSpotter: return isChinese ? "找出标红的「随手恶手」错在哪，点击棋盘下出正解妙手！" : "Spot why the marked blunder fails and tap the winning correction on the board!"
         }
     }
 }
@@ -429,4 +433,126 @@ enum GoMiniDrillsLibrary {
             ]
         )
     ]
+
+    // MARK: - 5. Blunder Spotter & Fix (棋谱捉虫 · 改恶手)
+
+    static let blunderDrills: [BlunderSpotterItem] = [
+        BlunderSpotterItem(
+            id: "bln-01",
+            rankBadge: "22K",
+            titleZh: "捉虫：错过提子救命！",
+            titleEn: "Fix the Blunder: Missed Counter-Capture",
+            boardSize: 7,
+            blackStones: ["bc", "cd", "dc"],
+            whiteStones: ["cc", "bd", "ac"],
+            blunderSGF: "bb",
+            correctSGFPoints: ["cb"],
+            promptZh: "小棋童刚才随手下在 ✕ 处，结果黑棋反而要被吃！请直接点在棋盘上，下出真正救命的一手！",
+            promptEn: "Playing at ✕ was a blunder that leaves Black in trouble! Tap the real lifesaving move on the board!",
+            explanationZh: "中间白子只剩上方最后 1 口气，直接提掉它既吃子又瞬间救活左侧黑子！",
+            explanationEn: "The center white stone only had 1 liberty — capturing it saves your left stone immediately!"
+        ),
+        BlunderSpotterItem(
+            id: "bln-02",
+            rankBadge: "18K",
+            titleZh: "捉虫：叫吃方向反啦！",
+            titleEn: "Fix the Blunder: Wrong Atari Direction",
+            boardSize: 9,
+            blackStones: ["ca", "cc", "dc", "eb"],
+            whiteStones: ["db"],
+            blunderSGF: "da",
+            correctSGFPoints: ["cb"],
+            promptZh: "刚才从一路 ✕ 打吃，白棋立刻往中央逃跑了！该从哪个方向打吃把白棋抱向边线？",
+            promptEn: "Atari from the 1st line at ✕ let White escape! Tap the correct atari direction to drive White to the edge!",
+            explanationZh: "记住「往边线/往己方墙方向打吃」——从二路打吃，白棋撞到一路边线无路可逃！",
+            explanationEn: "Always push the opponent toward the edge or your own wall — atari from the 2nd line!"
+        ),
+        BlunderSpotterItem(
+            id: "bln-03",
+            rankBadge: "15K",
+            titleZh: "捉虫：对杀先填公气的大恶手！",
+            titleEn: "Fix the Blunder: Filling Shared Liberty First",
+            boardSize: 9,
+            blackStones: ["ba", "bb", "cc", "dc", "ec", "eb", "fb", "fa"],
+            whiteStones: ["ab", "ac", "bc", "cb", "db", "da"],
+            blunderSGF: "ca",
+            correctSGFPoints: ["ea"],
+            promptZh: "黑棋刚才误下在中间公气 ✕，瞬间把自己气数填没了！请改出正确紧气点！",
+            promptEn: "Playing on the shared liberty at ✕ loses the race immediately! Tap the winning outside liberty!",
+            explanationZh: "口诀「对杀先紧外气」！先紧白棋右边外气，公气留到最后再走！",
+            explanationEn: "Always take outside liberties first in a capturing race!"
+        ),
+        BlunderSpotterItem(
+            id: "bln-04",
+            rankBadge: "12K",
+            titleZh: "捉虫：直三没占中心点！",
+            titleEn: "Fix the Blunder: Missed Straight-Three Center",
+            boardSize: 9,
+            blackStones: ["aa", "ab", "bb", "cb", "db", "eb", "ea"],
+            whiteStones: ["ac", "bc", "cc", "dc", "ec", "fb", "fa"],
+            blunderSGF: "ba",
+            correctSGFPoints: ["ca"],
+            promptZh: "刚才随手下在边侧 ✕，结果白棋反手一点黑棋全死！请点击真正能做出两只真眼的要点！",
+            promptEn: "Playing on the side at ✕ lets White kill your group! Tap the true center vital point to live!",
+            explanationZh: "三个并排空点必须下在正中央一分为二，左右立变两只永远吃不掉的真眼！",
+            explanationEn: "Split the Straight Three right down the middle to form two unkillable eyes!"
+        ),
+        BlunderSpotterItem(
+            id: "bln-05",
+            rankBadge: "8K",
+            titleZh: "捉虫：直接点里面给白棋做活！",
+            titleEn: "Fix the Blunder: Rushing Inside Before Reducing",
+            boardSize: 9,
+            blackStones: ["ac", "bc", "cc", "dc", "ec", "fc", "fb", "fa"],
+            whiteStones: ["aa", "ab", "bb", "cb", "db", "eb"],
+            blunderSGF: "ca",
+            correctSGFPoints: ["ea"],
+            promptZh: "黑棋急着往内部 ✕ 点入，白棋顺势挡住就活了！请点击先从外侧「缩小眼位」的妙手！",
+            promptEn: "Rushing inside at ✕ lets White live! Tap the outside 1st-line hane to shrink the eye space first!",
+            explanationZh: "杀棋黄金次序：先从外侧一路扳缩小眼位（四目变直三），再点杀必死无疑！",
+            explanationEn: "Reduce from the outside first on the 1st line — shrinking 4 spaces to 3 guarantees the kill!"
+        ),
+        BlunderSpotterItem(
+            id: "bln-06",
+            rankBadge: "2K",
+            titleZh: "捉虫：大伸腿前错失一路潜入！",
+            titleEn: "Fix the Blunder: Passive Endgame Crawl",
+            boardSize: 9,
+            blackStones: ["cd", "ce", "dc", "cc"],
+            whiteStones: ["gc", "gd", "ge"],
+            blunderSGF: "eb",
+            correctSGFPoints: ["fa"],
+            promptZh: "黑棋在二路 ✕ 随手一爬被白棋稳稳挡住，白白少赚好几目！请点出经典的「大伸腿」官子手筋！",
+            promptEn: "Crawling passively at ✕ gives away huge endgame points! Tap the classic Monkey Jump!",
+            explanationZh: "一路小飞伸腿潜入白棋下方，白棋挡不住，一招多捞 4～5 目大官子！",
+            explanationEn: "The 1st-line Monkey Jump digs deep under White's wall for massive endgame gains!"
+        )
+    ]
+}
+
+struct BlunderSpotterItem: Identifiable, Sendable {
+    let id: String
+    let rankBadge: String
+    let titleZh: String
+    let titleEn: String
+    let boardSize: Int
+    let blackStones: [String]
+    let whiteStones: [String]
+    let blunderSGF: String
+    let correctSGFPoints: Set<String>
+    let promptZh: String
+    let promptEn: String
+    let explanationZh: String
+    let explanationEn: String
+
+    func makeState() -> GoBoardState {
+        var s = GoBoardState(size: boardSize, komi: 0)
+        for p in blackStones { if let pt = BoardPoint(sgf: p) { s.setSetupStone(.black, at: pt) } }
+        for p in whiteStones { if let pt = BoardPoint(sgf: p) { s.setSetupStone(.white, at: pt) } }
+        s.resetPositionHistoryToCurrent()
+        return s
+    }
+
+    var blunderPoint: BoardPoint? { BoardPoint(sgf: blunderSGF) }
+    var correctPoints: Set<BoardPoint> { Set(correctSGFPoints.compactMap { BoardPoint(sgf: $0) }) }
 }

@@ -7,15 +7,28 @@ import SwiftUI
 
 struct GamePlayView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var viewModel: GameViewModel
 
     @State private var showResignConfirm = false
     @State private var showNewGameConfirm = false
+    @State private var showLeaveMatchConfirm = false
+    @State private var showActionsMenu = false
     @State private var showResultOverlay = false
     @State private var quickTermPopover: GoCodexEntry? = nil
 
+    @State private var focusRegion: BoardCropRegion?
+    @State private var isChoosingFocus = false
+    @State private var aiThinkingNudgeShake: CGFloat = 0
+    @State private var aiThinkingNudgeFlash = false
+
+    private var offersBoardFocus: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone &&
+            viewModel.boardSize == .nineteen && !viewModel.isTabletopFaceToFace
+    }
+
     private var l10n: L10n { appState.l10n }
-    private let topBarHeight: CGFloat = 58
+    private let topBarHeight: CGFloat = 60
 
     private var humanDidWin: Bool {
         guard let result = viewModel.gameResult else { return false }
@@ -35,13 +48,37 @@ struct GamePlayView: View {
                 Group {
                     if viewModel.isTwoPlayer && viewModel.isTabletopFaceToFace {
                         tabletopTwoPlayerLayout(w: w, h: h, pad: pad)
-                    } else if w < 700 {
+                    } else if w < 600 {
                         compactPortraitArena(w: w, h: h, pad: pad)
                     } else {
                         standardLandscapeArena(w: w, h: h, pad: pad)
                     }
                 }
                 .frame(width: w, height: h)
+            }
+
+            // Custom Game-Styled Top-Right Actions Dropdown Menu (crisp white icons!)
+            if showActionsMenu {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.22, dampingFraction: 0.82)) {
+                            showActionsMenu = false
+                        }
+                    }
+                    .zIndex(24)
+
+                VStack {
+                    HStack {
+                        Spacer()
+                        gameActionsDropdownCard
+                            .padding(.top, topBarHeight + 14)
+                            .padding(.trailing, 20)
+                    }
+                    Spacer()
+                }
+                .transition(.scale(scale: 0.90, anchor: .topTrailing).combined(with: .opacity))
+                .zIndex(25)
             }
 
             // Tap-to-Explain Authentic Go Term Quick Popover (e.g. Komi / Atari / Ko)
@@ -56,10 +93,6 @@ struct GamePlayView: View {
                 GoTermQuickCard(
                     entry: term,
                     l10n: l10n,
-                    onOpenCodex: {
-                        quickTermPopover = nil
-                        appState.navigationPath.append(.codex)
-                    },
                     onDismiss: {
                         withAnimation(.spring(response: 0.26, dampingFraction: 0.8)) { quickTermPopover = nil }
                     }
@@ -80,9 +113,14 @@ struct GamePlayView: View {
                         .zIndex(28)
                 }
 
+                let isCampaignMatch = viewModel.campaignNodeId != nil || viewModel.bossIslandId != nil
                 GameResultOverlayCard(
                     result: result,
+                    didHumanWin: humanDidWin,
                     isBossVictory: viewModel.bossIslandId != nil && humanDidWin,
+                    backButtonTitle: isCampaignMatch
+                        ? (l10n.language.isChinese ? "返回岛屿" : "Back to Island")
+                        : l10n.t("result.backHome"),
                     bestMove: viewModel.bestMoveNumber,
                     turningPoint: viewModel.turningPointMoveNumber,
                     l10n: l10n,
@@ -104,7 +142,11 @@ struct GamePlayView: View {
                     },
                     onBackHome: {
                         withAnimation { showResultOverlay = false }
-                        appState.popToHome()
+                        if isCampaignMatch {
+                            appState.popRoute()
+                        } else {
+                            appState.popToHome()
+                        }
                     }
                 )
                 .transition(.scale(scale: 0.88).combined(with: .opacity))
@@ -114,42 +156,124 @@ struct GamePlayView: View {
         .animation(.spring(response: 0.30, dampingFraction: 0.78), value: showResultOverlay)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: quickTermPopover)
         .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            viewModel.setSuspended(phase != .active)
+        }
+        .onDisappear {
+            viewModel.setSuspended(true)
+        }
+        .onAppear { viewModel.setSuspended(scenePhase != .active) }
+        .onChange(of: viewModel.isTabletopFaceToFace) { _, enabled in
+            if enabled {
+                focusRegion = nil
+                isChoosingFocus = false
+            }
+        }
         .onChange(of: viewModel.gameResult) { _, newValue in
             if newValue != nil {
                 showResultOverlay = true
             }
         }
-        .alert(l10n.t("game.confirm.resignTitle"), isPresented: $showResignConfirm) {
-            Button(l10n.t("game.action.resign"), role: .destructive) {
-                viewModel.resignCurrentPlayer()
-            }
-            Button(l10n.t("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(l10n.t("game.confirm.resignMessage"))
-        }
-        .alert(l10n.t("game.confirm.newGameTitle"), isPresented: $showNewGameConfirm) {
-            Button(l10n.t("game.action.newGame"), role: .destructive) {
-                viewModel.restartMatch()
-            }
-            Button(l10n.t("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(l10n.t("game.confirm.newGameMessage"))
-        }
-        .alert(
-            l10n.bilingual(zh: "发现未封口的边界！", en: "Unsealed Boundaries Detected!"),
-            isPresented: $viewModel.showUnsealedScoreAlert
-        ) {
-            Button(l10n.bilingual(zh: "回去补边界", en: "Seal First"), role: .cancel) {}
-            Button(l10n.bilingual(zh: "仍要直接数子", en: "Score Anyway")) {
-                viewModel.beginDeadStoneReview(bypassUnsealedWarning: true)
-            }
-        } message: {
-            let count = viewModel.endgameReadiness?.warningCount ?? 0
-            Text(l10n.bilingual(
-                zh: "棋盘上还有 \(count) 处边界未封口（已用红圈标出）。如果边界漏风，这片地盘可能算不成你的空哦！",
-                en: "There are \(count) unsealed border spot(s) marked in red. Unsealed territory won't count cleanly!"
-            ))
-        }
+        .gameDialog(
+            isPresented: $showLeaveMatchConfirm,
+            title: l10n.localized(
+                zh: "离开当前对局？",
+                en: "Leave This Match?",
+                ja: "対局を中断しますか？",
+                ko: "대국을 잠시 멈출까요?",
+                zhHant: "離開目前對局？"
+            ),
+            message: l10n.localized(
+                zh: "未下完的棋局会自动保存，下次进入 AI 对弈时可以随时继续。",
+                en: "Your unfinished game will be saved automatically so you can resume it next time you play vs AI.",
+                ja: "途中の対局は自動で保存され、次回 AI 対局を開いたときに続きから再開できます。",
+                ko: "진행 중인 대국은 자동 저장되며, 다음에 AI 대국에 들어오면 이어서 둘 수 있어요.",
+                zhHant: "未下完的棋局會自動儲存，下次進入 AI 對弈時可以隨時繼續。"
+            ),
+            icon: "bookmark.fill",
+            accentPalette: .sky,
+            actions: [
+                .secondary(l10n.localized(
+                    zh: "继续下棋",
+                    en: "Keep Playing",
+                    ja: "対局を続ける",
+                    ko: "계속 두기",
+                    zhHant: "繼續下棋"
+                )),
+                .primary(
+                    l10n.localized(
+                        zh: "保存并返回",
+                        en: "Save & Leave",
+                        ja: "保存して戻る",
+                        ko: "저장하고 나가기",
+                        zhHant: "儲存並返回"
+                    ),
+                    palette: .sky
+                ) {
+                    if let snapshot = viewModel.makePausedAIMatchSnapshot() {
+                        appState.savePausedAIMatch(snapshot)
+                    }
+                    appState.popRoute()
+                }
+            ]
+        )
+        .gameDialog(
+            isPresented: $showResignConfirm,
+            title: l10n.t("game.confirm.resignTitle"),
+            message: l10n.t("game.confirm.resignMessage"),
+            icon: "flag.fill",
+            accentPalette: .coral,
+            actions: [
+                .secondary(l10n.t("common.cancel")),
+                .destructive(l10n.t("game.action.resign")) {
+                    viewModel.resignCurrentPlayer()
+                }
+            ]
+        )
+        .gameDialog(
+            isPresented: $showNewGameConfirm,
+            title: l10n.t("game.confirm.newGameTitle"),
+            message: l10n.t("game.confirm.newGameMessage"),
+            icon: "arrow.counterclockwise",
+            accentPalette: .sky,
+            actions: [
+                .secondary(l10n.t("common.cancel")),
+                .destructive(l10n.t("game.action.newGame")) {
+                    viewModel.restartMatch()
+                }
+            ]
+        )
+        .gameDialog(
+            isPresented: $viewModel.showUnsealedScoreAlert,
+            title: l10n.localized(
+                zh: "发现未封口的边界！",
+                en: "Unsealed Boundaries Detected!",
+                ja: "境界が閉じていない場所があります！",
+                ko: "열린 경계가 발견되었습니다!",
+                zhHant: "發現未封口的邊界！"
+            ),
+            message: l10n.localized(
+                zh: "棋盘上还有 \(viewModel.endgameReadiness?.warningCount ?? 0) 处边界未封口（已用红圈标出）。如果边界漏风，这片地盘可能算不成你的空哦！",
+                en: "There are \(viewModel.endgameReadiness?.warningCount ?? 0) unsealed border spot(s) marked in red. Unsealed territory won't count cleanly!",
+                ja: "盤上に未封鎖の境界が\(viewModel.endgameReadiness?.warningCount ?? 0)か所（赤丸表示）あります。境界が閉じないと地合いが正しく数えられません。",
+                ko: "바둑판에 막히지 않은 경계가 \(viewModel.endgameReadiness?.warningCount ?? 0)곳(빨간 표시) 있습니다. 경계가 열려 있으면 집으로 계산되지 않아요!",
+                zhHant: "棋盤上還有 \(viewModel.endgameReadiness?.warningCount ?? 0) 處邊界未封口（已用紅圈標出）。如果邊界漏風，這片地盤可能算不成你的空哦！"
+            ),
+            icon: "exclamationmark.triangle.fill",
+            accentPalette: .sun,
+            actions: [
+                .primary(
+                    l10n.localized(zh: "回去补边界", en: "Seal First", ja: "戻って境界を閉じる", ko: "돌아가서 막기", zhHant: "回去補邊界"),
+                    palette: .mint
+                ),
+                .primary(
+                    l10n.localized(zh: "仍要直接数子", en: "Score Anyway", ja: "このまま計算する", ko: "그대로 계가하기", zhHant: "仍要直接數子"),
+                    palette: .sun
+                ) {
+                    viewModel.beginDeadStoneReview(bypassUnsealedWarning: true)
+                }
+            ]
+        )
     }
 
     // MARK: - Standard Landscape Arena (Immutable Board Left + Glossy Controls Right)
@@ -169,15 +293,12 @@ struct GamePlayView: View {
                     .frame(width: boardSide, height: boardSide)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                Group {
-                    if h < 600 {
-                        ScrollView(showsIndicators: false) {
-                            rightControlPanel
-                        }
-                    } else {
-                        rightControlPanel
-                    }
+                ScrollView(showsIndicators: false) {
+                    rightControlPanel
+                        .frame(minHeight: contentHeight)
                 }
+                .scrollClipDisabled()
+                .scrollBounceBehavior(.basedOnSize)
                 .frame(width: sidebarWidth)
             }
             .frame(height: contentHeight)
@@ -193,7 +314,7 @@ struct GamePlayView: View {
 
         return VStack(spacing: 10) {
             gameTopBar
-                .frame(height: 50)
+                .frame(height: topBarHeight)
 
             if boardSide > 0 {
                 boardView
@@ -203,6 +324,7 @@ struct GamePlayView: View {
             ScrollView(showsIndicators: false) {
                 rightControlPanel
             }
+            .scrollClipDisabled()
         }
         .padding(.horizontal, pad)
         .padding(.vertical, 8)
@@ -278,10 +400,10 @@ struct GamePlayView: View {
                 GameCircleButton(icon: "arrow.uturn.backward", palette: .snow, tint: AppTheme.inkPrimary, size: 42, playTapSound: false) {
                     viewModel.undo()
                 }
-                .disabled(viewModel.moves.isEmpty)
+                .disabled(!viewModel.isUndoAllowed)
 
                 if hasKidAssist {
-                    GameCircleButton(icon: "lightbulb.fill", palette: .sun, tint: .white, size: 42) {
+                    GameCircleButton(icon: "lightbulb.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 42) {
                         viewModel.requestHint()
                     }
                     .disabled(!isTurn)
@@ -303,6 +425,7 @@ struct GamePlayView: View {
                     .foregroundColor(hasKidAssist ? .white : AppTheme.sunBottom)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
+                    .frame(minHeight: AppTheme.buttonFaceHeight)
                     .background(Capsule().fill(hasKidAssist ? AppTheme.sunBottom : AppTheme.softGoldBg))
             }
             .tactileButton(scale: 0.94, sound: false)
@@ -318,10 +441,50 @@ struct GamePlayView: View {
 
     // MARK: - Glossy Top Bar (with Tappable Komi Term Explainer!)
 
+    private var canShowResumeLastMatchButton: Bool {
+        !viewModel.isTwoPlayer
+            && !viewModel.isExamMatch
+            && viewModel.bossIslandId == nil
+            && viewModel.tacticalScenario == nil
+            && appState.pausedAIMatch != nil
+    }
+
     private var gameTopBar: some View {
         HStack(spacing: 12) {
-            GameBackButton(title: l10n.t("common.back")) {
-                appState.popRoute()
+            HStack(spacing: 10) {
+                GameBackButton(title: l10n.t("common.back")) {
+                    if viewModel.shouldConfirmBeforeLeaving {
+                        showLeaveMatchConfirm = true
+                    } else {
+                        appState.popRoute()
+                    }
+                }
+
+                if canShowResumeLastMatchButton {
+                    Button {
+                        SoundAndHapticsManager.shared.playUITap()
+                        appState.resumePausedAIMatch()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.counterclockwise.circle.fill")
+                                .font(.system(size: 15, weight: .black))
+                            Text(l10n.localized(
+                                zh: "继续上局",
+                                en: "Resume Last",
+                                ja: "前回の続き",
+                                ko: "이어서 두기",
+                                zhHant: "繼續上局"
+                            ))
+                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .lineLimit(1)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+                    .accessibilityIdentifier("GameResumePausedMatchButton")
+                }
             }
 
             Spacer()
@@ -346,6 +509,23 @@ struct GamePlayView: View {
             Spacer()
 
             HStack(spacing: 10) {
+                if offersBoardFocus {
+                    Button {
+                        if focusRegion != nil {
+                            focusRegion = nil
+                        } else {
+                            isChoosingFocus.toggle()
+                        }
+                    } label: {
+                        Image(systemName: focusRegion != nil ? "minus.magnifyingglass" : "plus.magnifyingglass")
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel(focusRegion != nil
+                        ? l10n.localized(zh: "显示全盘", en: "Show full board", ja: "全盤を表示", ko: "전체 판 보기", zhHant: "顯示全盤")
+                        : l10n.localized(zh: "选择放大区域", en: "Choose area to zoom", ja: "拡大エリアを選択", ko: "확대 영역 선택", zhHant: "選擇放大區域"))
+                    .accessibilityIdentifier("GameBoardFocusButton")
+                }
                 if viewModel.isTwoPlayer {
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -361,35 +541,18 @@ struct GamePlayView: View {
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                 }
 
-                Menu {
-                    Button {
-                        showNewGameConfirm = true
-                    } label: {
-                        Label(l10n.t("game.action.newGame"), systemImage: "arrow.clockwise")
-                    }
-                    if !viewModel.isTwoPlayer {
-                        Button {
-                            viewModel.isCoopMode.toggle()
-                            SoundAndHapticsManager.shared.playUITap()
-                        } label: {
-                            Label(
-                                l10n.t("game.action.coopToggle"),
-                                systemImage: viewModel.isCoopMode ? "checkmark.circle.fill" : "person.2.fill"
-                            )
-                        }
-                    }
-                    if !viewModel.isGameOver {
-                        Button(role: .destructive) {
-                            showResignConfirm = true
-                        } label: {
-                            Label(l10n.t("game.action.resign"), systemImage: "flag.fill")
-                        }
+                stoneDisplayToggleButton
+
+                Button {
+                    SoundAndHapticsManager.shared.playUITap(weight: .light)
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.80)) {
+                        showActionsMenu.toggle()
                     }
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 18, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
-                        .frame(width: 46, height: 46)
+                        .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
                         .background(
                             ZStack {
                                 Circle().fill(GlossyPalette.snow.rim).overlay(Circle().strokeBorder(.white, lineWidth: 3)).offset(y: 5)
@@ -400,13 +563,405 @@ struct GamePlayView: View {
                         )
                         .padding(.bottom, 5)
                 }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("GameActionsMenu")
+            }
+        }
+    }
 
-                GameCircleButton(icon: "gearshape.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 46) {
-                    appState.showSettingsSheet = true
+    private enum StoneDisplayMode: Equatable {
+        case expressive
+        case moveNumbers
+        case standard
+    }
+
+    private var currentStoneDisplayMode: StoneDisplayMode {
+        if appState.settings.showMoveNumbers {
+            return .moveNumbers
+        }
+        if appState.settings.expressiveStones && !appState.settings.zenDojoMode && !viewModel.isExamMatch {
+            return .expressive
+        }
+        return .standard
+    }
+
+    private var stoneDisplayAccessibilityLabel: String {
+        switch currentStoneDisplayMode {
+        case .expressive:
+            return l10n.localized(
+                zh: "棋子样式：萌趣表情",
+                en: "Stone Display: Smiley",
+                ja: "碁石の表示：表情",
+                ko: "바둑돌 표시: 표정",
+                zhHant: "棋子樣式：萌趣表情"
+            )
+        case .moveNumbers:
+            return l10n.localized(
+                zh: "棋子样式：显示手数",
+                en: "Stone Display: Move Numbers",
+                ja: "碁石の表示：手数",
+                ko: "바둑돌 표시: 수순",
+                zhHant: "棋子樣式：顯示手數"
+            )
+        case .standard:
+            return l10n.localized(
+                zh: "棋子样式：默认",
+                en: "Stone Display: Default",
+                ja: "碁石の表示：デフォルト",
+                ko: "바둑돌 표시: 기본",
+                zhHant: "棋子樣式：預設"
+            )
+        }
+    }
+
+    private func cycleStoneDisplayMode() {
+        let nextMode: StoneDisplayMode
+        if viewModel.isExamMatch {
+            nextMode = currentStoneDisplayMode == .moveNumbers ? .standard : .moveNumbers
+        } else {
+            switch currentStoneDisplayMode {
+            case .expressive:
+                nextMode = .moveNumbers
+            case .moveNumbers:
+                nextMode = .standard
+            case .standard:
+                nextMode = .expressive
+            }
+        }
+
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
+            appState.updateSettings { s in
+                switch nextMode {
+                case .expressive:
+                    s.showMoveNumbers = false
+                    s.expressiveStones = true
+                    s.zenDojoMode = false
+                    s.assistPreset = .custom
+                case .moveNumbers:
+                    s.showMoveNumbers = true
+                    s.expressiveStones = false
+                    s.assistPreset = .custom
+                case .standard:
+                    s.showMoveNumbers = false
+                    s.expressiveStones = false
+                    s.assistPreset = .custom
+                }
+            }
+            if showActionsMenu {
+                showActionsMenu = false
+            }
+        }
+        SoundAndHapticsManager.shared.playUITap(weight: .light)
+    }
+
+    private var stoneToggleGradientColors: [Color] {
+        switch appState.settings.stoneStyle {
+        case .classicSlateShell:
+            return [
+                Color(red: 0.36, green: 0.38, blue: 0.42),
+                Color(red: 0.13, green: 0.14, blue: 0.17),
+                Color(red: 0.05, green: 0.06, blue: 0.08)
+            ]
+        case .coralPearl:
+            return [
+                Color(red: 0.24, green: 0.46, blue: 0.56),
+                Color(red: 0.08, green: 0.22, blue: 0.32),
+                Color(red: 0.04, green: 0.11, blue: 0.18)
+            ]
+        case .kyotoLacquer:
+            return [
+                Color(red: 0.44, green: 0.24, blue: 0.18),
+                Color(red: 0.16, green: 0.08, blue: 0.07),
+                Color(red: 0.07, green: 0.04, blue: 0.04)
+            ]
+        case .starlightJade:
+            return [
+                Color(red: 0.18, green: 0.54, blue: 0.46),
+                Color(red: 0.07, green: 0.26, blue: 0.24),
+                Color(red: 0.03, green: 0.12, blue: 0.14)
+            ]
+        }
+    }
+
+    private var stoneDisplayToggleButton: some View {
+        let mode = currentStoneDisplayMode
+        let stoneSize: CGFloat = 31
+
+        return Button {
+            cycleStoneDisplayMode()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: stoneToggleGradientColors,
+                            center: UnitPoint(x: 0.35, y: 0.32),
+                            startRadius: 1.5,
+                            endRadius: stoneSize * 0.65
+                        )
+                    )
+                    .frame(width: stoneSize, height: stoneSize)
+                    .shadow(color: Color.black.opacity(0.24), radius: 2.5, x: 0.8, y: 1.6)
+
+                Group {
+                    switch mode {
+                    case .expressive:
+                        Canvas { ctx, size in
+                            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                            let r = min(size.width, size.height) / 2
+                            let ink = Color.white.opacity(0.94)
+                            let eyeDX = r * 0.29
+                            let eyeY = center.y - r * 0.08
+                            let eyeR = max(1.6, r * 0.125)
+
+                            for dir in [-1.0, 1.0] {
+                                let ex = center.x + CGFloat(dir) * eyeDX
+                                ctx.fill(
+                                    Path(ellipseIn: CGRect(x: ex - eyeR, y: eyeY - eyeR, width: eyeR * 2, height: eyeR * 2)),
+                                    with: .color(ink)
+                                )
+                            }
+
+                            var smile = Path()
+                            smile.move(to: CGPoint(x: center.x - r * 0.22, y: center.y + r * 0.18))
+                            smile.addQuadCurve(
+                                to: CGPoint(x: center.x + r * 0.22, y: center.y + r * 0.18),
+                                control: CGPoint(x: center.x, y: center.y + r * 0.40)
+                            )
+                            ctx.stroke(smile, with: .color(ink), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                        }
+                        .frame(width: stoneSize, height: stoneSize)
+                    case .moveNumbers:
+                        Text("1")
+                            .font(.system(size: 14.5, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                    case .standard:
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [Color.white.opacity(0.30), Color.white.opacity(0.0)],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 6
+                                )
+                            )
+                            .frame(width: 11, height: 11)
+                            .offset(x: -5.5, y: -5.5)
+                    }
+                }
+                .id(mode)
+                .transition(.scale(scale: 0.72).combined(with: .opacity))
+            }
+            .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
+            .background(
+                ZStack {
+                    Circle().fill(GlossyPalette.snow.rim).overlay(Circle().strokeBorder(.white, lineWidth: 3)).offset(y: 5)
+                    Circle()
+                        .fill(LinearGradient(colors: [GlossyPalette.snow.top, GlossyPalette.snow.bottom], startPoint: .top, endPoint: .bottom))
+                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                }
+            )
+            .padding(.bottom, 5)
+        }
+        .tactileButton(scale: 0.92, sound: false)
+        .accessibilityLabel(stoneDisplayAccessibilityLabel)
+        .accessibilityIdentifier("GameStoneDisplayToggleButton")
+    }
+
+    private var gameActionsDropdownCard: some View {
+        let placementMode = appState.settings.stonePlacementMode
+
+        return VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(l10n.localized(
+                    zh: "落子方式",
+                    en: "Placement Mode",
+                    ja: "着手の方法",
+                    ko: "착수 방식",
+                    zhHant: "落子方式"
+                ))
+                .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                .foregroundColor(Color.white.opacity(0.66))
+                .padding(.horizontal, 4)
+
+                HStack(spacing: 4) {
+                    menuModeChoiceButton(
+                        title: l10n.localized(
+                            zh: "点两下落子",
+                            en: "Double Tap",
+                            ja: "2タップ",
+                            ko: "두 번 탭",
+                            zhHant: "點兩下落子"
+                        ),
+                        icon: "hand.tap.fill",
+                        isSelected: placementMode == .doubleTap,
+                        accessibilityId: "GamePlacementModeDoubleTap"
+                    ) {
+                        appState.updateSettings { s in
+                            s.stonePlacementMode = .doubleTap
+                        }
+                        SoundAndHapticsManager.shared.playUITap(weight: .light)
+                    }
+
+                    menuModeChoiceButton(
+                        title: l10n.localized(
+                            zh: "确认按钮",
+                            en: "Confirm Btn",
+                            ja: "確認ボタン",
+                            ko: "확인 버튼",
+                            zhHant: "確認按鈕"
+                        ),
+                        icon: "checkmark.circle.fill",
+                        isSelected: placementMode == .confirmButton,
+                        accessibilityId: "GamePlacementModeConfirmButton"
+                    ) {
+                        appState.updateSettings { s in
+                            s.stonePlacementMode = .confirmButton
+                        }
+                        SoundAndHapticsManager.shared.playUITap(weight: .light)
+                    }
+                }
+                .padding(3)
+                .background(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(Color.white.opacity(0.10))
+                )
+            }
+            .padding(.horizontal, 6)
+            .padding(.top, 4)
+            .padding(.bottom, 6)
+
+            Divider()
+                .background(Color.white.opacity(0.20))
+                .padding(.bottom, 2)
+
+            actionsMenuRow(
+                title: l10n.t("settings.assist.coordinates"),
+                icon: appState.settings.showCoordinates ? "checkmark.circle.fill" : "grid"
+            ) {
+                appState.updateSettings { $0.showCoordinates.toggle() }
+                SoundAndHapticsManager.shared.playUITap(weight: .light)
+            }
+
+            if !viewModel.isTwoPlayer {
+                actionsMenuRow(
+                    title: l10n.localized(
+                        zh: "AI 思考时间",
+                        en: "AI Thinking Time",
+                        ja: "AIの思考時間",
+                        ko: "AI 생각 시간",
+                        zhHant: "AI 思考時間"
+                    ),
+                    icon: appState.settings.aiSimulatedThinkingEnabled ? "checkmark.circle.fill" : "clock"
+                ) {
+                    appState.updateSettings { $0.aiSimulatedThinkingEnabled.toggle() }
+                    SoundAndHapticsManager.shared.playUITap(weight: .light)
+                }
+            }
+
+            actionsMenuRow(
+                title: l10n.t("settings.feedback.sound"),
+                icon: appState.settings.soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"
+            ) {
+                appState.updateSettings { $0.soundEnabled.toggle() }
+                SoundAndHapticsManager.shared.playUITap(weight: .light)
+            }
+
+            Divider()
+                .background(Color.white.opacity(0.24))
+                .padding(.vertical, 4)
+
+            actionsMenuRow(
+                title: l10n.t("game.action.newGame"),
+                icon: "arrow.clockwise"
+            ) {
+                showActionsMenu = false
+                showNewGameConfirm = true
+            }
+
+            if !viewModel.isGameOver {
+                actionsMenuRow(
+                    title: l10n.t("game.action.resign"),
+                    icon: "flag.fill",
+                    isDestructive: true
+                ) {
+                    showActionsMenu = false
+                    showResignConfirm = true
                 }
             }
         }
+        .padding(10)
+        .frame(width: 248)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color(red: 0.11, green: 0.16, blue: 0.28).opacity(0.96))
+                .shadow(color: Color.black.opacity(0.32), radius: 18, y: 10)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.42), lineWidth: 2)
+        )
+    }
+
+    private func menuModeChoiceButton(
+        title: String,
+        icon: String,
+        isSelected: Bool,
+        accessibilityId: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .bold))
+                Text(title)
+                    .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .foregroundColor(isSelected ? .white : Color.white.opacity(0.72))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)
+                            : LinearGradient(colors: [.clear, .clear], startPoint: .top, endPoint: .bottom)
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityId)
+    }
+
+    private func actionsMenuRow(
+        title: String,
+        icon: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(isDestructive ? Color(red: 1.0, green: 0.56, blue: 0.56) : .white)
+                    .frame(width: 22, alignment: .center)
+
+                Text(title)
+                    .font(.system(size: 14.5, weight: .bold, design: .rounded))
+                    .foregroundColor(isDestructive ? Color(red: 1.0, green: 0.62, blue: 0.62) : .white)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var headerTitle: String {
@@ -440,6 +995,8 @@ struct GamePlayView: View {
         GoBoardView(
             boardState: viewModel.boardState,
             theme: appState.settings.boardTheme,
+            stoneStyle: appState.settings.stoneStyle,
+            cropRegion: focusRegion,
             showCoordinates: appState.settings.showCoordinates,
             showMoveNumbers: appState.settings.showMoveNumbers,
             moveNumbers: viewModel.moveNumberLookup,
@@ -452,9 +1009,11 @@ struct GamePlayView: View {
             territoryEstimate: viewModel.showTerritoryOverlay ? viewModel.territoryEstimate : nil,
             aiSuggestions: viewModel.suggestions,
             unsealedWarningPoints: viewModel.unsealedWarningPoints,
+            labeledPoints: viewModel.scenarioBoardLabels,
             highlightedPocketPoints: viewModel.highlightedPocketPoints,
             pendingPoint: viewModel.pendingPoint,
             previewColor: viewModel.boardState.currentTurn,
+            isChoosingRegion: isChoosingFocus,
             isInteractive: (viewModel.isHumansTurn && !viewModel.isAIThinking && !viewModel.isGameOver) || viewModel.isMarkingDeadStones,
             capturedFlashPoints: viewModel.lastCapturedPoints,
             captureEventID: viewModel.captureEventID,
@@ -463,9 +1022,47 @@ struct GamePlayView: View {
             libertyBadgeFormat: l10n.t("game.libertiesBadge"),
             koBadgeLabel: l10n.t("board.koBadge"),
             onSelectPoint: { point in
-                viewModel.handleBoardTap(at: point)
+                if isChoosingFocus {
+                    focusRegion = .focused(around: point, size: viewModel.boardState.size)
+                    isChoosingFocus = false
+                } else {
+                    viewModel.handleBoardTap(at: point)
+                }
             }
         )
+        .overlay(alignment: .top) {
+            if isChoosingFocus {
+                Text(l10n.localized(zh: "点选要放大的位置", en: "Tap the area to zoom", ja: "拡大する場所をタップ", ko: "확대할 위치를 탭하세요", zhHant: "點選要放大的位置"))
+                    .font(.caption.bold())
+                    .padding(8)
+                    .background(.regularMaterial, in: Capsule())
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay {
+            if viewModel.isAIThinking && !viewModel.isGameOver && !isChoosingFocus {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        triggerAIThinkingNudge()
+                    }
+            }
+        }
+    }
+
+    private func triggerAIThinkingNudge() {
+        SoundAndHapticsManager.shared.playUITap(weight: .light)
+        withAnimation(.easeInOut(duration: 0.36)) {
+            aiThinkingNudgeShake += 2
+        }
+        withAnimation(.easeOut(duration: 0.14)) {
+            aiThinkingNudgeFlash = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(.easeOut(duration: 0.25)) {
+                aiThinkingNudgeFlash = false
+            }
+        }
     }
 
     // MARK: - Glossy Right Control Panel
@@ -474,24 +1071,6 @@ struct GamePlayView: View {
         VStack(spacing: 12) {
             if let diff = viewModel.aiDifficulty, !appState.settings.zenDojoMode {
                 companionCard(difficulty: diff)
-            }
-
-            // Co-op Pair Go Seat Indicator (when playing Parent + Child together!)
-            if viewModel.isCoopMode && !viewModel.isGameOver {
-                HStack(spacing: 10) {
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 16, weight: .black))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(AppTheme.mintBottom))
-                    Text(l10n.t(viewModel.coopTurnSeat == 1 ? "game.coop.kidTurn" : "game.coop.parentTurn"))
-                        .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundColor(AppTheme.mintBottom)
-                    Spacer()
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(AppTheme.mintTop.opacity(0.16)))
             }
 
             // Capture Race Trophy Bar (when playing 吃子棋!)
@@ -511,7 +1090,9 @@ struct GamePlayView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     if viewModel.isAIThinking {
-                        ProgressView().scaleEffect(0.82)
+                        ProgressView()
+                            .tint(AppTheme.skyBottom)
+                            .scaleEffect(0.88)
                     } else {
                         Circle()
                             .fill(viewModel.boardState.currentTurn == .black ? Color(white: 0.14) : Color.white)
@@ -520,8 +1101,12 @@ struct GamePlayView: View {
                     }
 
                     Text(primaryStatusLine)
-                        .font(.system(size: 13, weight: .heavy, design: .rounded))
-                        .foregroundColor(isAlertStatus ? AppTheme.coralBottom : AppTheme.inkPrimary)
+                        .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                        .foregroundColor(
+                            isAlertStatus
+                                ? AppTheme.coralBottom
+                                : (viewModel.isAIThinking ? AppTheme.skyBottom : AppTheme.inkPrimary)
+                        )
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                 }
@@ -540,7 +1125,27 @@ struct GamePlayView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .warmCard(cornerRadius: 22, padding: 14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(
+                        viewModel.isAIThinking
+                            ? AppTheme.skyTop.opacity(aiThinkingNudgeFlash ? 0.95 : 0.55)
+                            : Color.clear,
+                        lineWidth: aiThinkingNudgeFlash ? 3 : 2
+                    )
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(viewModel.isAIThinking ? AppTheme.skyTop.opacity(aiThinkingNudgeFlash ? 0.14 : 0.06) : Color.clear)
+            )
+            .shadow(
+                color: viewModel.isAIThinking ? AppTheme.skyTop.opacity(aiThinkingNudgeFlash ? 0.35 : 0.14) : .clear,
+                radius: aiThinkingNudgeFlash ? 14 : 8,
+                y: 2
+            )
+            .modifier(LockedShakeEffect(shakes: aiThinkingNudgeShake, amplitude: 6))
             .animation(.easeInOut(duration: 0.18), value: viewModel.showTerritoryOverlay)
+            .animation(.easeInOut(duration: 0.22), value: viewModel.isAIThinking)
 
             Spacer(minLength: 2)
 
@@ -550,15 +1155,17 @@ struct GamePlayView: View {
             } else {
                 // Fixed-height Confirm Placement Slot
                 ZStack {
-                    if let pending = viewModel.pendingPoint {
-                        confirmPlacementBar(for: pending)
+                    if viewModel.showsConfirmPlacementButton, viewModel.pendingPoint != nil {
+                        confirmPlacementBar
+                            .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
                             .transition(.scale(scale: 0.94).combined(with: .opacity))
                     } else {
                         Color.clear
                     }
                 }
-                .frame(height: 56)
+                .frame(height: AppTheme.boardActionFaceHeight + 5)
                 .animation(.spring(response: 0.24, dampingFraction: 0.72), value: viewModel.pendingPoint)
+                .animation(.spring(response: 0.24, dampingFraction: 0.72), value: viewModel.showsConfirmPlacementButton)
 
                 // Glossy Candy-Capsule Controls Grid
                 VStack(spacing: 10) {
@@ -568,7 +1175,7 @@ struct GamePlayView: View {
                             icon: "arrow.uturn.backward",
                             palette: .snow,
                             tint: AppTheme.inkPrimary,
-                            disabled: !viewModel.isUndoAllowed || viewModel.moves.isEmpty || viewModel.isAIThinking || viewModel.isGameOver,
+                            disabled: !viewModel.isUndoAllowed,
                             playSound: false
                         ) {
                             viewModel.undo()
@@ -577,8 +1184,8 @@ struct GamePlayView: View {
                         glossyActionTile(
                             title: l10n.t("game.action.hint"),
                             icon: viewModel.isComputingHint ? "hourglass" : "lightbulb.fill",
-                            palette: .sun,
-                            tint: .white,
+                            palette: .snow,
+                            tint: AppTheme.inkPrimary,
                             disabled: viewModel.isExamMatch || !viewModel.isHumansTurn || viewModel.isAIThinking || viewModel.isGameOver
                         ) {
                             viewModel.requestHint()
@@ -607,19 +1214,22 @@ struct GamePlayView: View {
                         }
                     }
 
-                    Button {
-                        viewModel.beginDeadStoneReview()
-                    } label: {
-                        Label(l10n.t("game.action.score"), systemImage: "flag.checkered")
-                            .font(.system(size: 16, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                            .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                    if !viewModel.ruleSet.isCaptureRace {
+                        Button {
+                            viewModel.beginDeadStoneReview()
+                        } label: {
+                            Label(l10n.t("game.action.score"), systemImage: "flag.checkered")
+                                .font(.system(size: 16, weight: .black, design: .rounded))
+                                .foregroundColor(.white)
+                                .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
+                        .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
+                        .disabled(viewModel.isGameOver || viewModel.moves.count < 2)
+                        .opacity(viewModel.isGameOver || viewModel.moves.count < 2 ? 0.42 : 1)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
-                    .disabled(viewModel.isGameOver || viewModel.moves.count < 2)
-                    .opacity(viewModel.isGameOver || viewModel.moves.count < 2 ? 0.42 : 1)
                 }
             }
         }
@@ -680,6 +1290,7 @@ struct GamePlayView: View {
                             .foregroundColor(selected ? .white : AppTheme.inkSecondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
+                            .frame(minHeight: AppTheme.buttonFaceHeight)
                             .background(
                                 Capsule().fill(
                                     selected
@@ -705,6 +1316,7 @@ struct GamePlayView: View {
                     .foregroundColor(AppTheme.sunBottom)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
+                    .frame(minHeight: AppTheme.buttonFaceHeight)
                     .background(Capsule().fill(AppTheme.softGoldBg))
                 }
                 .tactileButton(scale: 0.94, sound: false)
@@ -797,14 +1409,35 @@ struct GamePlayView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(l10n.t(difficulty.nameKey)) · \(difficulty.rankBadge)")
-                    .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.skyBottom)
-                Text(viewModel.companionDialogueText)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(AppTheme.inkPrimary)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.85)
+                if let scenario = viewModel.tacticalScenario {
+                    HStack(spacing: 6) {
+                        Text(scenario.title(isChinese: l10n.language.isChinese))
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .foregroundColor(AppTheme.coralBottom)
+                        if let progressText = viewModel.scenarioProgressSummary {
+                            Text(progressText)
+                                .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(AppTheme.coralBottom))
+                        }
+                    }
+                    Text(scenario.briefing(isChinese: l10n.language.isChinese))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                } else {
+                    Text("\(l10n.t(difficulty.nameKey)) · \(difficulty.rankBadge)")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.skyBottom)
+                    Text(viewModel.companionDialogueText)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.85)
+                }
             }
 
             Spacer(minLength: 0)
@@ -853,6 +1486,7 @@ struct GamePlayView: View {
                         .font(.system(size: 10, weight: .black))
                     Text(pClock.formattedDisplay)
                         .font(.system(size: 12.5, weight: .black, design: .monospaced))
+                        .monospacedDigit()
                 }
                 .foregroundColor(pClock.isUrgentCountdown ? .white : (isActiveTurn ? AppTheme.skyBottom : AppTheme.inkSecondary))
                 .padding(.horizontal, 9)
@@ -864,44 +1498,40 @@ struct GamePlayView: View {
                         : AnyShapeStyle(isActiveTurn ? AppTheme.skyTop.opacity(0.16) : AppTheme.canvasBackground)
                     )
                 )
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: isActiveTurn ? "stopwatch.fill" : "clock")
+                        .font(.system(size: 10, weight: .black))
+                    Text(viewModel.formattedElapsedTime(for: color))
+                        .font(.system(size: 12.5, weight: .black, design: .monospaced))
+                        .monospacedDigit()
+                }
+                .foregroundColor(isActiveTurn ? AppTheme.skyBottom : AppTheme.inkSecondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(
+                        isActiveTurn ? AppTheme.skyTop.opacity(0.16) : AppTheme.canvasBackground
+                    )
+                )
             }
 
             WoodenGoBowlView(capturedColor: color.opposite, count: captures)
         }
     }
 
-    private func confirmPlacementBar(for pending: BoardPoint) -> some View {
-        HStack(spacing: 8) {
-            Text(pending.humanLabel(boardSize: viewModel.boardState.size))
-                .font(.system(size: 15, weight: .black, design: .monospaced))
-                .foregroundColor(AppTheme.skyBottom)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(AppTheme.skyTop.opacity(0.16)))
-
-            Button {
-                viewModel.cancelPendingPlacement()
-            } label: {
-                Text(l10n.t("game.action.cancelPlace"))
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundColor(AppTheme.inkSecondary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5, playTapSound: false))
-
-            Button {
-                viewModel.confirmPendingPlacement()
-            } label: {
-                Label(l10n.t("game.action.confirmPlace"), systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
-                    .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+    private var confirmPlacementBar: some View {
+        Button {
+            viewModel.confirmPendingPlacement()
+        } label: {
+            Label(l10n.t("game.action.confirmPlace"), systemImage: "checkmark.circle.fill")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+                .shadow(color: AppTheme.skyRim.opacity(0.45), radius: 1, y: 1.5)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
         }
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
     }
 
     private func glossyActionTile(
@@ -923,7 +1553,7 @@ struct GamePlayView: View {
                     .minimumScaleFactor(0.8)
             }
             .foregroundColor(tint)
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .frame(maxWidth: .infinity, minHeight: AppTheme.boardActionFaceHeight)
         }
         .buttonStyle(
             GlossyCapsuleButtonStyle(
@@ -982,7 +1612,9 @@ struct GamePlayView: View {
 
 private struct GameResultOverlayCard: View {
     let result: GameResult
+    let didHumanWin: Bool
     let isBossVictory: Bool
+    let backButtonTitle: String
     let bestMove: Int?
     let turningPoint: Int?
     let l10n: L10n
@@ -992,8 +1624,15 @@ private struct GameResultOverlayCard: View {
     let onBackHome: () -> Void
 
     var body: some View {
+        ViewThatFits(in: .vertical) {
+            resultCard
+            ScrollView { resultCard }
+        }
+    }
+
+    private var resultCard: some View {
         VStack(spacing: 16) {
-            Text(isBossVictory ? "👑" : (result.winner == .black ? "🏆" : "🎉"))
+            Text(isBossVictory ? "👑" : (didHumanWin ? "🏆" : "💪"))
                 .font(.system(size: 56))
 
             if isBossVictory {
@@ -1049,7 +1688,7 @@ private struct GameResultOverlayCard: View {
 
             HStack(spacing: 12) {
                 Button(action: onBackHome) {
-                    Text(l10n.t("result.backHome"))
+                    Text(backButtonTitle)
                         .font(.system(size: 15, weight: .heavy, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)

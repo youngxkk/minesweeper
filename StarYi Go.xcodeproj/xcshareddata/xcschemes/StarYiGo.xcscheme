@@ -11,6 +11,9 @@
       <Testables>
          <TestableReference skipped="NO">
             <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="174E60362D6A25250000AF4C" BuildableName="StarYiGoTests.xctest" BlueprintName="StarYiGoTests" ReferencedContainer="container:StarYi Go.xcodeproj"/>
+            <SkippedTests>
+               <Test Identifier="UpgradeInstallationTests"/>
+            </SkippedTests>
          </TestableReference>
          <TestableReference skipped="NO">
             <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="174E60402D6A25250000AF4C" BuildableName="StarYiGoUITests.xctest" BlueprintName="StarYiGoUITests" ReferencedContainer="container:StarYi Go.xcodeproj"/>

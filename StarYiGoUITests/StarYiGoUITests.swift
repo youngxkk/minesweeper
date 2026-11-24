@@ -12,9 +12,9 @@ final class StarYiGoUITests: XCTestCase {
     }
 
     @MainActor
-    private func makeApp() -> XCUIApplication {
+    private func makeApp(language: String = "en", locale: String = "en_US") -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", locale]
         app.launchEnvironment["STARYIGO_UI_TEST_SUITE"] = "StarYiGoUITests.\(UUID())"
         return app
     }
@@ -24,6 +24,51 @@ final class StarYiGoUITests: XCTestCase {
         for _ in 0..<6 where !element.isHittable && scrollView.exists {
             scrollView.swipeUp(velocity: .slow)
         }
+    }
+
+    @MainActor
+    func testCampaignMapVisualReview() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = makeApp()
+        app.launch()
+        let quest = app.buttons["HomePuzzleQuestButton"]
+        XCTAssertTrue(quest.waitForExistence(timeout: 10))
+        quest.tap()
+
+        let landmarks = ["IslandPin_s1-reef", "IslandPinLocked_s2-wind", "IslandPinLocked_s3-pine", "IslandPinLocked_s4-mist", "IslandPinLocked_s5-forge"]
+        for (offset, landmark) in landmarks.enumerated() {
+            let index = offset + 1
+            let tab = app.buttons["SeaTab_sea-\(index)"]
+            XCTAssertTrue(tab.waitForExistence(timeout: 5))
+            tab.tap()
+            let selected = NSPredicate(format: "label CONTAINS %@", "Sea \(index)")
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: selected, object: tab)], timeout: 5), .completed)
+            let pin = app.buttons[landmark]
+            let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                pin.exists && pin.frame.midX >= app.frame.width * 0.1 && pin.frame.midX <= app.frame.width * 0.4
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed)
+            let title = app.descendants(matching: .any)["CampaignMapTitle"]
+            XCTAssertTrue(title.exists)
+            XCTAssertEqual(title.frame.midX, app.frame.midX, accuracy: 1)
+            if index > 1 {
+                let gate = app.buttons["CampaignSkipGateButton"]
+                XCTAssertTrue(gate.exists)
+                XCTAssertLessThanOrEqual(pin.frame.maxY, gate.frame.minY + 2)
+            }
+            let capture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            capture.name = "Campaign-Sea-\(index)"
+            capture.lifetime = .keepAlways
+            add(capture)
+        }
+
+        let map = app.scrollViews.firstMatch
+        let start = map.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.45))
+        let end = map.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.45))
+        start.press(forDuration: 0.08, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
+        let fourthSea = app.buttons["SeaTab_sea-4"]
+        let selected = NSPredicate(format: "label CONTAINS %@", "Sea 4")
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: selected, object: fourthSea)], timeout: 5), .completed)
     }
 
     @MainActor
@@ -38,11 +83,9 @@ final class StarYiGoUITests: XCTestCase {
 
         let board = app.otherElements["GoBoardCanvas"]
         XCTAssertTrue(board.waitForExistence(timeout: 10))
-        board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let confirm = app.buttons["Place Stone"]
-        reveal(confirm, in: app.scrollViews.firstMatch)
-        XCTAssertTrue(confirm.isHittable)
-        confirm.tap()
+        let center = board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        center.tap()
+        center.tap()
 
         let aiReply = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "GameStatusButton", "Move 2 ·")).firstMatch
         XCTAssertTrue(aiReply.waitForExistence(timeout: 20), "The AI must complete the second ply")
@@ -51,7 +94,7 @@ final class StarYiGoUITests: XCTestCase {
         XCTAssertTrue(actions.isHittable)
         actions.tap()
         app.buttons["Resign"].tap()
-        app.alerts.buttons["Resign"].tap()
+        app.buttons["Resign"].tap()
         XCTAssertTrue(app.buttons["Home"].waitForExistence(timeout: 10))
 
         // Relaunch against the same isolated store to verify persistence.
@@ -102,13 +145,23 @@ final class StarYiGoUITests: XCTestCase {
         let initialFrame = board.frame
         XCTAssertGreaterThan(initialFrame.width, 0)
 
-        // 3. Tap center of board (enters pending confirm state on 13x13)
+        // 3. Switch to Confirm Button mode via top-right menu, then tap center of board
+        let actions = app.buttons["GameActionsMenu"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        let confirmModeBtn = app.buttons["GamePlacementModeConfirmButton"]
+        XCTAssertTrue(confirmModeBtn.waitForExistence(timeout: 3))
+        confirmModeBtn.tap()
+        actions.tap()
+
         board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let confirmZh = app.buttons["确认落子"]
         let confirmEn = app.buttons["Place Stone"]
         let confirmBtn = confirmZh.waitForExistence(timeout: 3) ? confirmZh : confirmEn
         reveal(confirmBtn, in: app.scrollViews.firstMatch)
         XCTAssertTrue(confirmBtn.isHittable, "Confirm button should appear in fixed dock")
+
+        XCTAssertGreaterThanOrEqual(confirmBtn.frame.height, 56)
 
         let pendingFrame = board.frame
         XCTAssertEqual(initialFrame.origin.x, pendingFrame.origin.x, accuracy: 0.5, "Board X must not jump when confirm bar appears")
@@ -132,10 +185,66 @@ final class StarYiGoUITests: XCTestCase {
         let terrBtn = terrZh.exists ? terrZh : terrEn
         reveal(terrBtn, in: app.scrollViews.firstMatch)
         XCTAssertTrue(terrBtn.isHittable)
+        XCTAssertGreaterThanOrEqual(terrBtn.frame.height, 56)
         terrBtn.tap()
         let territoryFrame = board.frame
         XCTAssertEqual(initialFrame.origin.y, territoryFrame.origin.y, accuracy: 0.5, "Board Y must not jump when toggling territory")
         XCTAssertEqual(initialFrame.height, territoryFrame.height, accuracy: 0.5, "Board height must not change when toggling territory")
+    }
+
+    @MainActor
+    func testChineseNineteenLineBoardOnPhoneAndPad() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = makeApp(language: "zh-Hans", locale: "zh_CN")
+        app.launch()
+
+        let start = app.buttons["HomeStartMatchButton"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        let size = app.buttons["HomeBoardSizeChip"]
+        reveal(size, in: app.scrollViews.firstMatch)
+        XCTAssertTrue(size.isHittable)
+        size.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let nineteen = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "标准全场")).firstMatch
+        XCTAssertTrue(nineteen.waitForExistence(timeout: 5))
+        nineteen.tap()
+        reveal(start, in: app.scrollViews.firstMatch)
+        XCTAssertTrue(start.isHittable)
+        start.tap()
+
+        let actions = app.buttons["GameActionsMenu"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        actions.tap()
+        let confirmModeBtn = app.buttons["GamePlacementModeConfirmButton"]
+        XCTAssertTrue(confirmModeBtn.waitForExistence(timeout: 3))
+        confirmModeBtn.tap()
+        actions.tap()
+
+        let board = app.otherElements["GoBoardCanvas"]
+        XCTAssertTrue(board.waitForExistence(timeout: 10))
+        let center = board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let focus = app.buttons["GameBoardFocusButton"]
+        let confirm = app.buttons["确认落子"]
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            XCTAssertTrue(focus.isHittable)
+            focus.tap()
+            center.tap()
+            XCTAssertEqual(focus.label, "显示全盘")
+            XCTAssertFalse(confirm.exists, "Selecting a region must not select a move")
+        } else {
+            XCTAssertFalse(focus.exists)
+        }
+
+        center.tap()
+        reveal(confirm, in: app.scrollViews.firstMatch)
+        XCTAssertTrue(confirm.isHittable)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Pending move survives backgrounding")
+        confirm.tap()
+        if focus.exists {
+            focus.tap()
+            XCTAssertEqual(focus.label, "选择放大区域")
+        }
     }
 
     @MainActor

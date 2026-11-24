@@ -8,12 +8,17 @@ import SwiftUI
 struct GoMiniDrillPlayView: View {
     @EnvironmentObject var appState: AppState
     let kind: MiniDrillKind
+    var campaignNodeId: String? = nil
+    var startOffset: Int = 0
+    var targetQuestionCount: Int? = nil
 
     @State private var index: Int = 0
+    @State private var questionsDone: Int = 0
     @State private var score: Int = 0
     @State private var answered: Bool = false
     @State private var isCorrectAnswer: Bool = false
     @State private var feedbackText: String = ""
+    @State private var campaignClearedStars: Int? = nil
 
     // Animated Ladder playback state
     @State private var displayState: GoBoardState = GoBoardState(size: 9)
@@ -35,22 +40,37 @@ struct GoMiniDrillPlayView: View {
         case .ladderReading: return GoMiniDrillsLibrary.ladderDrills.count
         case .countingQuiz: return GoMiniDrillsLibrary.countingDrills.count
         case .openingPicker: return GoMiniDrillsLibrary.openingDrills.count
+        case .blunderSpotter: return GoMiniDrillsLibrary.blunderDrills.count
         }
+    }
+
+    private var goalCount: Int {
+        targetQuestionCount ?? totalItems
+    }
+
+    private var activeIndex: Int {
+        (startOffset + index) % max(1, totalItems)
     }
 
     private var boardLabels: [BoardPoint: String] {
         switch kind {
         case .openingPicker:
-            let item = GoMiniDrillsLibrary.openingDrills[index % GoMiniDrillsLibrary.openingDrills.count]
+            let item = GoMiniDrillsLibrary.openingDrills[activeIndex]
             var map: [BoardPoint: String] = [:]
             for c in item.choices { map[c.point] = c.id }
             return map
         case .ladderReading:
-            let item = GoMiniDrillsLibrary.ladderDrills[index % GoMiniDrillsLibrary.ladderDrills.count]
+            let item = GoMiniDrillsLibrary.ladderDrills[activeIndex]
             if !answered, let first = BoardPoint(sgf: item.firstAtariBlackSGF) {
                 return [first: "①"]
             }
             return [:]
+        case .blunderSpotter:
+            let item = GoMiniDrillsLibrary.blunderDrills[activeIndex]
+            var map: [BoardPoint: String] = [:]
+            if let bp = item.blunderPoint { map[bp] = "✕" }
+            if answered, let cp = item.correctPoints.first { map[cp] = "✓" }
+            return map
         default:
             return [:]
         }
@@ -72,7 +92,7 @@ struct GoMiniDrillPlayView: View {
                         Spacer()
                         GameTitleCrest(
                             title: kind.title(isChinese: isZh),
-                            subtitle: isZh ? "第 \(index + 1)/\(totalItems) 题 · 得分 \(score)" : "Q \(index + 1)/\(totalItems) · Score \(score)"
+                            subtitle: isZh ? "第 \(min(questionsDone + 1, goalCount))/\(goalCount) 题 · 得分 \(score)" : "Q \(min(questionsDone + 1, goalCount))/\(goalCount) · Score \(score)"
                         )
                         Spacer()
                         if kind == .speedLiberties {
@@ -128,7 +148,7 @@ struct GoMiniDrillPlayView: View {
             showTwoEyeGlow: false,
             territoryEstimate: (kind == .countingQuiz && showCountingReveal) ? GoScoring.estimateTerritory(state: displayState) : nil,
             labeledPoints: boardLabels,
-            isInteractive: kind == .speedLiberties || kind == .openingPicker,
+            isInteractive: kind == .speedLiberties || kind == .openingPicker || kind == .blunderSpotter,
             onSelectPoint: { pt in
                 handleBoardTap(pt)
             }
@@ -138,13 +158,44 @@ struct GoMiniDrillPlayView: View {
     @ViewBuilder
     private var controlPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if let stars = campaignClearedStars {
+                VStack(spacing: 12) {
+                    Text("🏆").font(.system(size: 46))
+                    Text(isZh ? "专项闯关完成！" : "Mini-Drill Cleared!")
+                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    HStack(spacing: 6) {
+                        ForEach(1...3, id: \.self) { i in
+                            Image(systemName: i <= stars ? "star.fill" : "star")
+                                .font(.system(size: 24, weight: .black))
+                                .foregroundColor(i <= stars ? AppTheme.sunBottom : AppTheme.subtleBorder)
+                        }
+                    }
+                    Text(isZh ? "答对 \(score)/\(goalCount) 题" : "Scored \(score)/\(goalCount)")
+                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        .foregroundColor(AppTheme.inkSecondary)
+
+                    Button {
+                        appState.popRoute()
+                    } label: {
+                        Label(isZh ? "返回岛屿继续闯关" : "Return to Island", systemImage: "flag.checkered")
+                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                }
+                .frame(maxWidth: .infinity)
+                .warmCard(cornerRadius: 24, padding: 18)
+            } else {
             switch kind {
             case .speedLiberties:
-                let q = GoMiniDrillsLibrary.speedLibertyQuestions[index % totalItems]
+                let q = GoMiniDrillsLibrary.speedLibertyQuestions[activeIndex]
                 promptCard(title: isZh ? "闪电火眼金睛" : "Speed Spotter", body: isZh ? q.promptZh : q.promptEn)
 
             case .ladderReading:
-                let item = GoMiniDrillsLibrary.ladderDrills[index % totalItems]
+                let item = GoMiniDrillsLibrary.ladderDrills[activeIndex]
                 promptCard(
                     title: isZh ? item.titleZh : item.titleEn,
                     body: isZh ? "黑棋下在 ① 发动征子！不要落子，先在脑中沿着 45° 斜线算清楚：征子能吃掉白棋吗？" : "Black starts the ladder at ①! Read in your head without placing stones: does Black capture White?"
@@ -172,7 +223,7 @@ struct GoMiniDrillPlayView: View {
                 }
 
             case .countingQuiz:
-                let item = GoMiniDrillsLibrary.countingDrills[index % totalItems]
+                let item = GoMiniDrillsLibrary.countingDrills[activeIndex]
                 promptCard(
                     title: isZh ? item.titleZh : item.titleEn,
                     body: isZh ? "中国数子法（白棋贴 \(String(format: "%.1f", item.komi)) 目）：不用辅助工具，快速心算判断哪一方领先？" : "Chinese Area Scoring (Komi \(String(format: "%.1f", item.komi))): Estimate who is ahead on the board!"
@@ -200,7 +251,7 @@ struct GoMiniDrillPlayView: View {
                 }
 
             case .openingPicker:
-                let item = GoMiniDrillsLibrary.openingDrills[index % totalItems]
+                let item = GoMiniDrillsLibrary.openingDrills[activeIndex]
                 promptCard(title: isZh ? item.titleZh : item.titleEn, body: isZh ? item.promptZh : item.promptEn)
                 VStack(spacing: 9) {
                     ForEach(item.choices) { ch in
@@ -224,6 +275,13 @@ struct GoMiniDrillPlayView: View {
                         .disabled(answered)
                     }
                 }
+
+            case .blunderSpotter:
+                let item = GoMiniDrillsLibrary.blunderDrills[activeIndex]
+                promptCard(
+                    title: "\(item.rankBadge) · \(isZh ? item.titleZh : item.titleEn)",
+                    body: isZh ? item.promptZh : item.promptEn
+                )
             }
 
             if answered {
@@ -239,7 +297,12 @@ struct GoMiniDrillPlayView: View {
                     Button {
                         advanceToNext()
                     } label: {
-                        Label(isZh ? "下一题 →" : "Next Question →", systemImage: "arrow.right.circle.fill")
+                        Label(
+                            (campaignNodeId != nil && questionsDone + 1 >= goalCount)
+                                ? (isZh ? "结算本关星级 →" : "Finish Stage →")
+                                : (isZh ? "下一题 →" : "Next Question →"),
+                            systemImage: "arrow.right.circle.fill"
+                        )
                             .font(.system(size: 15, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -248,6 +311,7 @@ struct GoMiniDrillPlayView: View {
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                 }
                 .warmCard(cornerRadius: 22, padding: 14)
+            }
             }
         }
     }
@@ -275,32 +339,41 @@ struct GoMiniDrillPlayView: View {
 
         switch kind {
         case .speedLiberties:
-            displayState = GoMiniDrillsLibrary.speedLibertyQuestions[index % totalItems].makeState()
+            displayState = GoMiniDrillsLibrary.speedLibertyQuestions[activeIndex].makeState()
         case .ladderReading:
-            displayState = GoMiniDrillsLibrary.ladderDrills[index % totalItems].makeState()
+            displayState = GoMiniDrillsLibrary.ladderDrills[activeIndex].makeState()
         case .countingQuiz:
-            displayState = GoMiniDrillsLibrary.countingDrills[index % totalItems].makeState()
+            displayState = GoMiniDrillsLibrary.countingDrills[activeIndex].makeState()
         case .openingPicker:
-            displayState = GoMiniDrillsLibrary.openingDrills[index % totalItems].makeState()
+            displayState = GoMiniDrillsLibrary.openingDrills[activeIndex].makeState()
+        case .blunderSpotter:
+            displayState = GoMiniDrillsLibrary.blunderDrills[activeIndex].makeState()
         }
     }
 
     private func handleBoardTap(_ pt: BoardPoint) {
         guard !answered else { return }
         if kind == .speedLiberties {
-            let q = GoMiniDrillsLibrary.speedLibertyQuestions[index % totalItems]
+            let q = GoMiniDrillsLibrary.speedLibertyQuestions[activeIndex]
             let ok = q.targetPoints.contains(pt)
             finishQuestion(ok: ok, explanation: isZh ? q.explanationZh : q.explanationEn)
         } else if kind == .openingPicker {
-            let item = GoMiniDrillsLibrary.openingDrills[index % totalItems]
+            let item = GoMiniDrillsLibrary.openingDrills[activeIndex]
             if let ch = item.choices.first(where: { $0.point == pt }) {
                 answerOpening(ch)
             }
+        } else if kind == .blunderSpotter {
+            let item = GoMiniDrillsLibrary.blunderDrills[activeIndex]
+            let ok = item.correctPoints.contains(pt)
+            if ok, case .success(let out) = displayState.applying(action: .place(pt), color: .black) {
+                displayState = out.nextState
+            }
+            finishQuestion(ok: ok, explanation: isZh ? item.explanationZh : item.explanationEn)
         }
     }
 
     private func answerLadder(guessWorks: Bool) {
-        let item = GoMiniDrillsLibrary.ladderDrills[index % totalItems]
+        let item = GoMiniDrillsLibrary.ladderDrills[activeIndex]
         let eval = item.evaluate()
         let ok = (guessWorks == eval.works)
         finishQuestion(ok: ok, explanation: isZh ? item.explanationZh : item.explanationEn)
@@ -326,7 +399,7 @@ struct GoMiniDrillPlayView: View {
     }
 
     private func answerCounting(guessWinner: StoneColor) {
-        let item = GoMiniDrillsLibrary.countingDrills[index % totalItems]
+        let item = GoMiniDrillsLibrary.countingDrills[activeIndex]
         let res = item.exactResult()
         showCountingReveal = true
         let ok = (guessWinner == res.winner)
@@ -345,16 +418,28 @@ struct GoMiniDrillPlayView: View {
         if ok {
             score += 1
             SoundAndHapticsManager.shared.playSuccess()
+            SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.12)
             appState.updateProfile { p in
                 p.xp += 10
                 p.starCoins += 5
             }
         } else {
             SoundAndHapticsManager.shared.playWrong()
+            SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
         }
     }
 
     private func advanceToNext() {
+        questionsDone += 1
+        if let nodeId = campaignNodeId, questionsDone >= goalCount {
+            let ratio = Double(score) / Double(max(1, goalCount))
+            let stars = ratio >= 0.99 ? 3 : (ratio >= 0.65 ? 2 : 1)
+            appState.recordCampaignNodeCleared(nodeId: nodeId, stars: stars, masteryTier: .normal)
+            campaignClearedStars = stars
+            SoundAndHapticsManager.shared.playVictoryFanfare()
+            SoundAndHapticsManager.shared.playVoice(.victory, delay: 0.22)
+            return
+        }
         index = (index + 1) % totalItems
         loadCurrentItem()
     }

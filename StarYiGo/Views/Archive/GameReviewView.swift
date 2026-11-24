@@ -33,7 +33,7 @@ struct GameReviewView: View {
 
     private var l10n: L10n { appState.l10n }
     private var isZh: Bool { l10n.language.isChinese }
-    private let topBarHeight: CGFloat = 58
+    private let topBarHeight: CGFloat = 60
 
     private var activeState: GoBoardState {
         if isVariationMode, let v = variationState { return v }
@@ -463,6 +463,7 @@ struct GameReviewView: View {
                                     .foregroundColor(stepIndex == m.moveNumber ? .white : AppTheme.coralBottom)
                                     .padding(.horizontal, 9)
                                     .padding(.vertical, 4)
+                                    .frame(minHeight: AppTheme.buttonFaceHeight)
                                     .background(Capsule().fill(stepIndex == m.moveNumber ? AppTheme.coralBottom : AppTheme.coralTop.opacity(0.14)))
                             }
                             .tactileButton(scale: 0.94)
@@ -511,6 +512,7 @@ struct GameReviewView: View {
                         .foregroundColor(AppTheme.skyBottom)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
+                        .frame(minHeight: AppTheme.buttonFaceHeight)
                         .background(Capsule().fill(AppTheme.skyTop.opacity(0.16)))
                     }
                     .tactileButton(scale: 0.94)
@@ -635,17 +637,12 @@ struct GameReviewView: View {
     }
 
     private func loadMainLineFromSGF() {
-        var initial = GoBoardState(size: record.boardSize, komi: record.komi, handicap: record.handicap)
         var states: [GoBoardState] = []
         var moves: [GoMove] = []
         var comments: [String?] = []
 
         if let root = SGFParser.parse(record.sgf) {
-            if record.handicap == 0 {
-                for pt in root.addedBlackPoints { initial.setSetupStone(.black, at: pt) }
-                for pt in root.addedWhitePoints { initial.setSetupStone(.white, at: pt) }
-                initial.resetPositionHistoryToCurrent()
-            }
+            let initial = root.initialBoard(size: record.boardSize, komi: record.komi, handicap: record.handicap)
             states.append(initial)
             comments.append(root.comment)
 
@@ -668,7 +665,7 @@ struct GameReviewView: View {
                 node = curNode.children.first
             }
         } else {
-            states = [initial]
+            states = [GoBoardState(size: record.boardSize, komi: record.komi, handicap: record.handicap)]
             comments = [nil]
         }
 

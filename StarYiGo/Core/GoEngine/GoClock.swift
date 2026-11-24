@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct PlayerClockState: Equatable, Sendable {
+struct PlayerClockState: Equatable, Codable, Sendable {
     var mainSecondsRemaining: Int
     var inByoyomi: Bool
     var byoyomiSecondsRemaining: Int
@@ -45,7 +45,7 @@ enum ClockTickEvent: Equatable, Sendable {
 }
 
 /// Pure value-type Go Clock supporting Unlimited, Sudden Death (包干), and Main + Byoyomi (读秒).
-struct GoClock: Equatable, Sendable {
+struct GoClock: Equatable, Codable, Sendable {
     let timeControl: TimeControl
     var black: PlayerClockState
     var white: PlayerClockState

@@ -8,15 +8,10 @@ import SwiftUI
 struct GoCodexView: View {
     @EnvironmentObject var appState: AppState
 
-    @State private var selectedTier: CodexTier? = nil
+    @State private var selectedTier: CodexTier = .starter
     @State private var selectedEntry: GoCodexEntry? = nil
 
     private var l10n: L10n { appState.l10n }
-
-    private var visibleTiers: [CodexTier] {
-        if let tier = selectedTier { return [tier] }
-        return CodexTier.allCases
-    }
 
     private var masteredCount: Int {
         GoTermCodex.allEntries.filter { appState.profile.unlockedCodexIds.contains($0.id) }.count
@@ -39,8 +34,7 @@ struct GoCodexView: View {
                     )
                     Spacer()
                     HStack(spacing: 5) {
-                        Text("🪙")
-                            .font(.system(size: 15))
+                        StarCoinBadgeView(size: 17)
                         Text("\(appState.profile.starCoins)")
                             .font(.system(size: 14.5, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.inkPrimary)
@@ -56,11 +50,6 @@ struct GoCodexView: View {
                 // Crisp Single-Line Tier Filter Pills
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        tierPill(
-                            title: "\(l10n.t("puzzle.category.all")) (\(GoTermCodex.allEntries.count))",
-                            tier: nil,
-                            accent: AppTheme.skyBottom
-                        )
                         ForEach(CodexTier.allCases) { tier in
                             let count = GoTermCodex.allEntries.filter { $0.tier == tier }.count
                             let done = GoTermCodex.allEntries.filter { $0.tier == tier && appState.profile.unlockedCodexIds.contains($0.id) }.count
@@ -75,17 +64,13 @@ struct GoCodexView: View {
                     .padding(.vertical, 2)
                 }
 
-                // Clean Sectioned Card Grid (grouped by Tier with generous breathing room)
+                // Selected tier card grid
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 24) {
-                        ForEach(visibleTiers) { tier in
-                            let entries = GoTermCodex.allEntries.filter { $0.tier == tier }
-                            tierSection(tier: tier, entries: entries)
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
-                    .padding(.bottom, 32)
+                    let entries = GoTermCodex.allEntries.filter { $0.tier == selectedTier }
+                    tierSection(tier: selectedTier, entries: entries)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 4)
+                        .padding(.bottom, 32)
                 }
             }
 
@@ -167,7 +152,7 @@ struct GoCodexView: View {
         }
     }
 
-    private func tierPill(title: String, tier: CodexTier?, accent: Color) -> some View {
+    private func tierPill(title: String, tier: CodexTier, accent: Color) -> some View {
         let active = selectedTier == tier
         return Button {
             withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
@@ -180,6 +165,7 @@ struct GoCodexView: View {
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
+                .frame(minHeight: AppTheme.buttonFaceHeight)
                 .background(
                     Capsule()
                         .fill(active ? accent : Color.white.opacity(0.92))
@@ -252,7 +238,8 @@ struct GoCodexView: View {
                 palette: .snow,
                 cornerRadius: 24,
                 rimHeight: 4,
-                whiteBorderWidth: 2.5
+                whiteBorderWidth: 2.5,
+                pressStyle: .card
             )
         )
     }

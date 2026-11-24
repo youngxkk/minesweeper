@@ -102,7 +102,41 @@ enum JosekiLibrary {
         )
     ]
 
+    /// Anti-trick-move ("破骗招") interactive Joseki drills for Sea 3 & Sea 4 islands!
+    static let trickMoveCourses: [JosekiCourse] = [
+        JosekiCourse(
+            id: "jos-trick-33-cut",
+            rankBadge: "10K–1D",
+            titleZh: "破骗招：点三三二路断反击",
+            titleEn: "Anti-Trick: Punishing the 3-3 Cut",
+            subtitleZh: "白棋点三三后不等活角就贪心强行切断？冷静打吃一举反杀！",
+            subtitleEn: "White gets greedy during the 3-3 invasion and cuts prematurely — punish it cleanly!",
+            boardSize: 19,
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 9, minCol: 9, maxCol: 18),
+            playerColor: .black,
+            sgfZh: "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][qd][od]AW[qc][pc][pe]C[骗招警告！白棋没有老实爬二路活角，反而强行扳出断黑棋！黑棋怎么一招惩罚？](;B[qe]C[漂亮！先贴身反打，把白棋分断并抢占角部先手！];W[oc]C[白棋只能回头企图活角。];B[oe]C[黑棋稳稳长出把白棋切开，白棋两边落空大败！（成功破骗招）]C[CORRECT])(;B[oe]C[正着！直接长出把白棋强子闷在里面，同样有力反击！];W[oc]C[白棋回头活角。];B[qe]C[黑棋打吃压迫，白棋外势尽失！（成功破骗招）]C[CORRECT])(;B[nc]C[WRONG]C[中计啦！放任白棋在外面切开黑棋两子，黑棋形状崩碎。]))",
+            sgfEn: "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][qd][od]AW[qc][pc][pe]C[Trick Move Alert! Instead of settling in the corner, White pushes recklessly to cut! How do you punish it?](;B[qe]C[Sharp! Counter-atari cleanly to split White and seize the initiative!];W[oc]C[White scrambles back toward the corner.];B[oe]C[Black extends solidly — White is split in two and crushed!]C[CORRECT])(;B[oe]C[Strong! Extending firmly keeps White's cutting stone isolated!];W[oc]C[White retreats to the corner.];B[qe]C[Black presses from the outside — trick move refuted!]C[CORRECT])(;B[nc]C[WRONG]C[Fell for the trick! Letting White tear through your shape leaves both groups weak.]))"
+        ),
+        JosekiCourse(
+            id: "jos-trick-knight-wedge",
+            rankBadge: "8K–2D",
+            titleZh: "破骗招：小飞挂强行冲断",
+            titleEn: "Anti-Trick: Knight Approach Overplay",
+            subtitleZh: "对手挂角后走出过分靠压骗招？用稳健反扳把对手吃成愚形！",
+            subtitleEn: "When White overplays against your star point, stay calm and punish the thin shape!",
+            boardSize: 19,
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 9, minCol: 8, maxCol: 18),
+            playerColor: .black,
+            sgfZh: "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][qf]AW[nc][qd]C[骗招警报！白棋小飞挂后不等黑棋走稳，直接贴身冲进角上挑衅！黑棋如何反击？](;B[qc]C[妙手反扳！抢先占住角部要害三三点，让白棋撞成气紧愚形！];W[rc]C[白棋硬挡角上。];B[pc]C[黑棋冷静长出，白棋两块棋互相拖累，黑棋大优！]C[CORRECT])(;B[qe]C[WRONG]C[退让过分！白棋轻松冲入三三抢掉角空，骗招得逞了。]))",
+            sgfEn: "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][qf]AW[nc][qd]C[Trick Move Alert! White barges right into your star point with an aggressive attachment! How do you counter?](;B[qc]C[Brilliant counter-hane! Claiming 3-3 puts White into cramped, awkward shape!];W[rc]C[White blocks desperately in the corner.];B[pc]C[Black extends solidly — White's overplay completely backfires!]C[CORRECT])(;B[qe]C[WRONG]C[Too passive! Backing off hands White the entire corner on a silver platter.]))"
+        )
+    ]
+
+    static var allCatalogCourses: [JosekiCourse] {
+        allCourses + trickMoveCourses
+    }
+
     static func course(withId id: String) -> JosekiCourse? {
-        allCourses.first { $0.id == id }
+        allCatalogCourses.first { $0.id == id }
     }
 }

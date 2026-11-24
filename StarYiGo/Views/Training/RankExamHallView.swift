@@ -259,6 +259,9 @@ struct RankExamWrittenTestView: View {
             if correctCount >= spec.requiredPuzzlePass {
                 appState.recordExamWrittenPass(tier: spec.tier)
                 SoundAndHapticsManager.shared.playVictoryFanfare()
+                SoundAndHapticsManager.shared.playVoice(.examPass, delay: 0.24)
+            } else {
+                SoundAndHapticsManager.shared.playVoice(.encourageLoss, delay: 0.18)
             }
             return
         }
@@ -325,8 +328,14 @@ struct RankExamWrittenTestView: View {
         if correct {
             correctCount += 1
             SoundAndHapticsManager.shared.playSuccess()
+            if currentIdx + 1 < puzzles.count {
+                SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.10)
+            }
         } else {
             SoundAndHapticsManager.shared.playWrong()
+            if currentIdx + 1 < puzzles.count {
+                SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
+            }
         }
         Task {
             try? await Task.sleep(nanoseconds: 850_000_000)

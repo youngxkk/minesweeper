@@ -15,6 +15,7 @@ import SwiftUI
 struct GoBoardView: View {
     let boardState: GoBoardState
     let theme: BoardTheme
+    var stoneStyle: StoneStyle = .classicSlateShell
     var cropRegion: BoardCropRegion? = nil
     var showCoordinates: Bool = true
     var showMoveNumbers: Bool = false
@@ -33,6 +34,7 @@ struct GoBoardView: View {
     var highlightedPocketPoints: Set<BoardPoint> = []
     var pendingPoint: BoardPoint? = nil
     var previewColor: StoneColor = .black
+    var isChoosingRegion = false
     var isInteractive: Bool = true
     var capturedFlashPoints: [BoardPoint] = []
     var captureEventID: UUID = UUID()
@@ -41,6 +43,9 @@ struct GoBoardView: View {
     var libertyBadgeFormat: String = "%d"
     var koBadgeLabel: String = "劫"
     var onSelectPoint: ((BoardPoint) -> Void)? = nil
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     @State private var dragHoverPoint: BoardPoint? = nil
     @State private var isDraggingAim: Bool = false
@@ -59,14 +64,28 @@ struct GoBoardView: View {
         cropRegion ?? BoardCropRegion.full(size: boardState.size)
     }
 
-    private func needsActiveTimeline(now: Date, hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
-        if hasAtari || hasTwoEyes || boardState.koIndex != nil || !aiSuggestions.isEmpty || puzzleHintPoint != nil || !unsealedWarningPoints.isEmpty || !highlightedPocketPoints.isEmpty || pendingPoint != nil || dragHoverPoint != nil || inspectedGroup != nil || showLiveLiberties {
-            return true
-        }
+    private func needsHighFPSTimeline(now: Date) -> Bool {
+        if dragHoverPoint != nil { return true }
         if now.timeIntervalSince(lastMoveTimestamp) < 0.45 { return true }
         if now.timeIntervalSince(captureTimestamp) < 0.60 { return true }
         if now.timeIntervalSince(illegalTimestamp) < 0.45 { return true }
         return false
+    }
+
+    private func needsAmbientTimeline(hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
+        guard !reduceMotion else { return false }
+        return hasAtari || hasTwoEyes || boardState.koIndex != nil || !aiSuggestions.isEmpty || puzzleHintPoint != nil || !unsealedWarningPoints.isEmpty || !highlightedPocketPoints.isEmpty || pendingPoint != nil || inspectedGroup != nil || showLiveLiberties
+    }
+
+    private func timelineInterval(now: Date, hasAtari: Bool, hasTwoEyes: Bool) -> TimeInterval {
+        if needsHighFPSTimeline(now: now) {
+            return 1.0 / 60.0
+        }
+        return needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes) ? (1.0 / 15.0) : 1.0
+    }
+
+    private func isTimelinePaused(now: Date, hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
+        !needsHighFPSTimeline(now: now) && !needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
     }
 
     var body: some View {
@@ -77,7 +96,13 @@ struct GoBoardView: View {
             let atariSet = highlightAtari ? boardState.atariPoints() : []
             let twoEyeAnalysis = showTwoEyeGlow ? boardState.twoEyeAliveAnalysis() : (eyePoints: Set<BoardPoint>(), aliveStoneIndices: Set<Int>())
 
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !needsActiveTimeline(now: Date(), hasAtari: !atariSet.isEmpty, hasTwoEyes: !twoEyeAnalysis.eyePoints.isEmpty))) { timeline in
+            let nowSnapshot = Date()
+            let hasAtari = !atariSet.isEmpty
+            let hasTwoEyes = !twoEyeAnalysis.eyePoints.isEmpty
+            let interval = timelineInterval(now: nowSnapshot, hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+            let paused = isTimelinePaused(now: nowSnapshot, hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+
+            TimelineView(.animation(minimumInterval: interval, paused: paused)) { timeline in
                 let now = timeline.date
                 Canvas { context, size in
                     drawBoard(
@@ -102,7 +127,7 @@ struct GoBoardView: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
-                            if isDeadStoneReviewMode { return }
+                            if isChoosingRegion || isDeadStoneReviewMode { return }
                             let distMoved = hypot(value.translation.width, value.translation.height)
                             if distMoved > 12 {
                                 isDraggingAim = true
@@ -146,6 +171,12 @@ struct GoBoardView: View {
                             }
                         }
                         .onEnded { value in
+                            if isChoosingRegion {
+                                if let point = nearestPoint(for: value.location, side: side, region: region) {
+                                    onSelectPoint?(point)
+                                }
+                                return
+                            }
                             if isDeadStoneReviewMode {
                                 if let pt = nearestPoint(for: value.location, side: side, region: region),
                                    boardState.stone(at: pt) != nil {
@@ -178,8 +209,15 @@ struct GoBoardView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .aspectRatio(1, contentMode: .fit)
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("GoBoardCanvas")
+        .accessibilityLabel(boardAccessibilitySummary)
+        .accessibilityHint(isInteractive ? "Double-tap or use board intersections to place a stone." : "")
+        .overlay {
+            if UIAccessibility.isVoiceOverRunning && isInteractive {
+                voiceOverGridOverlay
+            }
+        }
         .onChange(of: boardState.moveCount) { _, _ in
             if case .place(let pt) = boardState.lastMove {
                 lastMovePointCached = pt
@@ -332,20 +370,41 @@ struct GoBoardView: View {
             lineWidth: 1.5
         )
 
-        // 2. Subtle wood grain
-        var grainPath = Path()
-        let stripeCount = 36
+        // 2. Organic multi-frequency Kaya wood grain + subtle warm board vignette
+        let stripeCount = 44
         for i in 0..<stripeCount {
-            let x = canvasSize.width * (CGFloat(i) + 0.5) / CGFloat(stripeCount)
-            let wave = sin(Double(i) * 0.85) * 3.5
-            grainPath.move(to: CGPoint(x: x, y: 0))
-            grainPath.addCurve(
-                to: CGPoint(x: x + CGFloat(wave), y: canvasSize.height),
-                control1: CGPoint(x: x - CGFloat(wave), y: canvasSize.height * 0.35),
-                control2: CGPoint(x: x + CGFloat(wave * 1.3), y: canvasSize.height * 0.70)
+            var fiber = Path()
+            let frac = (CGFloat(i) + 0.5) / CGFloat(stripeCount)
+            let x = canvasSize.width * frac
+            let wave1 = sin(Double(i) * 0.73 + 0.4) * 4.2
+            let wave2 = cos(Double(i) * 1.41) * 2.1
+            fiber.move(to: CGPoint(x: x, y: 0))
+            fiber.addCurve(
+                to: CGPoint(x: x + CGFloat(wave1 * 0.7), y: canvasSize.height),
+                control1: CGPoint(x: x - CGFloat(wave1 - wave2), y: canvasSize.height * 0.33),
+                control2: CGPoint(x: x + CGFloat(wave1 + wave2 * 0.8), y: canvasSize.height * 0.68)
+            )
+            let alphaScale: Double = (i % 5 == 0) ? 1.35 : ((i % 3 == 0) ? 0.90 : 0.55)
+            context.stroke(
+                fiber,
+                with: .color(palette.grainColor.opacity(alphaScale)),
+                lineWidth: (i % 5 == 0) ? 1.7 : 1.05
             )
         }
-        context.stroke(grainPath, with: .color(palette.grainColor), lineWidth: 1.4)
+        // Subtle warm edge vignette for physical wooden table depth
+        context.fill(
+            Path(rect),
+            with: .radialGradient(
+                Gradient(colors: [
+                    Color.clear,
+                    Color.clear,
+                    Color.black.opacity(theme == .midnightStar ? 0.18 : 0.08)
+                ]),
+                center: CGPoint(x: canvasSize.width * 0.5, y: canvasSize.height * 0.48),
+                startRadius: min(canvasSize.width, canvasSize.height) * 0.36,
+                endRadius: max(canvasSize.width, canvasSize.height) * 0.76
+            )
+        )
 
         // 3. Grid lines
         let extendLeft: CGFloat = region.minCol > 0 ? m.cellStep * 0.38 : 0
@@ -449,10 +508,22 @@ struct GoBoardView: View {
                     let center = m.center(for: pt)
                     let sqRect = CGRect(x: center.x - sq / 2, y: center.y - sq / 2, width: sq, height: sq)
                     let alpha = min(0.84, max(0.32, abs(val) * 0.85))
-                    let fill: Color = val > 0 ? Color(red: 0.08, green: 0.24, blue: 0.20).opacity(alpha) : Color.white.opacity(alpha)
-                    context.fill(Path(roundedRect: sqRect, cornerRadius: 4), with: .color(fill))
-                    if val < 0 {
-                        context.stroke(Path(roundedRect: sqRect, cornerRadius: 4), with: .color(AppTheme.starGold.opacity(0.45)), lineWidth: 1)
+                    if val > 0 {
+                        let fill = Color(red: 0.08, green: 0.24, blue: 0.20).opacity(alpha)
+                        context.fill(Path(roundedRect: sqRect, cornerRadius: 4), with: .color(fill))
+                        if differentiateWithoutColor {
+                            context.stroke(Path(roundedRect: sqRect, cornerRadius: 4), with: .color(.white.opacity(0.65)), lineWidth: 1.2)
+                        }
+                    } else {
+                        let fill = Color.white.opacity(alpha)
+                        if differentiateWithoutColor {
+                            // Distinct diamond/circle shape for White territory in colorblind mode
+                            context.fill(Path(ellipseIn: sqRect), with: .color(fill))
+                            context.stroke(Path(ellipseIn: sqRect), with: .color(AppTheme.inkPrimary.opacity(0.65)), lineWidth: 1.2)
+                        } else {
+                            context.fill(Path(roundedRect: sqRect, cornerRadius: 4), with: .color(fill))
+                            context.stroke(Path(roundedRect: sqRect, cornerRadius: 4), with: .color(AppTheme.starGold.opacity(0.45)), lineWidth: 1)
+                        }
                     }
                 }
             }
@@ -585,26 +656,45 @@ struct GoBoardView: View {
                 }
 
                 var renderRadius = stoneRadius
-                if pt == lastMovePoint && pt == lastMovePointCached && landingAge >= 0 && landingAge < 0.36 {
+                var landingDiveOffset: CGFloat = 0
+                if pt == lastMovePoint && pt == lastMovePointCached && landingAge >= 0 && landingAge < 0.36 && !reduceMotion {
                     let t = landingAge / 0.36
                     let ripR = stoneRadius * (0.95 + t * 0.75)
                     let ripRect = CGRect(x: center.x - ripR, y: center.y - ripR, width: ripR * 2, height: ripR * 2)
                     context.stroke(Path(ellipseIn: ripRect), with: .color(Color.white.opacity((1.0 - t) * 0.58)), lineWidth: max(1.0, 2.8 * (1.0 - t)))
-                    if landingAge < 0.18 {
-                        let st = landingAge / 0.18
-                        let bounce = 1.0 + 0.17 * exp(-st * 5.0) * cos(st * .pi * 2.2)
+                    if landingAge < 0.085 {
+                        // Tactile 3-stage drop: stone dives from pinched hover onto Kaya wood
+                        let dropT = 1.0 - (landingAge / 0.085)
+                        landingDiveOffset = -stoneRadius * 0.24 * CGFloat(dropT * dropT)
+                        renderRadius = stoneRadius * CGFloat(1.0 + 0.07 * dropT)
+                    } else if landingAge < 0.20 {
+                        let st = (landingAge - 0.085) / 0.115
+                        let bounce = 1.0 + 0.12 * exp(-st * 5.0) * cos(st * .pi * 2.0)
                         renderRadius = stoneRadius * CGFloat(bounce)
                     }
                 }
 
                 drawStone(
                     context: &context,
-                    center: center,
+                    center: CGPoint(x: center.x, y: center.y + landingDiveOffset),
                     radius: renderRadius,
                     color: color,
                     opacity: isMarkedDead ? 0.36 : 1.0,
-                    lifted: false
+                    lifted: landingDiveOffset < -1.0
                 )
+
+                // Colorblind-friendly Atari shape badge (dashed ring + tiny exclamation pip)
+                if differentiateWithoutColor && atariSet.contains(pt) && !isMarkedDead {
+                    let badgeR = max(3.5, stoneRadius * 0.28)
+                    let badgeCenter = CGPoint(x: center.x + stoneRadius * 0.58, y: center.y - stoneRadius * 0.58)
+                    let badgeRect = CGRect(x: badgeCenter.x - badgeR, y: badgeCenter.y - badgeR, width: badgeR * 2, height: badgeR * 2)
+                    context.fill(Path(ellipseIn: badgeRect), with: .color(AppTheme.vermilionAccent))
+                    context.stroke(Path(ellipseIn: badgeRect), with: .color(.white), lineWidth: 1.2)
+                    context.draw(
+                        Text("!").font(.system(size: max(7, badgeR * 1.3), weight: .black)).foregroundColor(.white),
+                        at: badgeCenter
+                    )
+                }
 
                 // Nintendo Expressive Kids Stone Faces (hidden when move numbers are shown or board is too dense)
                 if expressiveStones && !showMoveNumbers && !isMarkedDead && stoneRadius >= 11 {
@@ -750,14 +840,16 @@ struct GoBoardView: View {
                 let r = stoneRadius * 0.72
                 let badgeRect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
                 let hasStone = boardState.stone(at: pt) != nil
+                let isWrongMarker = (text == "✕" || text == "×" || text == "X")
+                let badgeColor = isWrongMarker ? AppTheme.coralBottom : AppTheme.skyBottom
                 if !hasStone {
-                    context.fill(Path(ellipseIn: badgeRect), with: .color(AppTheme.skyBottom.opacity(0.92)))
+                    context.fill(Path(ellipseIn: badgeRect), with: .color(badgeColor.opacity(0.94)))
                     context.stroke(Path(ellipseIn: badgeRect), with: .color(.white), lineWidth: 2.0)
                 }
                 context.draw(
                     Text(text)
                         .font(.system(size: max(10, r * 0.92), weight: .black, design: .rounded))
-                        .foregroundColor(hasStone ? AppTheme.sunTop : .white),
+                        .foregroundColor(hasStone ? (isWrongMarker ? AppTheme.coralBottom : AppTheme.sunTop) : .white),
                     at: center
                 )
             }
@@ -906,38 +998,193 @@ struct GoBoardView: View {
         let lightCenter = CGPoint(x: drawCenter.x - radius * 0.30, y: drawCenter.y - radius * 0.30)
 
         if color == .black {
+            let colors: [Color]
+            switch stoneStyle {
+            case .classicSlateShell:
+                colors = [
+                    Color(red: 0.34, green: 0.36, blue: 0.39).opacity(opacity),
+                    Color(red: 0.12, green: 0.13, blue: 0.15).opacity(opacity),
+                    Color(red: 0.05, green: 0.06, blue: 0.07).opacity(opacity)
+                ]
+            case .coralPearl:
+                colors = [
+                    Color(red: 0.24, green: 0.46, blue: 0.56).opacity(opacity),
+                    Color(red: 0.08, green: 0.22, blue: 0.32).opacity(opacity),
+                    Color(red: 0.04, green: 0.11, blue: 0.18).opacity(opacity)
+                ]
+            case .kyotoLacquer:
+                colors = [
+                    Color(red: 0.44, green: 0.24, blue: 0.18).opacity(opacity),
+                    Color(red: 0.16, green: 0.08, blue: 0.07).opacity(opacity),
+                    Color(red: 0.07, green: 0.04, blue: 0.04).opacity(opacity)
+                ]
+            case .starlightJade:
+                colors = [
+                    Color(red: 0.18, green: 0.54, blue: 0.46).opacity(opacity),
+                    Color(red: 0.07, green: 0.26, blue: 0.24).opacity(opacity),
+                    Color(red: 0.03, green: 0.12, blue: 0.14).opacity(opacity)
+                ]
+            }
             context.fill(
                 Path(ellipseIn: stoneRect),
                 with: .radialGradient(
-                    Gradient(colors: [
-                        Color(red: 0.34, green: 0.36, blue: 0.39).opacity(opacity),
-                        Color(red: 0.12, green: 0.13, blue: 0.15).opacity(opacity),
-                        Color(red: 0.05, green: 0.06, blue: 0.07).opacity(opacity)
-                    ]),
+                    Gradient(colors: colors),
                     center: lightCenter,
                     startRadius: radius * 0.08,
                     endRadius: radius * 1.25
                 )
             )
+            if stoneStyle == .starlightJade || stoneStyle == .kyotoLacquer {
+                context.stroke(
+                    Path(ellipseIn: stoneRect),
+                    with: .color((stoneStyle == .starlightJade ? Color(red: 0.65, green: 0.96, blue: 0.88) : Color(red: 0.96, green: 0.72, blue: 0.36)).opacity(0.32 * opacity)),
+                    lineWidth: 0.9
+                )
+            }
         } else {
+            let gradient: Gradient
+            switch stoneStyle {
+            case .classicSlateShell:
+                gradient = Gradient(stops: [
+                    .init(color: Color.white.opacity(opacity), location: 0.0),
+                    .init(color: Color(red: 0.99, green: 0.99, blue: 0.995).opacity(opacity), location: 0.42),
+                    .init(color: Color(red: 0.92, green: 0.93, blue: 0.945).opacity(opacity), location: 0.78),
+                    .init(color: Color(red: 0.80, green: 0.82, blue: 0.85).opacity(opacity), location: 1.0)
+                ])
+            case .coralPearl:
+                gradient = Gradient(stops: [
+                    .init(color: Color.white.opacity(opacity), location: 0.0),
+                    .init(color: Color(red: 0.985, green: 0.985, blue: 0.99).opacity(opacity), location: 0.45),
+                    .init(color: Color(red: 0.92, green: 0.925, blue: 0.94).opacity(opacity), location: 0.80),
+                    .init(color: Color(red: 0.82, green: 0.83, blue: 0.86).opacity(opacity), location: 1.0)
+                ])
+            case .kyotoLacquer:
+                gradient = Gradient(stops: [
+                    .init(color: Color(red: 1.00, green: 0.98, blue: 0.90).opacity(opacity), location: 0.0),
+                    .init(color: Color(red: 0.99, green: 0.88, blue: 0.66).opacity(opacity), location: 0.55),
+                    .init(color: Color(red: 0.86, green: 0.66, blue: 0.36).opacity(opacity), location: 1.0)
+                ])
+            case .starlightJade:
+                gradient = Gradient(stops: [
+                    .init(color: Color.white.opacity(opacity), location: 0.0),
+                    .init(color: Color(red: 0.93, green: 0.96, blue: 1.00).opacity(opacity), location: 0.55),
+                    .init(color: Color(red: 0.78, green: 0.85, blue: 0.96).opacity(opacity), location: 1.0)
+                ])
+            }
             context.fill(
                 Path(ellipseIn: stoneRect),
                 with: .radialGradient(
-                    Gradient(colors: [
-                        Color.white.opacity(opacity),
-                        Color(red: 0.95, green: 0.94, blue: 0.90).opacity(opacity),
-                        Color(red: 0.82, green: 0.80, blue: 0.75).opacity(opacity)
-                    ]),
+                    gradient,
                     center: lightCenter,
-                    startRadius: radius * 0.10,
-                    endRadius: radius * 1.25
+                    startRadius: radius * 0.08,
+                    endRadius: radius * 1.28
                 )
             )
+            // Authentic Clamshell (蛤碁石) subtle curved shell striations on classic white stones
+            if stoneStyle == .classicSlateShell && radius >= 8 {
+                var clipped = context
+                clipped.clip(to: Path(ellipseIn: stoneRect))
+                for sIdx in -2...2 {
+                    let yOff = drawCenter.y + CGFloat(sIdx) * radius * 0.30
+                    var striation = Path()
+                    striation.move(to: CGPoint(x: drawCenter.x - radius, y: yOff - radius * 0.10))
+                    striation.addQuadCurve(
+                        to: CGPoint(x: drawCenter.x + radius, y: yOff + radius * 0.08),
+                        control: CGPoint(x: drawCenter.x, y: yOff - radius * 0.24)
+                    )
+                    clipped.stroke(
+                        striation,
+                        with: .color(Color(red: 0.78, green: 0.80, blue: 0.83).opacity(0.14 * opacity)),
+                        lineWidth: max(0.55, radius * 0.035)
+                    )
+                }
+            }
+            // Soft realistic ceramic/clamshell top-left specular highlight
+            if radius >= 6 {
+                let specW = radius * 0.52
+                let specH = radius * 0.32
+                let specRect = CGRect(
+                    x: drawCenter.x - radius * 0.44 - specW * 0.25,
+                    y: drawCenter.y - radius * 0.48 - specH * 0.25,
+                    width: specW,
+                    height: specH
+                )
+                context.fill(
+                    Path(ellipseIn: specRect),
+                    with: .radialGradient(
+                        Gradient(colors: [
+                            Color.white.opacity(0.85 * opacity),
+                            Color.white.opacity(0.0)
+                        ]),
+                        center: CGPoint(x: specRect.midX, y: specRect.midY),
+                        startRadius: 0,
+                        endRadius: specW * 0.55
+                    )
+                )
+            }
             context.stroke(
                 Path(ellipseIn: stoneRect),
-                with: .color(Color.black.opacity(0.16 * opacity)),
-                lineWidth: 0.8
+                with: .color(Color(red: 0.45, green: 0.48, blue: 0.54).opacity(0.22 * opacity)),
+                lineWidth: 0.85
             )
         }
+    }
+
+    // MARK: - VoiceOver Full Board Accessibility
+
+    private var boardAccessibilitySummary: String {
+        let turnLabel = boardState.currentTurn == .black ? "Black" : "White"
+        let lastLabel: String
+        if case .place(let pt) = boardState.lastMove {
+            lastLabel = pt.humanLabel(boardSize: boardState.size)
+        } else if case .pass = boardState.lastMove {
+            lastLabel = "Pass"
+        } else {
+            lastLabel = "None"
+        }
+        return "\(boardState.size) by \(boardState.size) Go board. \(turnLabel) to play. Move \(boardState.moveCount). Last move \(lastLabel). Captures: Black \(boardState.blackCaptures), White \(boardState.whiteCaptures)."
+    }
+
+    private var voiceOverGridOverlay: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let region = effectiveRegion
+            let m = computeMetrics(side: side, region: region)
+            let hitSize = max(18, m.cellStep)
+
+            ZStack {
+                ForEach(region.minRow...region.maxRow, id: \.self) { r in
+                    ForEach(region.minCol...region.maxCol, id: \.self) { c in
+                        let pt = BoardPoint(row: r, col: c)
+                        let center = m.center(for: pt)
+                        Button {
+                            onSelectPoint?(pt)
+                        } label: {
+                            Color.clear
+                                .frame(width: hitSize, height: hitSize)
+                        }
+                        .position(x: center.x, y: center.y)
+                        .accessibilityLabel(accessibilityLabel(for: pt))
+                    }
+                }
+            }
+            .frame(width: side, height: side)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+    }
+
+    private func accessibilityLabel(for pt: BoardPoint) -> String {
+        let coord = pt.humanLabel(boardSize: boardState.size)
+        if let stone = boardState.stone(at: pt) {
+            let colorName = stone == .black ? "Black" : "White"
+            let idx = boardState.index(row: pt.row, col: pt.col)
+            let libs = boardState.groupAndLiberties(at: idx)?.liberties.count ?? 0
+            let isLast = (boardState.lastMove == .place(pt)) ? ", last move" : ""
+            return "\(coord), \(colorName) stone, \(libs) liberties\(isLast)"
+        }
+        if boardState.koPoint == pt {
+            return "\(coord), Ko forbidden"
+        }
+        return "\(coord), empty"
     }
 }

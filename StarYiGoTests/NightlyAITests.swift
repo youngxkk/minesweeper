@@ -16,22 +16,48 @@ final class NightlyAITests: XCTestCase {
         _ = try play(size: 19, seed: 2026, maxPlies: 12)
     }
 
-    private func play(size: Int, seed: UInt64, maxPlies: Int) throws -> GoBoardState {
+    func testNineteenLineMiddleAndLateGameResponseTimes() throws {
+        executionTimeAllowance = 180
+        for (phase, plies) in [("middle", 72), ("late", 224)] {
+            let fixture = try fixedPosition(after: plies)
+            _ = try play(size: 19, seed: 2026, maxPlies: 8, phase: phase, startingFrom: fixture)
+        }
+    }
+
+    private func fixedPosition(after plies: Int) throws -> GoBoardState {
+        var state = GoBoardState(size: 19)
+        var random = SeededGenerator(state: 84)
+        let indices = Array(0..<(19 * 19)).shuffled(using: &random)
+        for index in indices {
+            let point = state.point(for: index)
+            if case .success(let outcome) = state.applying(action: .place(point)) {
+                state = outcome.nextState
+                if state.moveCount == plies { return state }
+            }
+        }
+        throw FixtureError.insufficientLegalMoves
+    }
+
+    private enum FixtureError: Error {
+        case insufficientLegalMoves
+    }
+
+    private func play(size: Int, seed: UInt64, maxPlies: Int, phase: String = "opening", startingFrom: GoBoardState? = nil) throws -> GoBoardState {
         let engine = LocalMCTSGoEngine()
-        var state = GoBoardState(size: size)
+        var state = startingFrom ?? GoBoardState(size: size)
         var random = SeededGenerator(state: seed)
         var moves: [MoveAction] = []
         var milliseconds: [Double] = []
         defer {
             let sorted = milliseconds.sorted()
             let p95 = sorted.isEmpty ? 0 : sorted[Int(ceil(Double(sorted.count) * 0.95)) - 1]
-            let summary = "size=\(size) seed=\(seed) level=rabbit plies=\(moves.count) p95_ms=\(p95) max_ms=\(sorted.last ?? 0)"
+            let summary = "size=\(size) phase=\(phase) seed=\(seed) level=rabbit plies=\(moves.count) p95_ms=\(p95) max_ms=\(sorted.last ?? 0)"
             let lines = zip(moves, milliseconds).enumerated().map {
                 "\($0.offset + 1),\($0.element.0),\($0.element.1)"
             }
             print("AI self-play: \(summary)")
             let report = XCTAttachment(string: ([summary, "ply,action,elapsed_ms"] + lines).joined(separator: "\n"))
-            report.name = "AI self-play \(size)x\(size), seed \(seed)"
+            report.name = "AI self-play \(size)x\(size) \(phase), seed \(seed)"
             report.lifetime = .keepAlways
             add(report)
         }

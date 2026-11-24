@@ -2,8 +2,8 @@
 "app.name" = "StarYi Go";
 "app.subtitle" = "Play, Solve & Grow";
 "home.hero.poeticSubtitle" = "STARYI GO · PLAY, SOLVE & GROW";
-"home.hero.playSubtitle" = "Instant offline match";
-"home.hero.questSubtitle" = "Explore 5 Go Islands & Boss Duels";
+"home.hero.playSubtitle" = "Play a fun game with animal buddies";
+"home.hero.questSubtitle" = "Solve puzzles, earn stars & unlock 5 worlds";
 "home.hero.matchOptions" = "Match Options";
 "home.starterCamp" = "5×5 Starter Camp";
 
@@ -14,7 +14,7 @@
 "home.totalStars" = "%d Stars";
 "home.totalWins" = "%d Wins";
 "home.aiCard.title" = "Play vs AI";
-"home.aiCard.subtitle" = "Offline smart opponents from 25K to 1D";
+"home.aiCard.subtitle" = "Play with animal buddies and grow from 25K to 1D";
 "home.aiCard.boardSize" = "Board";
 "home.aiCard.opponent" = "Opponent";
 "home.aiCard.playAs" = "Play As";
@@ -22,12 +22,12 @@
 "home.aiCard.ruleMode" = "Game Mode";
 "home.aiCard.start" = "Play vs AI";
 "home.aiCard.resume" = "Resume Match";
-"home.puzzleCard.title" = "StarYi Islands";
-"home.puzzleCard.subtitle" = "Adventure through 5 Go Islands";
+"home.puzzleCard.title" = "StarYi Adventure";
+"home.puzzleCard.subtitle" = "Adventure through 5 Go Worlds";
 "home.puzzleCard.solved" = "%d / %d Cleared";
 "home.puzzleCard.continue" = "Set Sail";
 "home.puzzleCard.mistakes" = "Mistake Book (%d)";
-"home.dailyCard.title" = "Daily Challenge";
+"home.dailyCard.title" = "Daily Quest";
 "home.dailyCard.subtitle" = "Today's special puzzle";
 "home.dailyCard.done" = "Cleared Today!";
 "home.twoPlayerCard.title" = "Tabletop 2P";
@@ -72,7 +72,6 @@
 /* Islands Adventure Map */
 "islands.title" = "StarYi Islands";
 "islands.bossDuel" = "Challenge Island Master";
-"islands.bossCoop" = "Co-op 2P";
 "islands.bossSubtitle" = "9×9 Trial Match vs %@ (%@)";
 "islands.chapterProgress" = "%d / %d Cleared";
 "islands.worldNumber" = "World %d";
@@ -127,12 +126,20 @@
 "ai.rabbit.desc" = "Active beginner, fun tactical fights";
 "ai.fox.name" = "Clever Fox";
 "ai.fox.desc" = "Spots atari, cuts, and corners";
+"ai.deer.name" = "Jade Deer";
+"ai.deer.desc" = "Graceful shape, connections, and life & death";
 "ai.panda.name" = "Wise Panda";
 "ai.panda.desc" = "Solid shape and territory sense";
 "ai.crane.name" = "Cloud Crane";
 "ai.crane.desc" = "Deep local reading and balanced play";
+"ai.tiger.name" = "Fierce Tiger";
+"ai.tiger.desc" = "Sharp middle-game fighter and capturing races";
 "ai.dragon.name" = "Star Dragon";
-"ai.dragon.desc" = "Strong offline MCTS challenger";
+"ai.dragon.desc" = "Strong offline MCTS Shodan challenger";
+"ai.phoenix.name" = "Crimson Phoenix";
+"ai.phoenix.desc" = "3D deep-reading master with razor endgame";
+"ai.kirin.name" = "Celestial Kirin";
+"ai.kirin.desc" = "5D grandmaster guardian at peak depth";
 
 /* Generic + Character-Specific Companion Dialogues */
 "companion.greet" = "Let's have a fun match! Good luck!";
@@ -169,6 +176,11 @@
 "companion.dragon.playerBigCapture" = "Incredible reading!! Now the Dragon gets serious!";
 "companion.dragon.playerWin" = "Magnificent! You conquered Starlight Peak!";
 
+"companion.deer.greet" = "Light steps and clean shape — let's enjoy a thoughtful game!";
+"companion.tiger.greet" = "Roar! Ready for sharp middle-game fights? Guard your cuts!";
+"companion.phoenix.greet" = "The 3D trial begins! Every single endgame point counts!";
+"companion.kirin.greet" = "Welcome to the Kirin Star Zenith! Play your finest Go!";
+
 /* Game Play */
 "game.title.vsAI" = "vs %@";
 "game.title.twoPlayer" = "Tabletop 2P";
@@ -189,13 +201,9 @@
 "game.action.resign" = "Resign";
 "game.action.newGame" = "New Match";
 "game.action.tabletop" = "Face-to-Face";
-"game.action.coopToggle" = "Parent-Child Co-op Mode";
 "game.action.confirmPlace" = "Place Stone";
 "game.action.cancelPlace" = "Cancel";
 "game.tabletop.kidAssist" = "Kid Assist";
-"game.coop.kidTurn" = "Co-op Pair Go · Kid's Turn!";
-"game.coop.parentTurn" = "Co-op Pair Go · Partner's Turn!";
-"game.coopTeamName" = "%@ Co-op Team";
 "game.deadStones.title" = "Confirm Dead Stones";
 "game.deadStones.hint" = "Trapped dead stones are marked with X. Tap any group to toggle, then confirm score!";
 "game.deadStones.confirm" = "Confirm Score";
@@ -307,6 +315,7 @@
 "settings.section.feedback" = "Music, Sound & Haptics";
 "settings.feedback.bgm" = "Island Pentatonic Music";
 "settings.feedback.sound" = "Wood Clacks & Chimes";
+"settings.feedback.voice" = "Kid Voice Cheers";
 "settings.feedback.haptics" = "Haptic Feedback";
 "settings.section.eyecare" = "Eye-Care Timer";
 "settings.eyecare.off" = "Off";

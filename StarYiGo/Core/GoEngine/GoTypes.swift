@@ -274,6 +274,13 @@ struct BoardCropRegion: Hashable, Codable, Sendable {
         BoardCropRegion(minRow: 0, maxRow: size - 1, minCol: 0, maxCol: size - 1)
     }
 
+    static func focused(around point: BoardPoint, size: Int) -> BoardCropRegion {
+        let span = min(9, size)
+        let row = min(max(point.row - span / 2, 0), size - span)
+        let col = min(max(point.col - span / 2, 0), size - span)
+        return BoardCropRegion(minRow: row, maxRow: row + span - 1, minCol: col, maxCol: col + span - 1)
+    }
+
     func contains(_ point: BoardPoint) -> Bool {
         point.row >= minRow && point.row <= maxRow && point.col >= minCol && point.col <= maxCol
     }
@@ -506,5 +513,69 @@ struct GameResult: Hashable, Codable, Sendable {
             return "\(prefix)+R"
         }
         return String(format: "%@+%.1f", prefix, margin)
+    }
+}
+
+/// Collectible Go Stone Finishes unlocked by defeating Sea Bosses or spending Star Coins (Nintendo-style tactile rewards!).
+enum StoneStyle: String, CaseIterable, Codable, Identifiable, Hashable, Sendable {
+    case classicSlateShell
+    case coralPearl
+    case kyotoLacquer
+    case starlightJade
+
+    var id: String { rawValue }
+
+    var unlockCoinCost: Int {
+        switch self {
+        case .classicSlateShell: return 0
+        case .coralPearl: return 60
+        case .kyotoLacquer: return 120
+        case .starlightJade: return 180
+        }
+    }
+
+    /// Defeating this Sea Boss unlocks the stone finish for free!
+    var bossUnlockIslandId: String? {
+        switch self {
+        case .classicSlateShell: return nil
+        case .coralPearl: return "s1-lighthouse"
+        case .kyotoLacquer: return "s3-sanctum"
+        case .starlightJade: return "s4-zenith"
+        }
+    }
+
+    var badgeEmoji: String {
+        switch self {
+        case .classicSlateShell: return "⚫️"
+        case .coralPearl: return "🐚"
+        case .kyotoLacquer: return "🍁"
+        case .starlightJade: return "💎"
+        }
+    }
+
+    func displayName(_ l10n: L10n) -> String {
+        switch self {
+        case .classicSlateShell:
+            return l10n.localized(zh: "经典云子·蛤碁石", en: "Classic Slate & Shell", ja: "本蛤・那智黒石", ko: "클래식 운자·조개돌", zhHant: "經典雲子·蛤碁石")
+        case .coralPearl:
+            return l10n.localized(zh: "珊瑚贝壳珍珠子", en: "Coral & Ocean Pearl", ja: "珊瑚パール碁石", ko: "산호 진주 바둑돌", zhHant: "珊瑚貝殼珍珠子")
+        case .kyotoLacquer:
+            return l10n.localized(zh: "京都漆黑·琥珀子", en: "Kyoto Obsidian & Amber", ja: "京都漆黒・琥珀石", ko: "교토 흑요·호박돌", zhHant: "京都漆黑·琥珀子")
+        case .starlightJade:
+            return l10n.localized(zh: "星辰翡翠·月光石", en: "Starlight Jade & Moonstone", ja: "星彩翡翠・月光石", ko: "별빛 비취·월장석", zhHant: "星辰翡翠·月光石")
+        }
+    }
+
+    func unlockHint(_ l10n: L10n) -> String {
+        switch self {
+        case .classicSlateShell:
+            return l10n.localized(zh: "默认拥有", en: "Included", ja: "初期開放", ko: "기본 보유", zhHant: "預設擁有")
+        case .coralPearl:
+            return l10n.localized(zh: "击败第一海域Boss免费解锁 / 60🪙", en: "Beat Sea 1 Boss or 60🪙", ja: "第1海域ボス撃破 / 60🪙", ko: "제1해역 보스 처치 / 60🪙", zhHant: "擊敗第一海域Boss免費解鎖 / 60🪙")
+        case .kyotoLacquer:
+            return l10n.localized(zh: "击败第三海域Boss免费解锁 / 120🪙", en: "Beat Sea 3 Boss or 120🪙", ja: "第3海域ボス撃破 / 120🪙", ko: "제3해역 보스 처치 / 120🪙", zhHant: "擊敗第三海域Boss免費解鎖 / 120🪙")
+        case .starlightJade:
+            return l10n.localized(zh: "击败第四海域Boss免费解锁 / 180🪙", en: "Beat Sea 4 Boss or 180🪙", ja: "第4海域ボス撃破 / 180🪙", ko: "제4해역 보스 처치 / 180🪙", zhHant: "擊敗第四海域Boss免費解鎖 / 180🪙")
+        }
     }
 }

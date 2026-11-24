@@ -40,10 +40,10 @@ struct GlossyPalette {
 
     static func forIsland(_ islandId: String) -> GlossyPalette {
         switch islandId {
-        case "bamboo": return .mint
-        case "canyon": return .coral
-        case "lake": return .sky
-        case "temple": return .sun
+        case "bamboo", "s1-reef", "s2-wind", "s3-pine", "s4-mist": return .mint
+        case "canyon", "s1-shell", "s2-canyon", "s3-forge", "s4-flame": return .coral
+        case "lake", "s1-lagoon", "s2-lake", "s3-river", "s4-azure": return .sky
+        case "temple", "s1-harbor", "s2-temple", "s3-pagoda", "s4-citadel": return .sun
         default: return .grape
         }
     }
@@ -69,6 +69,12 @@ struct LockedShakeEffect: GeometryEffect {
 struct GlossyCapsuleButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    @Environment(\.minimumButtonFaceHeight) private var minimumHeight
+
+    enum PressStyle {
+        case button, homeEntrance, card
+    }
+
     var palette: GlossyPalette
     var cornerRadius: CGFloat = 999 // default true capsule
     var rimHeight: CGFloat = 6
@@ -76,11 +82,58 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
     var showStripeSheen: Bool = false
     var playTapSound: Bool = true
 
+    var pressStyle: PressStyle = .button
+
     func makeBody(configuration: Configuration) -> some View {
         let pressed = configuration.isPressed
-        let travel = pressed ? rimHeight * 0.82 : 0
+        let depth: CGFloat = switch pressStyle {
+        case .button: rimHeight * 0.85
+        case .homeEntrance: min(5, rimHeight * 0.65)
+        case .card: max(3, rimHeight * 0.55)
+        }
+        let travel = pressed && !reduceMotion ? depth : 0
+        let release: Animation = switch pressStyle {
+        case .button: MotionToken.buttonRelease
+        case .homeEntrance: MotionToken.heroRelease
+        case .card: MotionToken.cardRelease
+        }
+        let hapticWeight: UITapWeight = switch pressStyle {
+        case .button: .standard
+        case .homeEntrance: .heavy
+        case .card: .card
+        }
+        let scaleX: CGFloat = {
+            guard pressed && !reduceMotion else { return 1.0 }
+            switch pressStyle {
+            case .button: return 1.012
+            case .homeEntrance: return 0.992
+            case .card: return 0.975
+            }
+        }()
+        let scaleY: CGFloat = {
+            guard pressed && !reduceMotion else { return 1.0 }
+            switch pressStyle {
+            case .button: return 0.975
+            case .homeEntrance: return 0.985
+            case .card: return 0.975
+            }
+        }()
+        let innerScale: CGFloat = {
+            guard pressed && !reduceMotion else { return 1.0 }
+            switch pressStyle {
+            case .button: return 1.0
+            case .homeEntrance: return 0.975
+            case .card: return 0.985
+            }
+        }()
 
         configuration.label
+            .scaleEffect(innerScale)
+            .animation(
+                reduceMotion ? nil : (pressed ? MotionToken.pressDown : MotionToken.innerParallaxRelease),
+                value: pressed
+            )
+            .frame(minHeight: minimumHeight)
             .offset(y: travel)
             .background(
                 GeometryReader { geo in
@@ -88,13 +141,19 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                     let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
 
                     ZStack {
+                        // Grounded soft contact shadow tucked naturally beneath the rim
                         shape
                             .fill(palette.rim)
+                            .padding(.horizontal, 2)
                             .shadow(
-                                color: palette.glow.opacity(pressed ? 0.16 : 0.27),
-                                radius: pressed ? 3 : 7,
-                                y: pressed ? 2 : 4
+                                color: palette.glow.opacity(pressed ? 0.08 : 0.18),
+                                radius: pressed ? 1.5 : 4,
+                                y: pressed ? 0.5 : 2.5
                             )
+                            .offset(y: rimHeight)
+
+                        shape
+                            .fill(palette.rim)
                             .offset(y: rimHeight)
 
                         ZStack {
@@ -117,8 +176,8 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                                 .fill(
                                     LinearGradient(
                                         stops: [
-                                            .init(color: .white.opacity(pressed ? 0.13 : 0.26), location: 0),
-                                            .init(color: .white.opacity(0.06), location: 0.26),
+                                            .init(color: .white.opacity(pressed ? 0.11 : 0.26), location: 0),
+                                            .init(color: .white.opacity(pressed ? 0.03 : 0.06), location: 0.26),
                                             .init(color: .clear, location: 0.52)
                                         ],
                                         startPoint: .top,
@@ -127,9 +186,12 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                                 )
 
                             shape
+                                .fill(Color.black.opacity(pressed ? 0.045 : 0))
+
+                            shape
                                 .strokeBorder(
                                     LinearGradient(
-                                        colors: [.white.opacity(0.82), palette.rim.opacity(0.65)],
+                                        colors: [.white.opacity(pressed ? 0.65 : 0.82), palette.rim.opacity(0.65)],
                                         startPoint: .top,
                                         endPoint: .bottom
                                     ),
@@ -141,14 +203,15 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                 }
                 .allowsHitTesting(false)
             )
+            .scaleEffect(x: scaleX, y: scaleY)
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .animation(
-                reduceMotion ? nil : (pressed ? .easeOut(duration: 0.07) : .spring(response: 0.23, dampingFraction: 0.76)),
+                reduceMotion ? nil : (pressed ? MotionToken.pressDown : release),
                 value: pressed
             )
             .onChange(of: pressed) { _, isNowPressed in
                 if isNowPressed && playTapSound {
-                    SoundAndHapticsManager.shared.playUITap()
+                    SoundAndHapticsManager.shared.playUITap(weight: hapticWeight)
                 }
             }
             .padding(.bottom, rimHeight)
@@ -208,14 +271,14 @@ struct GameBackButton: View {
         Button(action: action) {
             HStack(spacing: 7) {
                 Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 14, weight: .black))
+                    .font(.system(size: 14.5, weight: .black))
                 Text(title)
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .font(.system(size: 15.5, weight: .heavy, design: .rounded))
             }
             .foregroundColor(.white)
             .shadow(color: AppTheme.skyRim.opacity(0.45), radius: 1, y: 1.5)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 19)
+            .padding(.vertical, 10.5)
         }
         .buttonStyle(
             GlossyCapsuleButtonStyle(
@@ -230,6 +293,7 @@ struct GameBackButton: View {
 
 /// Glossy Candy-Circle Game Icon Button (Settings, Sound, Tabletop Flip, Move Numbers).
 struct GameCircleButton: View {
+    @Environment(\.minimumButtonFaceHeight) private var minimumHeight
     let icon: String
     var palette: GlossyPalette = .snow
     var tint: Color = AppTheme.inkPrimary
@@ -238,16 +302,17 @@ struct GameCircleButton: View {
     let action: () -> Void
 
     var body: some View {
+        let diameter = max(size, minimumHeight)
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: size * 0.42, weight: .heavy))
+                .font(.system(size: max(size * 0.42, diameter * 0.38), weight: .heavy))
                 .foregroundColor(tint)
-                .frame(width: size, height: size)
+                .frame(width: diameter, height: diameter)
         }
         .buttonStyle(
             GlossyCapsuleButtonStyle(
                 palette: palette,
-                cornerRadius: size / 2,
+                cornerRadius: diameter / 2,
                 rimHeight: 5,
                 whiteBorderWidth: 3,
                 playTapSound: playTapSound
@@ -260,6 +325,7 @@ struct GameCircleButton: View {
 struct GameTitleCrest: View {
     let title: String
     var subtitle: String? = nil
+    var minHeight: CGFloat? = nil
 
     var body: some View {
         HStack(spacing: 10) {
@@ -290,6 +356,7 @@ struct GameTitleCrest: View {
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 8)
+        .frame(minHeight: minHeight)
         .background(
             Capsule()
                 .fill(
@@ -376,12 +443,16 @@ struct CharacterAvatarView: View {
 
     private var palette: (top: Color, bottom: Color, accent: Color) {
         switch character {
-        case .sprout: return (AppTheme.mintTop, AppTheme.mintBottom, Color(red: 0.78, green: 0.98, blue: 0.62))
-        case .rabbit: return (Color(red: 1.0, green: 0.74, blue: 0.82), Color(red: 0.96, green: 0.45, blue: 0.62), .white)
-        case .fox:    return (AppTheme.sunTop, AppTheme.coralBottom, Color(red: 1.0, green: 0.93, blue: 0.80))
-        case .panda:  return (AppTheme.skyTop, AppTheme.skyBottom, .white)
-        case .crane:  return (Color(red: 0.98, green: 0.84, blue: 0.46), AppTheme.sunBottom, .white)
-        case .dragon: return (AppTheme.grapeTop, AppTheme.grapeBottom, AppTheme.sunTop)
+        case .sprout:  return (AppTheme.mintTop, AppTheme.mintBottom, Color(red: 0.78, green: 0.98, blue: 0.62))
+        case .rabbit:  return (Color(red: 1.0, green: 0.74, blue: 0.82), Color(red: 0.96, green: 0.45, blue: 0.62), .white)
+        case .fox:     return (AppTheme.sunTop, AppTheme.coralBottom, Color(red: 1.0, green: 0.93, blue: 0.80))
+        case .deer:    return (Color(red: 0.42, green: 0.86, blue: 0.74), Color(red: 0.08, green: 0.62, blue: 0.56), .white)
+        case .panda:   return (AppTheme.skyTop, AppTheme.skyBottom, .white)
+        case .crane:   return (Color(red: 0.98, green: 0.84, blue: 0.46), AppTheme.sunBottom, .white)
+        case .tiger:   return (Color(red: 1.0, green: 0.66, blue: 0.18), Color(red: 0.88, green: 0.34, blue: 0.10), .white)
+        case .dragon:  return (AppTheme.grapeTop, AppTheme.grapeBottom, AppTheme.sunTop)
+        case .phoenix: return (Color(red: 1.0, green: 0.36, blue: 0.44), Color(red: 0.76, green: 0.12, blue: 0.34), AppTheme.sunTop)
+        case .kirin:   return (Color(red: 0.44, green: 0.58, blue: 1.0), Color(red: 0.32, green: 0.20, blue: 0.86), AppTheme.sunTop)
         }
     }
 
@@ -485,6 +556,38 @@ struct CharacterAvatarView: View {
                     ctx.fill(lHorn, with: .color(AppTheme.sunTop))
                     ctx.fill(rHorn, with: .color(AppTheme.sunTop))
                     ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 1.05, y: cy - headR * 0.88, width: headR * 2.1, height: headR * 1.82)), with: .color(Color(red: 0.42, green: 0.86, blue: 0.78)))
+
+                case .deer:
+                    // Gentle Jade Antlers + warm fawn face
+                    ctx.fill(Path(roundedRect: CGRect(x: cx - headR * 0.72, y: cy - headR * 1.42, width: headR * 0.22, height: headR * 0.65), cornerRadius: headR * 0.1), with: .color(Color(red: 0.68, green: 0.46, blue: 0.26)))
+                    ctx.fill(Path(roundedRect: CGRect(x: cx + headR * 0.50, y: cy - headR * 1.42, width: headR * 0.22, height: headR * 0.65), cornerRadius: headR * 0.1), with: .color(Color(red: 0.68, green: 0.46, blue: 0.26)))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 1.0, y: cy - headR * 0.88, width: headR * 2.0, height: headR * 1.85)), with: .color(Color(red: 0.93, green: 0.76, blue: 0.56)))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 0.62, y: cy + headR * 0.08, width: headR * 1.24, height: headR * 0.78)), with: .color(Color(red: 1.0, green: 0.96, blue: 0.88)))
+
+                case .tiger:
+                    // Rounded fierce tiger ears + golden striped face
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 1.02, y: cy - headR * 1.12, width: headR * 0.62, height: headR * 0.62)), with: .color(Color(red: 0.96, green: 0.54, blue: 0.12)))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx + headR * 0.40, y: cy - headR * 1.12, width: headR * 0.62, height: headR * 0.62)), with: .color(Color(red: 0.96, green: 0.54, blue: 0.12)))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 1.05, y: cy - headR * 0.88, width: headR * 2.1, height: headR * 1.84)), with: .color(Color(red: 1.0, green: 0.66, blue: 0.20)))
+                    // Signature forehead stripes
+                    ctx.fill(Path(roundedRect: CGRect(x: cx - headR * 0.34, y: cy - headR * 0.72, width: headR * 0.68, height: headR * 0.12), cornerRadius: 2), with: .color(AppTheme.inkPrimary))
+                    ctx.fill(Path(roundedRect: CGRect(x: cx - headR * 0.24, y: cy - headR * 0.52, width: headR * 0.48, height: headR * 0.10), cornerRadius: 2), with: .color(AppTheme.inkPrimary))
+
+                case .phoenix:
+                    // Blazing crimson-gold crest feathers + radiant face
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 0.48, y: cy - headR * 1.44, width: headR * 0.96, height: headR * 0.76)), with: .color(AppTheme.sunTop))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 0.26, y: cy - headR * 1.50, width: headR * 0.52, height: headR * 0.66)), with: .color(AppTheme.coralBottom))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 1.0, y: cy - headR * 0.90, width: headR * 2.0, height: headR * 1.84)), with: .color(Color(red: 1.0, green: 0.94, blue: 0.84)))
+
+                case .kirin:
+                    // Celestial single golden horn + luminous starlight mane
+                    var cHorn = Path()
+                    cHorn.move(to: CGPoint(x: cx - headR * 0.22, y: cy - headR * 0.80))
+                    cHorn.addLine(to: CGPoint(x: cx, y: cy - headR * 1.56))
+                    cHorn.addLine(to: CGPoint(x: cx + headR * 0.22, y: cy - headR * 0.80))
+                    cHorn.closeSubpath()
+                    ctx.fill(cHorn, with: .color(AppTheme.sunTop))
+                    ctx.fill(Path(ellipseIn: CGRect(x: cx - headR * 1.02, y: cy - headR * 0.88, width: headR * 2.04, height: headR * 1.82)), with: .color(Color(red: 0.92, green: 0.95, blue: 1.0)))
                 }
 
                 // Rosy Nintendo cheeks
@@ -532,7 +635,7 @@ struct CharacterAvatarView: View {
                 }
 
                 // Cute smile / beak
-                if character == .crane {
+                if character == .crane || character == .phoenix {
                     var beak = Path()
                     beak.move(to: CGPoint(x: cx - headR * 0.22, y: cy + headR * 0.16))
                     beak.addLine(to: CGPoint(x: cx + headR * 0.22, y: cy + headR * 0.16))
@@ -684,6 +787,21 @@ struct GoTermQuickCard: View {
                         .padding(.vertical, 11)
                 }
                 .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+            } else {
+                Button(action: onDismiss) {
+                    Text(l10n.localized(
+                        zh: "知道了",
+                        en: "Got it",
+                        ja: "わかった",
+                        ko: "알겠어요",
+                        zhHant: "知道了"
+                    ))
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                }
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
             }
         }
         .padding(20)
@@ -698,5 +816,184 @@ extension Color {
         let g = Double((hex >> 8) & 0xFF) / 255.0
         let b = Double(hex & 0xFF) / 255.0
         self.init(red: r, green: g, blue: b)
+    }
+}
+
+// MARK: - Custom Nintendo-Switch-Style Game Alert Dialog (High-Contrast, Kid-Friendly)
+
+struct GameDialogAction: Identifiable {
+    let id = UUID()
+    let title: String
+    let palette: GlossyPalette
+    let isLightFace: Bool
+    let action: () -> Void
+
+    init(
+        title: String,
+        palette: GlossyPalette = .sky,
+        isLightFace: Bool = false,
+        action: @escaping () -> Void = {}
+    ) {
+        self.title = title
+        self.palette = palette
+        self.isLightFace = isLightFace
+        self.action = action
+    }
+
+    static func primary(_ title: String, palette: GlossyPalette = .mint, action: @escaping () -> Void = {}) -> GameDialogAction {
+        GameDialogAction(title: title, palette: palette, isLightFace: false, action: action)
+    }
+
+    static func secondary(_ title: String, action: @escaping () -> Void = {}) -> GameDialogAction {
+        GameDialogAction(title: title, palette: .snow, isLightFace: true, action: action)
+    }
+
+    static func destructive(_ title: String, action: @escaping () -> Void = {}) -> GameDialogAction {
+        GameDialogAction(title: title, palette: .coral, isLightFace: false, action: action)
+    }
+}
+
+struct GameDialogModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let title: String
+    let message: String
+    let icon: String
+    let accentPalette: GlossyPalette
+    let actions: [GameDialogAction]
+
+    func body(content: Content) -> some View {
+        ZStack {
+            content
+
+            if isPresented {
+                Color(red: 0.05, green: 0.11, blue: 0.22)
+                    .opacity(0.56)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .zIndex(900)
+
+                VStack(spacing: 16) {
+                    // Top glossy emblem badge
+                    ZStack {
+                        Circle()
+                            .fill(accentPalette.rim)
+                            .frame(width: 66, height: 66)
+                            .offset(y: 4)
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [accentPalette.top, accentPalette.bottom],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 66, height: 66)
+                            .overlay(Circle().strokeBorder(.white, lineWidth: 3.5))
+                            .shadow(color: accentPalette.glow.opacity(0.35), radius: 10, y: 4)
+
+                        Image(systemName: icon)
+                            .font(.system(size: 28, weight: .black))
+                            .foregroundColor(.white)
+                            .shadow(color: accentPalette.rim.opacity(0.5), radius: 2, y: 1.5)
+                    }
+
+                    Text(title)
+                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(message)
+                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.inkSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 6)
+
+                    // Big, high-contrast glossy capsule buttons
+                    HStack(spacing: 12) {
+                        ForEach(actions) { item in
+                            Button {
+                                SoundAndHapticsManager.shared.playUITap()
+                                withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                                    isPresented = false
+                                }
+                                item.action()
+                            } label: {
+                                Text(item.title)
+                                    .font(.system(size: 16, weight: .black, design: .rounded))
+                                    .foregroundColor(item.isLightFace ? AppTheme.inkPrimary : .white)
+                                    .shadow(
+                                        color: item.isLightFace ? .clear : item.palette.rim.opacity(0.5),
+                                        radius: 1.5,
+                                        y: 1.5
+                                    )
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 13)
+                            }
+                            .buttonStyle(
+                                GlossyCapsuleButtonStyle(
+                                    palette: item.palette,
+                                    cornerRadius: 999,
+                                    rimHeight: 5,
+                                    whiteBorderWidth: 3,
+                                    playTapSound: false
+                                )
+                            )
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 24)
+                .frame(maxWidth: 430)
+                .background(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white, Color(red: 0.95, green: 0.98, blue: 1.0)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: Color(red: 0.04, green: 0.14, blue: 0.30).opacity(0.35), radius: 24, y: 12)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .strokeBorder(.white, lineWidth: 4)
+                )
+                .padding(.horizontal, 24)
+                .transition(.scale(scale: 0.86).combined(with: .opacity))
+                .zIndex(901)
+            }
+        }
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isPresented)
+    }
+}
+
+extension View {
+    /// Presents a high-contrast, kid-friendly Nintendo-Switch-style dialog matching StarYi Go's glossy aesthetic.
+    func gameDialog(
+        isPresented: Binding<Bool>,
+        title: String,
+        message: String,
+        icon: String = "exclamationmark.circle.fill",
+        accentPalette: GlossyPalette = .sky,
+        actions: [GameDialogAction]
+    ) -> some View {
+        modifier(
+            GameDialogModifier(
+                isPresented: isPresented,
+                title: title,
+                message: message,
+                icon: icon,
+                accentPalette: accentPalette,
+                actions: actions
+            )
+        )
     }
 }

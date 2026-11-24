@@ -1,0 +1,2726 @@
+{
+  "version": 1,
+  "description": "StarYi Go Verified Multi-Rank Puzzle Pack (30K -> 5D)",
+  "templates": [
+    {
+      "id": "pk-cap-01",
+      "category": "capture",
+      "rankBadge": "30K",
+      "titleZh": "边线提一子",
+      "titleEn": "Edge Single Capture",
+      "promptZh": "黑先：一路边线的白子只剩 1 口气，一子提掉它！",
+      "promptEn": "Black to play: Capture the 1-liberty white stone on the edge!",
+      "hintZh": "看看边线白子旁边唯一剩下的空交叉点。",
+      "hintEn": "Spot the single open intersection next to the white stone.",
+      "boardSize": 5,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[5]PL[B]AB[ba][cb]AW[ca](;B[da]C[CORRECT])(;B[db];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-cap-02",
+      "category": "capture",
+      "rankBadge": "29K",
+      "titleZh": "角上双子提吃",
+      "titleEn": "Corner Twin Capture",
+      "promptZh": "黑先：角上两颗白子紧紧挨着，快拿走它们最后一口气！",
+      "promptEn": "Black to play: Both corner white stones share one last liberty — capture them!",
+      "hintZh": "这两颗白子只剩右边边线那一口气。",
+      "hintEn": "Both stones share the final liberty along the top edge.",
+      "boardSize": 5,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[5]PL[B]AB[ab][bb][cb]AW[aa][ba](;B[ca]C[CORRECT])(;B[cc];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-cap-03",
+      "category": "capture",
+      "rankBadge": "28K",
+      "titleZh": "中央提三子",
+      "titleEn": "Center Triple Capture",
+      "promptZh": "黑先：中间一排白子被包围得严严实实，一口气全提光！",
+      "promptEn": "Black to play: The white line in the center has 1 liberty left — capture all three!",
+      "hintZh": "找一找三颗白子四周唯一没有黑子堵住的地方。",
+      "hintEn": "Find the single remaining liberty around the three white stones.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[cb][db][eb][bc][cd][dd][ed]AW[cc][dc][ec](;B[fc]C[CORRECT])(;B[fb];W[fc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-04",
+      "category": "capture",
+      "rankBadge": "27K",
+      "titleZh": "虎口救命逃跑",
+      "titleEn": "Escape Into Space",
+      "promptZh": "黑先：两颗黑子只剩一口气了！快往宽阔处长气逃出来！",
+      "promptEn": "Black to play: Your two stones are in atari — extend into open space!",
+      "hintZh": "往右侧空地长出一子，立刻变成 3 口气！",
+      "hintEn": "Extend right into open space to jump to 3 liberties!",
+      "boardSize": 5,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[5]PL[B]AB[bc][cc]AW[bb][cb][ac][bd][cd](;B[dc]C[CORRECT])(;B[db];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-cap-05",
+      "category": "capture",
+      "rankBadge": "26K",
+      "titleZh": "反提解围（对吃）",
+      "titleEn": "Counter-Capture Rescue",
+      "promptZh": "黑先：黑棋被叫吃了，但旁边白子也只剩 1 口气！抢先提掉白子！",
+      "promptEn": "Black to play: You're in atari, but a white stone is too! Capture it first!",
+      "hintZh": "不要逃跑，直接提掉那颗只剩 1 口气的白子就能救出全部黑棋！",
+      "hintEn": "Capture the white stone with 1 liberty to save your whole group!",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[cb][eb][dc]AW[cc][ec][db](;B[da]C[CORRECT])(;B[de];W[dd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-06",
+      "category": "capture",
+      "rankBadge": "25K",
+      "titleZh": "切断分而吃之",
+      "titleEn": "Cut & Capture",
+      "promptZh": "黑先：两颗白子靠得很近但还没连上！先切断并叫吃右边白子！",
+      "promptEn": "Black to play: Cut between the two white stones and put the right one in atari!",
+      "hintZh": "下在两颗白子正中间的断点，右边白子立刻只剩 1 口气。",
+      "hintEn": "Play on the cutting point between them to put the right stone in atari.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[cb][eb][fd][ec]AW[cc][dc][ed](;B[dd](;W[cd];B[ee]C[CORRECT])(;W[ee];B[cd]C[CORRECT]))(;B[ee];W[dd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-07",
+      "category": "capture",
+      "rankBadge": "24K",
+      "titleZh": "二路抱吃单子",
+      "titleEn": "Second-Line Hug Capture",
+      "promptZh": "黑先：不要把白子往中央放跑，把它抱向一路边线吃掉！",
+      "promptEn": "Black to play: Drive the white stone onto the first line to capture it!",
+      "hintZh": "从二路挡住白子往中央逃跑的路线。",
+      "hintEn": "Atari from the second line so White has to crawl onto the edge.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bc][bd][dc][ce]AW[cc](;B[cd];W[cb];B[db]C[CORRECT])(;B[cb];W[cd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-08",
+      "category": "capture",
+      "rankBadge": "23K",
+      "titleZh": "顺墙抱吃",
+      "titleEn": "Drive Into Friendly Wall",
+      "promptZh": "黑先：利用上方已有的黑墙，选对打吃方向吃掉白子！",
+      "promptEn": "Black to play: Choose the right atari direction to push White into your wall!",
+      "hintZh": "从下方叫吃，逼白棋往上方黑墙撞上去。",
+      "hintEn": "Atari from below to push White right into your upper stones.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bb][cb][db][dc][be]AW[cc](;B[cd];W[bc];B[ac]C[CORRECT])(;B[bc];W[cd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-09",
+      "category": "capture",
+      "rankBadge": "22K",
+      "titleZh": "角部关门吃",
+      "titleEn": "Corner Door Capture",
+      "promptZh": "黑先：白子躲在二二位，先叫吃逼它进角再关门全吃！",
+      "promptEn": "Black to play: Push White into the corner door and slam it shut!",
+      "hintZh": "先从外侧叫吃，白棋逃进角里后只剩一口气。",
+      "hintEn": "Atari from outside so White runs into the corner trap.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bc][cb][dc][ad]AW[bb](;B[ba];W[ab];B[aa]C[CORRECT])(;B[ab];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-10",
+      "category": "capture",
+      "rankBadge": "22K",
+      "titleZh": "中央关门吃",
+      "titleEn": "Center Door Trap",
+      "promptZh": "黑先：两颗黑子已经摆好门柱，从后面叫吃请君入瓮！",
+      "promptEn": "Black to play: Your two doorposts are ready — atari White straight into the door!",
+      "hintZh": "从左边叫吃白子，白子往右逃就会钻进两颗黑子的口袋！",
+      "hintEn": "Atari from the left so White runs right between your two stones!",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[cd][ce][de][ec][fe]AW[dd](;B[dc];W[ed];B[ee]C[CORRECT])(;B[ed];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-11",
+      "category": "capture",
+      "rankBadge": "21K",
+      "titleZh": "十字双打吃",
+      "titleEn": "Cross-Cut Double Atari",
+      "promptZh": "黑先：棋盘中央出现经典双打吃机会，一子叫吃两白子！",
+      "promptEn": "Black to play: Spot the classic double atari in the center!",
+      "hintZh": "找同时紧挨着两颗白子的那个交叉点。",
+      "hintEn": "Find the empty point touching both two-liberty white stones.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bc][cd][ed]AW[cc][dd](;B[dc](;W[cb];B[de]C[CORRECT])(;W[de];B[cb]C[CORRECT]))(;B[cb];W[dc]C[WRONG])(;B[de];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-12",
+      "category": "capture",
+      "rankBadge": "21K",
+      "titleZh": "边线双打吃",
+      "titleEn": "Side Double Atari",
+      "promptZh": "黑先：贴着边线钻进去，同时叫吃左右两块白子！",
+      "promptEn": "Black to play: Step in near the edge to put both white stones in atari!",
+      "hintZh": "中间的空点正好同时威胁到左边和右边两颗白子。",
+      "hintEn": "The center gap threatens both left and right white stones at once.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cd][ec][eb]AW[cb][db][cc](;B[dc](;W[ca];B[dd]C[CORRECT])(;W[dd];B[ca]C[CORRECT]))(;B[ca];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-cap-13",
+      "category": "capture",
+      "rankBadge": "20K",
+      "titleZh": "双打吃吃大块",
+      "titleEn": "Double Atari on Groups",
+      "promptZh": "黑先：白棋留下了一个致命缺口，打进去左右必吃一块！",
+      "promptEn": "Black to play: Step into White's gap for a double atari on two groups!",
+      "hintZh": "找到让左右两块白棋同时变成 1 口气的虎口点。",
+      "hintEn": "Play on the point that reduces both white groups to 1 liberty.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bc][bd][ce][df][fe][fd]AW[cc][cd][dd][ee][ed](;B[de](;W[dc];B[ef]C[CORRECT])(;W[ef];B[dc]C[CORRECT]))(;B[dc];W[de]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 1,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-14",
+      "category": "capture",
+      "rankBadge": "20K",
+      "titleZh": "双线长气联络",
+      "titleEn": "Connect Under Pressure",
+      "promptZh": "黑先：左下黑棋被分断且只剩一口气，冷静连回救出大块！",
+      "promptEn": "Black to play: Your group is cut and in atari — connect cleanly to survive!",
+      "hintZh": "把两块黑棋连成一家，立刻拥有充足气数。",
+      "hintEn": "Link your endangered stones to your healthy neighbors.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cc][eb][ec][dc]AW[bb][bc][bd][cd][de][ed][fb][fc](;B[db]C[CORRECT])(;B[dd];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-cap-15",
+      "category": "capture",
+      "rankBadge": "20K",
+      "titleZh": "提子反杀救大龙",
+      "titleEn": "Capture Saving Throw",
+      "promptZh": "黑先：三颗黑子命悬一线，找到那颗 1 口气白子立刻提掉！",
+      "promptEn": "Black to play: Three black stones are in atari — capture the key white stone to save them!",
+      "hintZh": "注意观察包围黑子的白子中，哪一颗只剩最后一口气。",
+      "hintEn": "Look at the surrounding white stones — one of them only has 1 liberty!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ba][ca][ea]AW[ab][cb][da](;B[db]C[CORRECT])(;B[ee];W[bb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-01",
+      "category": "lifeAndDeath",
+      "rankBadge": "24K",
+      "titleZh": "两眼初体验",
+      "titleEn": "First Two True Eyes",
+      "promptZh": "黑先：黑棋被围在边上，把三个空点一分为二做出两只真眼！",
+      "promptEn": "Black to play: Split the 3 empty edge spaces into two unkillable true eyes!",
+      "hintZh": "点在三个空点正中间，左右各留一只闪亮真眼。",
+      "hintEn": "Play right in the center of the three empty points.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[aa][ab][bb][cb][db][eb][ea]AW[ac][bc][cc][dc][ec][fb][fa](;B[ca]C[CORRECT])(;B[ba];W[ca]C[WRONG])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-02",
+      "category": "lifeAndDeath",
+      "rankBadge": "22K",
+      "titleZh": "补成第二只眼",
+      "titleEn": "Secure Second Eye",
+      "promptZh": "黑先：黑棋左角已有一只真眼，快在右边补成第二只真眼活棋！",
+      "promptEn": "Black to play: You have one eye on the left — complete the second eye on the right!",
+      "hintZh": "把右边虎口补牢，别让白棋扑进来破眼！",
+      "hintEn": "Solidify the right eye before White destroys it.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bb][cb][db][da][fb][fa]AW[ac][bc][cc][dc][ec][fc][gc][gb][ga](;B[eb]C[CORRECT])(;B[ea];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-lad-03",
+      "category": "lifeAndDeath",
+      "rankBadge": "21K",
+      "titleZh": "角部做两眼",
+      "titleEn": "Corner Two Eyes",
+      "promptZh": "黑先：角上三目空地，下在哪里能变出两只真眼？",
+      "promptEn": "Black to play: Find the vital point in the corner to make two true eyes!",
+      "hintZh": "拐角 1-1 正好把角上三个空点隔成两只眼。",
+      "hintEn": "The 1-1 corner splits the three spaces into two separate eyes.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[ca][cb][bb][bc][ac]AW[da][db][dc][cd][bd][ad](;B[aa]C[CORRECT])(;B[ba];W[aa]C[WRONG])(;B[ab];W[aa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-open-01",
+      "category": "opening",
+      "rankBadge": "22K",
+      "titleZh": "9路天元开局",
+      "titleEn": "9×9 Center Opening",
+      "promptZh": "黑先：空荡荡的 9 路小棋盘，第一步占领正中央「天元」辐射四方！",
+      "promptEn": "Black to play: On an empty 9×9 board, claim the center Tengen star point!",
+      "hintZh": "9 路棋盘正中央的星位叫「天元」（5-5 点）。",
+      "hintEn": "Tap the center star point (Tengen) at the heart of the 9×9 board.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B](;B[ee]C[CORRECT])(;B[aa];W[ee]C[WRONG])(;B[ia];W[ee]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 8,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-open-02",
+      "category": "opening",
+      "rankBadge": "20K",
+      "titleZh": "先抢空角星位",
+      "titleEn": "Claim Empty Corner",
+      "promptZh": "黑先：白棋占了右上星位，黑棋赶快去抢占左下「金角」星位！",
+      "promptEn": "Black to play: Claim the open bottom-left golden corner star point!",
+      "hintZh": "「金角银边草肚皮」——左下角 3-3/4-4 星位还空着哦！",
+      "hintEn": "Corners are gold — claim the open bottom-left star point!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc]AW[gc][gg](;B[cg]C[CORRECT])(;B[ee];W[cg]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 8,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-tac-01",
+      "category": "tactics",
+      "rankBadge": "20K",
+      "titleZh": "一线打吃防逃",
+      "titleEn": "Edge Cut & Capture",
+      "promptZh": "黑先：切开两颗白子，同时叫吃一路边线上的白子！",
+      "promptEn": "Black to play: Cut between the white stones and capture along the edge!",
+      "hintZh": "从二路挡住逃跑路线，白子无处可逃。",
+      "hintEn": "Cut on the second line so the edge white stone cannot escape.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][fb]AW[cb][db][da](;B[ea](;W[ca];B[fa]C[CORRECT])(;W[fa];B[ca]C[CORRECT]))(;B[ca];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-end-01",
+      "category": "endgame",
+      "rankBadge": "20K",
+      "titleZh": "边线挡住守空",
+      "titleEn": "Block to Keep Territory",
+      "promptZh": "黑先：白棋沿二路伸过来偷地盘啦！快立下挡住守好自己的空！",
+      "promptEn": "Black to play: White is sneaking along the 2nd line — block cleanly to guard your territory!",
+      "hintZh": "在白棋前面一路稳稳立下挡住。",
+      "hintEn": "Stand down on the first line directly in front of White.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][cd][ce][dc][db]AW[ec][ed][ee][eb](;B[da]C[CORRECT])(;B[ea];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-tac-02",
+      "category": "tactics",
+      "rankBadge": "18K",
+      "titleZh": "小征子追击",
+      "titleEn": "Short Ladder Capture",
+      "promptZh": "黑先：选对第一手叫吃方向，把白子一路征到上方边线！",
+      "promptEn": "Black to play: Choose the right first atari to ladder White to the top edge!",
+      "hintZh": "封住白棋往右边中央逃跑的路，逼它朝上方边线走楼梯。",
+      "hintEn": "Block the center direction so White zig-zags straight into the top edge.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][bd][ce]AW[cd](;B[dd];W[cc];B[dc];W[cb];B[db];W[ca];B[da]C[CORRECT])(;B[cc];W[dd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-tac-03",
+      "category": "tactics",
+      "rankBadge": "17K",
+      "titleZh": "巧用友军征子",
+      "titleEn": "Ladder Into Friendly Stone",
+      "promptZh": "黑先：上方已有黑棋接应，大胆发动征子让白棋一头撞墙！",
+      "promptEn": "Black to play: A friendly black stone waits ahead — start the ladder now!",
+      "hintZh": "堵住右下方，把白棋往左上方己方黑子处追过去！",
+      "hintEn": "Block below to drive White right into your waiting friendly stone!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cc][cd][de][fa]AW[dd](;B[ed];W[dc];B[ec];W[db];B[eb];W[da];B[ea]C[CORRECT])(;B[dc];W[ed]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-04",
+      "category": "tactics",
+      "rankBadge": "17K",
+      "titleZh": "方形枷吃",
+      "titleEn": "Square Net Capture",
+      "promptZh": "黑先：直接打吃会让白棋逃跑！用一记轻灵的「枷」罩住白子！",
+      "promptEn": "Black to play: Direct atari lets White escape — trap it with a clean Net!",
+      "hintZh": "隔一格斜对角罩住，白棋往哪边冲都会只剩 1 口气。",
+      "hintEn": "Play diagonally across to net White — every escape runs into atari.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[dc][cd][ec][ce][df][fd]AW[dd](;B[ee](;W[ed];B[de]C[CORRECT])(;W[de];B[ed]C[CORRECT]))(;B[ed];W[de]C[WRONG])(;B[de];W[ed]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 1,
+        "maxRow": 6,
+        "minCol": 1,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-05",
+      "category": "tactics",
+      "rankBadge": "16K",
+      "titleZh": "双子枷吃",
+      "titleEn": "Two-Stone Net (Geta)",
+      "promptZh": "黑先：两颗白子想往中腹钻出，一招「大枷」彻底封死！",
+      "promptEn": "Black to play: Two white stones try to break out — seal them with a Net!",
+      "hintZh": "不要贴身撞上去，站在前方斜角罩住它们的两处出口。",
+      "hintEn": "Cap diagonally ahead of both escape lanes!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cd][dc][ec][cf][gd][eg]AW[dd][de](;B[fe](;W[ee];B[ef]C[CORRECT])(;W[ef];B[ee]C[CORRECT]))(;B[ee];W[fe]C[WRONG])(;B[ef];W[fe]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 1,
+        "maxRow": 7,
+        "minCol": 1,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-tac-06",
+      "category": "tactics",
+      "rankBadge": "16K",
+      "titleZh": "竹节枷吃",
+      "titleEn": "Bamboo Net",
+      "promptZh": "黑先：利用两边的黑棋配合，轻轻一「枷」把白子收入囊中！",
+      "promptEn": "Black to play: Coordinate your surrounding stones to net the white stone cleanly!",
+      "hintZh": "下在白子正前方的马步/斜角位置，左右都跑不掉。",
+      "hintEn": "Place a loose net directly ahead of White's escape path.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][dc][bd][be][cf][ec][fc]AW[cd][dd](;B[ee](;W[ed];B[de]C[CORRECT])(;W[de];B[ed]C[CORRECT]))(;B[de];W[ee]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 1,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-07",
+      "category": "tactics",
+      "rankBadge": "16K",
+      "titleZh": "角上倒扑",
+      "titleEn": "Corner Snapback",
+      "promptZh": "黑先：大胆送吃一子！白棋提完立刻只剩一口气，反手全提！",
+      "promptEn": "Black to play: Sacrifice one stone in the corner to snap back the entire group!",
+      "hintZh": "直接扑进白棋虎口，白棋提掉后反而自撞死胡同！",
+      "hintEn": "Throw a stone into White's mouth — if White captures, snap right back!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][ba][cb][db][eb][ea]AB[bb][bc][cc][dc][ec][fb][fa](;B[ca];W[da];B[ca]C[CORRECT])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-08",
+      "category": "tactics",
+      "rankBadge": "15K",
+      "titleZh": "边路倒扑吃三子",
+      "titleEn": "Edge Snapback Three",
+      "promptZh": "黑先：先弃一子扑入白棋断点，引诱白棋提子后一举反提！",
+      "promptEn": "Black to play: Throw in on the edge to trigger a 3-stone snapback!",
+      "hintZh": "在一路直接扑入切断点，等白棋提子后再提回来！",
+      "hintEn": "Throw in on the first line, wait for White's capture, then snap back!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[ba][bb][ca][db][eb][fb][fa]AB[cb][cc][dc][ec][fc][gb][ga](;B[da];W[ea];B[da]C[CORRECT])(;B[ea];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-tac-09",
+      "category": "tactics",
+      "rankBadge": "15K",
+      "titleZh": "角部接不归",
+      "titleEn": "Corner Connect & Die",
+      "promptZh": "黑先：叫吃角上白子，白棋如果敢粘上就会整块被吃光！",
+      "promptEn": "Black to play: Atari the corner stones — if White connects, capture the whole group!",
+      "hintZh": "先在二路分断叫吃，白棋粘上后只剩 1 口气！",
+      "hintEn": "Cut on the second line so connecting leaves White with 1 liberty!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bc][dc][ec][eb][fb][ga]AW[ba][bb][db][da][ea](;B[cb];W[ca];B[fa]C[CORRECT])(;B[ca];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-tac-10",
+      "category": "tactics",
+      "rankBadge": "15K",
+      "titleZh": "中腹接不归",
+      "titleEn": "Center Connect & Die",
+      "promptZh": "黑先：一子切断叫吃，白棋粘上就全军覆没！",
+      "promptEn": "Black to play: Cut and atari in the center — White cannot safely connect!",
+      "hintZh": "看准白棋最气紧的断点打吃进去。",
+      "hintEn": "Cut at White's tightest shortage-of-liberties point.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][cd][ce][df][ef][fe][fd][dc]AW[dd][de][ee][ed](;B[ec](;W[fc];B[eb]C[CORRECT])(;W[eb];B[fc]C[CORRECT]))(;B[eb];W[ec]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 1,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-11",
+      "category": "tactics",
+      "rankBadge": "14K",
+      "titleZh": "连环滚打包收",
+      "titleEn": "Chain Rolling Squeeze",
+      "promptZh": "黑先：连续叫吃把白棋滚成一团“大愚形”，一口气吃光！",
+      "promptEn": "Black to play: Chain ataris to squeeze White into a breathless clump!",
+      "hintZh": "先从外侧打吃，逼白棋不断粘上变成一团。",
+      "hintEn": "Start with the forcing atari from the outside and keep squeezing!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bc][bd][dc][eb][ec][fc]AW[cc][cd][db][dd][de](;B[cb];W[da];B[ca];W[ea];B[fa]C[CORRECT])(;B[da];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-12",
+      "category": "tactics",
+      "rankBadge": "14K",
+      "titleZh": "挖断吃边子",
+      "titleEn": "Wedge & Cut Capture",
+      "promptZh": "黑先：一子犀利「挖」入白棋二路薄弱处，左右必吃其一！",
+      "promptEn": "Black to play: Wedge cleanly between White's two 2nd-line stones!",
+      "hintZh": "下在两颗二路白子正中间，无论白棋哪边挡另一边都会被吃。",
+      "hintEn": "Wedge right between the two white stones — White can't save both.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][fb][fa]AW[cb][da][eb](;B[db](;W[ca];B[ea]C[CORRECT])(;W[ea];B[ca]C[CORRECT]))(;B[ca];W[db]C[WRONG])(;B[ea];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-13",
+      "category": "tactics",
+      "rankBadge": "13K",
+      "titleZh": "二路夹渡联络",
+      "titleEn": "Second-Line Clamp Connect",
+      "promptZh": "黑先：左右两块黑棋被白棋隔开，用一记「夹」在一路/二路巧妙渡过！",
+      "promptEn": "Black to play: Unite your two separated groups with a sharp clamp!",
+      "hintZh": "下在正中间的一路要点，白棋从哪边挡都挡不住另一边。",
+      "hintEn": "Play at the central 1st-line clamp — whichever side White blocks, slip past the other!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][bc][eb][ec][fb]AW[cb][cc][cd][dc][dd][db](;B[da](;W[ca];B[ea]C[CORRECT])(;W[ea];B[ca]C[CORRECT]))(;B[ca];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-14",
+      "category": "tactics",
+      "rankBadge": "12K",
+      "titleZh": "经典金鸡独立",
+      "titleEn": "Classic Crane's Leg",
+      "promptZh": "黑先：冷静立下一子，左右两块白棋同时「不入气」全被吃！",
+      "promptEn": "Black to play: Play the calm Crane's Leg — neither white group can approach!",
+      "hintZh": "不要急着去打吃任何一边，先稳稳接回中间那颗一路黑子。",
+      "hintEn": "Connect calmly in the center — both sides become self-atari for White!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][db][eb][ea]AB[ca][ac][bc][cc][dc][ec][fb][fa](;B[cb]C[CORRECT])(;B[ba];W[cb]C[WRONG])(;B[da];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-04",
+      "category": "lifeAndDeath",
+      "rankBadge": "18K",
+      "titleZh": "边线直三点杀",
+      "titleEn": "Kill Edge Straight Three",
+      "promptZh": "黑先：白棋摆出「直三」眼位，抢先点中中心杀棋！",
+      "promptEn": "Black to play: Strike the center vital point to kill White's Straight Three!",
+      "hintZh": "「敌之要点即我之要点」——直接点在三个空点正中间！",
+      "hintEn": "Strike the exact middle of the three empty spaces!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb][ea]AB[ac][bc][cc][dc][ec][fb][fa](;B[ca]C[CORRECT])(;B[ba];W[ca]C[WRONG])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-05",
+      "category": "lifeAndDeath",
+      "rankBadge": "17K",
+      "titleZh": "角上曲三点杀",
+      "titleEn": "Kill Corner Bent Three",
+      "promptZh": "黑先：白棋角部是「曲三」，请一招点杀！",
+      "promptEn": "Black to play: Kill White's corner Bent Three in one move!",
+      "hintZh": "点在角上 1-1 的拐弯中心点。",
+      "hintEn": "Play on the 1-1 corner bend to destroy White's second eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[ca][cb][bb][bc][ac]AB[da][db][dc][cd][bd][ad](;B[aa]C[CORRECT])(;B[ba];W[aa]C[WRONG])(;B[ab];W[aa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-lad-06",
+      "category": "lifeAndDeath",
+      "rankBadge": "16K",
+      "titleZh": "丁四做活",
+      "titleEn": "Live in Pyramid Four",
+      "promptZh": "黑先：黑棋眼位呈「丁」字形四目，守住中心点轻松做活！",
+      "promptEn": "Black to play: Claim the center of your T-shaped Pyramid Four to live!",
+      "hintZh": "占住「丁」字交叉的正中央，立刻变出三只眼！",
+      "hintEn": "Occupy the center intersection of the T-shape.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bb][bc][cc][dc][db][eb][ea]AW[ac][bd][cd][dd][ed][ec][fc][fb][fa](;B[ca]C[CORRECT])(;B[cb];W[ca]C[WRONG])(;B[ba];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-07",
+      "category": "lifeAndDeath",
+      "rankBadge": "15K",
+      "titleZh": "点杀丁四",
+      "titleEn": "Kill Pyramid Four",
+      "promptZh": "黑先：白棋摆出「丁四」，抢占唯一要点杀掉整块白棋！",
+      "promptEn": "Black to play: Strike the T-center vital point to kill White's Pyramid Four!",
+      "hintZh": "下在「丁」字形四目的正中央，白棋再也分不出两只眼。",
+      "hintEn": "Play directly at the center of the T-shape.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][bc][cc][dc][db][eb][ea]AB[ac][bd][cd][dd][ed][ec][fc][fb][fa](;B[ca]C[CORRECT])(;B[cb];W[ca]C[WRONG])(;B[ba];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-08",
+      "category": "lifeAndDeath",
+      "rankBadge": "15K",
+      "titleZh": "刀把五做活",
+      "titleEn": "Live in Bulky Five",
+      "promptZh": "黑先：经典的「刀把五」眼形，抢占中心要点做成两眼活棋！",
+      "promptEn": "Black to play: Secure the vital point inside your Bulky Five to live!",
+      "hintZh": "刀背与刀柄交汇的中心点就是活棋要点。",
+      "hintEn": "Play at the intersection touching 3 of the 5 empty spaces.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][ac][bc][cc][dc][db][eb][ea]AW[ad][bd][cd][dd][ed][ec][fc][fb][fa](;B[ca]C[CORRECT])(;B[ba];W[ca]C[WRONG])(;B[cb];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-09",
+      "category": "lifeAndDeath",
+      "rankBadge": "14K",
+      "titleZh": "点杀刀把五",
+      "titleEn": "Kill Bulky Five",
+      "promptZh": "黑先：面对白棋的「刀把五」，点中核心要点后再跟进破眼！",
+      "promptEn": "Black to play: Strike the Bulky Five's vital point and finish the kill!",
+      "hintZh": "先点在刀把中心，白棋挡哪边就继续点破另一侧。",
+      "hintEn": "Hit the central vital point first, then follow up on White's resistance.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][ac][bc][cc][dc][db][eb][ea]AB[ad][bd][cd][dd][ed][ec][fc][fb][fa](;B[ca];W[ba];B[cb]C[CORRECT])(;B[ba];W[ca]C[WRONG])(;B[cb];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-10",
+      "category": "lifeAndDeath",
+      "rankBadge": "13K",
+      "titleZh": "梅花五做活",
+      "titleEn": "Live in Crossed Five",
+      "promptZh": "黑先：十字形「梅花五」眼位，占住正中央变出四只眼！",
+      "promptEn": "Black to play: Play the center of the Crossed Five to form four eyes!",
+      "hintZh": "下在「十」字中心，四周四点全部成为独立真眼。",
+      "hintEn": "Claim the center of the plus sign!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ca][da][ea][bb][fb][bc][fc][bd][cd][dd][ed][fd]AW[ba][fa][ab][ac][ad][ae][be][ce][de][ee][fe][ge][gd][gc][gb][ga](;B[dc]C[CORRECT])(;B[cc];W[dc]C[WRONG])(;B[db];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-lad-11",
+      "category": "lifeAndDeath",
+      "rankBadge": "12K",
+      "titleZh": "点杀梅花五",
+      "titleEn": "Kill Crossed Five",
+      "promptZh": "黑先：一子直击白棋「梅花五」花心，白棋瞬间无法做活！",
+      "promptEn": "Black to play: Pierce the exact heart of White's Crossed Five!",
+      "hintZh": "十字形眼位的正中心是唯一的杀棋点。",
+      "hintEn": "Strike the dead center of the plus-shaped eye space.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[ca][da][ea][bb][fb][bc][fc][bd][cd][dd][ed][fd]AB[ba][fa][ab][ac][ad][ae][be][ce][de][ee][fe][ge][gd][gc][gb][ga](;B[dc]C[CORRECT])(;B[cc];W[dc]C[WRONG])(;B[ec];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-race-01",
+      "category": "capturingRace",
+      "rankBadge": "16K",
+      "titleZh": "两气对杀紧外气",
+      "titleEn": "2-Liberty Race: Outside First",
+      "promptZh": "黑先：双方各剩 2 口气！千万别碰中间公气，先紧白棋外气！",
+      "promptEn": "Black to play: Both have 2 liberties — take White's outside liberty first!",
+      "hintZh": "「对杀先紧外气」——先下在右边紧白棋外气！",
+      "hintEn": "Fill White's outer liberty on the right before touching the shared point.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][eb][fb][fa]AW[ab][ac][bc][cb][db][da](;B[ea];W[aa];B[ca]C[CORRECT])(;B[ca];W[aa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-race-02",
+      "category": "capturingRace",
+      "rankBadge": "14K",
+      "titleZh": "三气对杀定次序",
+      "titleEn": "3-Liberty Race Order",
+      "promptZh": "黑先：对杀紧张胶着，抢先紧掉白棋右侧外气胜出一气！",
+      "promptEn": "Black to play: Win the 3-liberty capturing race by taking the outside liberty!",
+      "hintZh": "切忌先走中间公气给自己减气，先紧外侧！",
+      "hintEn": "Never reduce your own shared liberties first — approach from outside.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][ae][be][ce][de][bd][cd][dc][dd][ed][ec][eb][fb][fa]AW[ab][ac][ad][bc][cc][cb][db][da](;B[ea];W[aa];B[ca]C[CORRECT])(;B[ca];W[aa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-open-03",
+      "category": "opening",
+      "rankBadge": "16K",
+      "titleZh": "13路拆二立根",
+      "titleEn": "13×13 Two-Space Base",
+      "promptZh": "黑先：四角占完后向下方三路「拆二」，建立稳固根据地！",
+      "promptEn": "Black to play: Extend two spaces along the bottom 3rd line for a living base!",
+      "hintZh": "在左下黑星位右侧隔两格（三路）拆二。",
+      "hintEn": "Extend two spaces to the right along the third line.",
+      "boardSize": 13,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[13]PL[B]AB[dd][dj]AW[jj][jd](;B[gk]C[CORRECT])(;B[ek];W[gk]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 12,
+        "minCol": 0,
+        "maxCol": 12
+      }
+    },
+    {
+      "id": "pk-open-04",
+      "category": "opening",
+      "rankBadge": "13K",
+      "titleZh": "立二拆三扩张",
+      "titleEn": "Two-High Three-Extension",
+      "promptZh": "黑先：左上黑棋已两子并立，按口诀「立二拆三」大步围边！",
+      "promptEn": "Black to play: From your 2-stone wall, leap 3 spaces along the top side!",
+      "hintZh": "从两子并立处向右隔三格落子，效率拉满。",
+      "hintEn": "Leave three empty intersections from your 2-stone wall!",
+      "boardSize": 13,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[13]PL[B]AB[dd][dc]AW[jj][jd](;B[hd]C[CORRECT])(;B[fd];W[hd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 12,
+        "minCol": 0,
+        "maxCol": 12
+      }
+    },
+    {
+      "id": "pk-end-02",
+      "category": "endgame",
+      "rankBadge": "14K",
+      "titleZh": "二路先手扳粘",
+      "titleEn": "2nd-Line Sente Hane",
+      "promptZh": "黑先：二路先手扳入压缩白空，白棋不得不挡！",
+      "promptEn": "Black to play: Play the 2nd-line hane to scoop White's edge in sente!",
+      "hintZh": "贴着白棋二路拐弯扳下，然后再稳稳粘回。",
+      "hintEn": "Hane on the second line, then connect cleanly when White blocks.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][cd][ce][dc]AW[ec][ed][ee][fd](;B[eb];W[fb];B[db]C[CORRECT])(;B[db];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-15",
+      "category": "tactics",
+      "rankBadge": "11K",
+      "titleZh": "一路扳渡妙手",
+      "titleEn": "First-Line Under-Connect",
+      "promptZh": "黑先：沿着一路巧妙扳渡，白棋敢挡就反手切断吃掉！",
+      "promptEn": "Black to play: Hane along the 1st line to slip underneath and connect!",
+      "hintZh": "紧贴左边黑棋一路扳过，白棋气紧无法阻断。",
+      "hintEn": "Hane on the first line — if White blocks, capture right back!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][bc][db][dc][eb][ec]AW[ab][ac][bd][cb][cc][cd][dd](;B[ca];W[da];B[ea]C[CORRECT])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-tac-16",
+      "category": "tactics",
+      "rankBadge": "10K",
+      "titleZh": "封口反吃三子",
+      "titleEn": "Seal the Exit",
+      "promptZh": "黑先：选对打吃方向封住右侧出口，三颗白子插翅难逃！",
+      "promptEn": "Black to play: Seal the open right side so the three white stones cannot escape!",
+      "hintZh": "左边已经是黑墙，必须从右边把出口彻底封死。",
+      "hintEn": "Your left wall is solid — seal the open right exit!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[cb][db][da]AB[ba][bb][bc][cc][dc][ec][eb](;B[ea]C[CORRECT])(;B[ca];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-tac-17",
+      "category": "tactics",
+      "rankBadge": "10K",
+      "titleZh": "长征子大追击",
+      "titleEn": "Long 7-Move Ladder",
+      "promptZh": "黑先：算清整条对角线，一步步把白棋征到边线全歼！",
+      "promptEn": "Black to play: Read the whole diagonal and execute the full ladder!",
+      "hintZh": "第一手从右侧封堵，之后每手紧追白棋唯一出路。",
+      "hintEn": "Seal from the right first, then zig-zag tightly to the edge.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cc][cd][de]AW[dd](;B[ed];W[dc];B[ec];W[db];B[eb];W[da];B[ea]C[CORRECT])(;B[dc];W[ed]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-tac-18",
+      "category": "tactics",
+      "rankBadge": "9K",
+      "titleZh": "双不入气妙立",
+      "titleEn": "Double Shortage Stand",
+      "promptZh": "黑先：一子立下稳住中路，左右白棋同时无法入气！",
+      "promptEn": "Black to play: Stand calmly in the middle so neither white group can play!",
+      "hintZh": "不要贪吃左边或右边，先把中间气口立牢。",
+      "hintEn": "Play calmly in the center to lock both white groups out.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[da][bc][cc][dc][ec][fc][gb][ga]AW[ba][bb][cb][eb][fb][fa](;B[db]C[CORRECT])(;B[ca];W[db]C[WRONG])(;B[ea];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-tac-19",
+      "category": "tactics",
+      "rankBadge": "8K",
+      "titleZh": "扑吃破边连",
+      "titleEn": "Throw-In Shatter",
+      "promptZh": "黑先：白棋虎口看似牢固，一记大胆「扑」把它撕得粉碎！",
+      "promptEn": "Black to play: White looks connected — throw in to shatter it via snapback!",
+      "hintZh": "直接扑在一路切断点，白棋提掉反而变 1 口气。",
+      "hintEn": "Throw in on the 1st line to force a fatal snapback.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cc][dc][ec][fb][fa]AW[aa][ab][ac][ba][cb][db][eb][ea](;B[ca];W[da];B[ca]C[CORRECT])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-20",
+      "category": "tactics",
+      "rankBadge": "7K",
+      "titleZh": "犀利挖断吃子",
+      "titleEn": "Sharp Mid-Edge Wedge",
+      "promptZh": "黑先：两颗白子二路飞过留有断点，一子挖入必得其一！",
+      "promptEn": "Black to play: Wedge straight into White's thin second-line shape!",
+      "hintZh": "直接下在两颗二路白子正中间的空点。",
+      "hintEn": "Wedge directly between the two white stones.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ca][cb][dc][ec][fc][gb][ga]AW[db][ea][fb](;B[eb](;W[da];B[fa]C[CORRECT])(;W[fa];B[da]C[CORRECT]))(;B[da];W[eb]C[WRONG])(;B[fa];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 1,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-tac-21",
+      "category": "tactics",
+      "rankBadge": "6K",
+      "titleZh": "封头吃中腹",
+      "titleEn": "Cap White's Head",
+      "promptZh": "黑先：白棋想往中央探头逃生，当头一「镇」封死出路！",
+      "promptEn": "Black to play: Cap White's head to seal its escape completely!",
+      "hintZh": "按住白棋往下方出头的正前方交叉点。",
+      "hintEn": "Play right in front of White's escaping head.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][db][bc][ec][cd][fd][cf][ef]AW[cc][dc][dd][ed](;B[de](;W[ee];B[fe]C[CORRECT])(;W[ce];B[ee]C[CORRECT]))(;B[ee];W[de]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-tac-22",
+      "category": "tactics",
+      "rankBadge": "5K",
+      "titleZh": "倒扑破角联络",
+      "titleEn": "Corner Cut Snapback",
+      "promptZh": "黑先：白棋角上看似有退路，巧妙切断送吃反提！",
+      "promptEn": "Black to play: Cut off the corner and use a snapback to capture!",
+      "hintZh": "先在二路切断逼白棋入气，再顺势收割。",
+      "hintEn": "Cut on the 2nd line so White runs out of liberties immediately.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][ec][fc][fb][gb][ha]AW[ca][cb][eb][ea][fa](;B[db];W[da];B[ga]C[CORRECT])(;B[da];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-lad-12",
+      "category": "lifeAndDeath",
+      "rankBadge": "11K",
+      "titleZh": "扑破假眼杀棋",
+      "titleEn": "Throw-In False Eye Kill",
+      "promptZh": "黑先：白棋眼看要做出两只眼，一记一路「扑」把它变成假眼！",
+      "promptEn": "Black to play: Throw in on the edge to turn White's eye into a false eye!",
+      "hintZh": "直接扑在右边眼位里，白棋就算提子也只剩假眼！",
+      "hintEn": "Throw in on the right so capturing leaves White with a false eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][da][eb]AB[ac][bc][cc][dc][ec][fc][fb][fa](;B[ea];W[ca];B[ba]C[CORRECT])(;B[ca];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-13",
+      "category": "lifeAndDeath",
+      "rankBadge": "10K",
+      "titleZh": "一路扳缩眼杀",
+      "titleEn": "Outside Hane Eye Reduction",
+      "promptZh": "黑先：白棋有四目宽阔空间，先从外侧一路扳缩成死形再点杀！",
+      "promptEn": "Black to play: Don't rush inside — shrink from outside with a 1st-line hane first!",
+      "hintZh": "记住口诀「缩小眼位再点杀」，先在一路扳缩小成直三！",
+      "hintEn": "Hane on the first line to shrink 4 spaces down to a dead Straight Three.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb]AB[ac][bc][cc][dc][ec][fc][fb][fa](;B[ea](;W[ca];B[da]C[CORRECT])(;W[da];B[ca]C[CORRECT]))(;B[ca];W[da]C[WRONG])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-lad-14",
+      "category": "lifeAndDeath",
+      "rankBadge": "9K",
+      "titleZh": "点杀葡萄六",
+      "titleEn": "Kill Rabbitty Six",
+      "promptZh": "黑先：著名的「葡萄六（花六）」死活常形，直击唯一花心杀白！",
+      "promptEn": "Black to play: Strike the center vital point of the famous Rabbitty Six!",
+      "hintZh": "找那个同时挨着 3 个内部空点的花心位置！",
+      "hintEn": "Target the intersection touching three other interior empty points.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][ac][bc][cc][dc][ec][eb][fb][fa]AB[ad][bd][cd][dd][ed][fd][fc][gc][gb][ga](;B[cb];W[ca];B[db]C[CORRECT])(;B[ca];W[cb]C[WRONG])(;B[da];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-lad-15",
+      "category": "lifeAndDeath",
+      "rankBadge": "8K",
+      "titleZh": "葡萄六做活",
+      "titleEn": "Live in Rabbitty Six",
+      "promptZh": "黑先：黑棋眼形是葡萄六，抢先守住花心变出三只真眼！",
+      "promptEn": "Black to play: Claim the center vital point of your Rabbitty Six to live!",
+      "hintZh": "敌之要点即我之要点，占住花心即活！",
+      "hintEn": "Occupy the center vital point before White can strike it.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][ac][bc][cc][dc][ec][eb][fb][fa]AW[ad][bd][cd][dd][ed][fd][fc][gc][gb][ga](;B[cb]C[CORRECT])(;B[ca];W[cb]C[WRONG])(;B[da];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-lad-16",
+      "category": "lifeAndDeath",
+      "rankBadge": "7K",
+      "titleZh": "角部扩大成直四",
+      "titleEn": "Expand Corner to Straight Four",
+      "promptZh": "黑先：角上三目眼位不够活！往边线一路扳撑大成直四活棋！",
+      "promptEn": "Black to play: 3 spaces aren't safe — expand outward along the 1st line!",
+      "hintZh": "向右边一路扳出，把眼位扩大成不可点杀的四目活形！",
+      "hintEn": "Hane outward on the first line to build a living 4-space eye!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bb][cb][db][eb]AW[ac][bc][cc][dc][ec][fc][fb](;B[fa];W[ga];B[ea]C[CORRECT])(;B[ca];W[ea]C[WRONG])(;B[ea];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-lad-17",
+      "category": "lifeAndDeath",
+      "rankBadge": "6K",
+      "titleZh": "虎口补真眼",
+      "titleEn": "Tiger Mouth Eye Living",
+      "promptZh": "黑先：白棋企图扑破黑棋角眼，冷静补成虎口做成铁两眼！",
+      "promptEn": "Black to play: Defend against White's throw-in threat to secure two solid eyes!",
+      "hintZh": "把右边容易被扑破的缺口稳稳补住。",
+      "hintEn": "Protect the vulnerable eye corner so White cannot turn it false.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bb][cb][db][da][fb][fa][gb]AW[ac][bc][cc][dc][ec][fc][gc][hc][hb][ha](;B[eb]C[CORRECT])(;B[ea];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-lad-18",
+      "category": "lifeAndDeath",
+      "rankBadge": "5K",
+      "titleZh": "五目缩成直三杀",
+      "titleEn": "Shrink Five to Kill",
+      "promptZh": "黑先：白棋边线有五目宽敞空地，先从外侧一路扳紧气缩眼！",
+      "promptEn": "Black to play: White has 5 spaces along the edge — reduce from outside first!",
+      "hintZh": "切忌直接点里面给白棋做眼机会，先从一路缩小眼位！",
+      "hintEn": "Hane on the 1st line first to shrink the eye space before striking inside.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb][fb]AB[ac][bc][cc][dc][ec][fc][gc][gb][ga](;B[fa];W[ca];B[da]C[CORRECT])(;B[ca];W[fa]C[WRONG])(;B[da];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-race-03",
+      "category": "capturingRace",
+      "rankBadge": "11K",
+      "titleZh": "有眼杀无眼",
+      "titleEn": "One Eye Beats No Eye",
+      "promptZh": "黑先：双方公气多，先在角上做出一只真眼让公气全归黑棋！",
+      "promptEn": "Black to play: Form one true eye in the corner so all shared liberties become yours!",
+      "hintZh": "「有眼杀无眼」——先把左上角做成稳固真眼！",
+      "hintEn": "Complete a true corner eye — White can't enter until the very last move!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][ea][eb][ec][ed][dd][cd][bd][ad][ae]AW[ca][cb][cc][bc][ac][da](;B[ab];W[db];B[dc]C[CORRECT])(;B[db];W[ab]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-race-04",
+      "category": "capturingRace",
+      "rankBadge": "10K",
+      "titleZh": "角部立下延气",
+      "titleEn": "Corner Stand Liberty Extension",
+      "promptZh": "黑先：硬紧外气慢一气！用角上二路/一路立下妙手给自己延气！",
+      "promptEn": "Black to play: Direct approach loses by 1 liberty — extend your own corner liberties!",
+      "hintZh": "先在左边二路立下延气，瞬间多长出两口气！",
+      "hintEn": "Stand down on the left to gain extra liberties and win the race.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cc][dc][ec][eb][ea]AW[ab][ac][ad][bd][cd][dd][ed][fb][fa][cb][db](;B[ba];W[ca];B[aa]C[CORRECT])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-race-05",
+      "category": "capturingRace",
+      "rankBadge": "8K",
+      "titleZh": "扑破眼赢对杀",
+      "titleEn": "Throw-In Race Winner",
+      "promptZh": "黑先：白棋有一只眼，直接紧气会输！一记「扑」破眼反杀！",
+      "promptEn": "Black to play: White has an eye — throw in to destroy it and win the race!",
+      "hintZh": "直接扑在白棋眼位里，逼白棋自填一口气！",
+      "hintEn": "Throw in inside White's eye so it ceases to be an eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bc][cc][dc][ec][fc][fb][fa]AW[ba][bb][cb][db][eb][ea](;B[da];W[ca];B[da]C[CORRECT])(;B[ca];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-race-06",
+      "category": "capturingRace",
+      "rankBadge": "6K",
+      "titleZh": "大眼杀小眼",
+      "titleEn": "Big Eye Beats Small Eye",
+      "promptZh": "黑先：直三大眼里藏着 3 口气！护住大眼入口稳赢对杀！",
+      "promptEn": "Black to play: A 3-space big eye holds 3 liberties — seal yours to win the race!",
+      "hintZh": "守住己方直三大眼入口，白棋气数远远不够！",
+      "hintEn": "Protect your 3-space big eye entrance to outlast White.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ca][cb][bb][ab][da][db][dc][dd][ed][fd][gd][ha][hb][hc][hd]AW[ea][eb][ec][fc][gc][ga](;B[fb];W[gb];B[fa]C[CORRECT])(;B[fa];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-open-05",
+      "category": "opening",
+      "rankBadge": "10K",
+      "titleZh": "星位小飞挂角",
+      "titleEn": "Knight's Move Approach",
+      "promptZh": "黑先：四角占毕，对右上白星位下出轻灵的「小飞挂」！",
+      "promptEn": "Black to play: Approach White's top-right star point with a Knight's Move!",
+      "hintZh": "在右上白星位左下方三路（马步位置）挂角。",
+      "hintEn": "Play on the 3rd line a knight's move away from White's star point.",
+      "boardSize": 13,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[13]PL[B]AB[dd][dj]AW[jd][jj](;B[gc]C[CORRECT])(;B[gg];W[gc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 12,
+        "minCol": 0,
+        "maxCol": 12
+      }
+    },
+    {
+      "id": "pk-open-06",
+      "category": "opening",
+      "rankBadge": "8K",
+      "titleZh": "小飞守角成势",
+      "titleEn": "Knight's Corner Enclosure",
+      "promptZh": "黑先：抢先一步给左上黑星位下出「小飞守角」，兼顾角地与上边！",
+      "promptEn": "Black to play: Enclose your top-left corner with a Knight's Move!",
+      "hintZh": "在左上黑星位右侧三路马步位置守角。",
+      "hintEn": "Enclose on the 3rd line a knight's move to the right of your star point.",
+      "boardSize": 13,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[13]PL[B]AB[dd][dj]AW[jd][jj](;B[fc]C[CORRECT])(;B[bb];W[fc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 12,
+        "minCol": 0,
+        "maxCol": 12
+      }
+    },
+    {
+      "id": "pk-open-07",
+      "category": "opening",
+      "rankBadge": "6K",
+      "titleZh": "星位点三三时机",
+      "titleEn": "19×19 3-3 Invasion",
+      "promptZh": "黑先：白棋右上星位未守角，直接「点三三」掏空角地！",
+      "promptEn": "Black to play: White's top-right 4-4 is open — invade directly at 3-3!",
+      "hintZh": "右上角三三点（Q17 / 3-3 点）是现代围棋最犀利的掏角手段！",
+      "hintEn": "Play directly at the top-right 3-3 point!",
+      "boardSize": 19,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[19]PL[B]AB[dd][pp]AW[pd][dp](;B[qc]C[CORRECT])(;B[jj];W[qc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 18,
+        "minCol": 0,
+        "maxCol": 18
+      }
+    },
+    {
+      "id": "pk-end-03",
+      "category": "endgame",
+      "rankBadge": "10K",
+      "titleZh": "大伸腿（猴脸官子）",
+      "titleEn": "Classic Monkey Jump",
+      "promptZh": "黑先：施展著名的「大伸腿」，沿一路一口气捞走白棋大空！",
+      "promptEn": "Black to play: Execute the Monkey Jump along the 1st line to scoop territory!",
+      "hintZh": "沿一路小飞伸腿潜入白棋边空下方。",
+      "hintEn": "Leap a knight's move deep along the 1st line under White's wall.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cd][ce][dc][cc]AW[gc][gd][ge](;B[fa];W[fb];B[ea]C[CORRECT])(;B[eb];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-end-04",
+      "category": "endgame",
+      "rankBadge": "8K",
+      "titleZh": "一路潜入收官",
+      "titleEn": "1st-Line Liberty Clamp Endgame",
+      "promptZh": "黑先：利用白棋边线气紧，沿一路扳入猛掏角空！",
+      "promptEn": "Black to play: Hane onto the 1st line exploiting White's shortage of liberties!",
+      "hintZh": "一路扳进去，白棋如果硬挡就会被切断反吃。",
+      "hintEn": "Slip onto the 1st line — White is too short of liberties to block.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cc][cd][dc][eb][ec]AW[bb][bc][bd][ab][db][da](;B[ca];W[ba];B[ea]C[CORRECT])(;B[ea];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-end-05",
+      "category": "endgame",
+      "rankBadge": "6K",
+      "titleZh": "二路小尖收官",
+      "titleEn": "2nd-Line Diagonal Endgame",
+      "promptZh": "黑先：下出一手犀利的二路扳，抢走白棋边空还留先手！",
+      "promptEn": "Black to play: Play the sharp 2nd-line hane to squeeze White's side territory!",
+      "hintZh": "紧贴白棋二路拐弯扳下，逼白棋退让。",
+      "hintEn": "Hane on the 2nd line next to White's border stone.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[dc][dd][de][ec]AW[fc][fd][fe][gd](;B[fb];W[gb];B[eb]C[CORRECT])(;B[eb];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 2,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-dan-01",
+      "category": "lifeAndDeath",
+      "rankBadge": "4K",
+      "titleZh": "角部做双活",
+      "titleEn": "Corner Seki Survival",
+      "promptZh": "黑先：做不出两只真眼时，冷静立下做出「双活」平安求生！",
+      "promptEn": "Black to play: Two eyes aren't possible — create a peaceful Seki to live!",
+      "hintZh": "稳稳立在右侧，形成双方共享两口公气的双活局面。",
+      "hintEn": "Stand down calmly so neither side can safely approach the shared liberties.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][ac][bc][cc][dc][ec][eb]AW[ca][da][cb][db][ad][bd][cd][dd][ed][fd][fc][fb][fa](;B[ea]C[CORRECT])(;B[ba];W[bb]C[WRONG])(;B[bb];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-02",
+      "category": "lifeAndDeath",
+      "rankBadge": "3K",
+      "titleZh": "盘角曲四点杀",
+      "titleEn": "Bent Four in Corner Kill",
+      "promptZh": "黑先：角上经典「盘角曲四」常形，直击唯一杀棋要点！",
+      "promptEn": "Black to play: Strike the vital point of the legendary corner Bent Four!",
+      "hintZh": "抢占角部 2-1 拐点，白棋无论哪边挡都只剩一只眼。",
+      "hintEn": "Play on the 2-1 corner vital point so White cannot split two eyes.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[da][db][cb][bb][bc][ac]AB[ea][eb][ec][dc][cc][cd][bd][ad](;B[ba](;W[ca];B[aa]C[CORRECT])(;W[ab];B[ca]C[CORRECT]))(;B[aa];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-dan-03",
+      "category": "lifeAndDeath",
+      "rankBadge": "3K",
+      "titleZh": "角部六目做活",
+      "titleEn": "Corner Six-Space Life",
+      "promptZh": "黑先：角上宽敞但暗藏杀机！找准唯一急所做出不可点杀的活形！",
+      "promptEn": "Black to play: Find the exact vital point in the corner to guarantee life!",
+      "hintZh": "抢占角上 2-1 关键点，彻底防住白棋点杀。",
+      "hintEn": "Claim the 2-1 vital point before White strikes inside.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[da][db][cb][bb][bc][ac]AW[ea][eb][ec][dc][cc][cd][bd][ad](;B[ba]C[CORRECT])(;B[aa];W[ba]C[WRONG])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-dan-04",
+      "category": "lifeAndDeath",
+      "rankBadge": "2K",
+      "titleZh": "二一要点做活（小猪嘴）",
+      "titleEn": "2-1 Vital Point Life",
+      "promptZh": "黑先：角上空间紧促，下在著名的「二一路要点」妙手做活！",
+      "promptEn": "Black to play: Play the famous 2-1 vital point to live in a cramped corner!",
+      "hintZh": "「角上活棋二一路」——在 2-1 位置落子同时瞄准两边做眼！",
+      "hintEn": "Play on the 2-1 intersection to create miai for two eyes.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ea][eb][db][cb][bc][ac]AW[fa][fb][fc][ec][dc][cc][cd][bd][ad](;B[ba](;W[ca];B[ab]C[CORRECT])(;W[ab];B[ca]C[CORRECT]))(;B[ca];W[ba]C[WRONG])(;B[ab];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-05",
+      "category": "lifeAndDeath",
+      "rankBadge": "2K",
+      "titleZh": "二一要点点杀",
+      "titleEn": "2-1 Vital Point Kill",
+      "promptZh": "黑先：白棋角上只差一步成活！直击「二一路要点」干净杀棋！",
+      "promptEn": "Black to play: Strike the 2-1 vital point before White secures corner life!",
+      "hintZh": "同样是 2-1 点！点进去后白棋两翼无法兼顾。",
+      "hintEn": "Strike directly at the 2-1 vital point to deny White miai.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[ea][eb][db][cb][bc][ac]AB[fa][fb][fc][ec][dc][cc][cd][bd][ad](;B[ba](;W[ca];B[aa]C[CORRECT])(;W[ab];B[ca]C[CORRECT]))(;B[aa];W[ba]C[WRONG])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-06",
+      "category": "lifeAndDeath",
+      "rankBadge": "1K",
+      "titleZh": "一路托破眼杀",
+      "titleEn": "1st-Line Attachment Kill",
+      "promptZh": "黑先：先从外侧一路扳缩小眼位，再准确点杀白棋大龙！",
+      "promptEn": "Black to play: Shrink from the 1st line first, then strike the fatal vital point!",
+      "hintZh": "先一路扳进去压缩空间，切忌直接乱点内部。",
+      "hintEn": "Hane on the 1st line first to reduce White's eye space.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb][fb]AB[ac][bc][cc][dc][ec][fc][gc][gb][ga](;B[fa](;W[ca];B[da]C[CORRECT])(;W[da];B[ca]C[CORRECT]))(;B[ca];W[fa]C[WRONG])(;B[da];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-dan-07",
+      "category": "capturingRace",
+      "rankBadge": "1K",
+      "titleZh": "精密紧气次序",
+      "titleEn": "Exact Liberty Sequence",
+      "promptZh": "黑先：白棋外气看似够用，必须先占一路要害不让白棋做眼！",
+      "promptEn": "Black to play: Take the 1st-line vital point first so White cannot make an eye!",
+      "hintZh": "先从外侧一路紧气并破眼，再回手紧中间气。",
+      "hintEn": "Take the outer 1st-line point first to deny White's eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][eb][fb]AW[ab][ac][bc][cb][db][da][ea](;B[fa];W[aa];B[ca]C[CORRECT])(;B[ca];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-08",
+      "category": "endgame",
+      "rankBadge": "1K",
+      "titleZh": "逆收双倍大官子",
+      "titleEn": "Reverse Sente Double Value",
+      "promptZh": "黑先：抢占二路逆收大官子，防止白棋先手扳粘白白损失双倍目数！",
+      "promptEn": "Black to play: Claim the 2nd-line reverse sente endgame before White strikes!",
+      "hintZh": "对手的先手官子被我方先下到，价值翻倍！",
+      "hintEn": "Preventing White's sente intrusion is worth double — claim it first!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[dc][dd][de][ec]AW[fc][fd][fe][gd](;B[fb];W[gb];B[eb]C[CORRECT])(;B[eb];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 2,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-dan-09",
+      "category": "tactics",
+      "rankBadge": "1D",
+      "titleZh": "双扑紧气吃大龙",
+      "titleEn": "Double Throw-In Capture",
+      "promptZh": "黑先：白棋看似连成铁板，连环「扑」破眼并紧气全歼！",
+      "promptEn": "Black to play: Throw in cleanly to strip White's eye and liberties at once!",
+      "hintZh": "大胆扑进白棋虎口，白棋提子立刻掉进倒扑陷阱。",
+      "hintEn": "Throw in straight into White's tiger mouth to trigger a snapback!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bc][cc][dc][ec][fc][fb][fa]AW[ba][bb][cb][db][eb][ea](;B[da];W[ca];B[da]C[CORRECT])(;B[ca];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-10",
+      "category": "lifeAndDeath",
+      "rankBadge": "1D",
+      "titleZh": "角部宽眼先缩后点",
+      "titleEn": "Corner Reduce Then Vital Point",
+      "promptZh": "黑先：角上白棋空间较大，精准运用「缩眼 → 点杀」连招！",
+      "promptEn": "Black to play: Combine outside eye reduction with the decisive vital point!",
+      "hintZh": "先在右侧一路扳缩眼位，等白棋挡住后再点中直三要点。",
+      "hintEn": "Reduce from the right on the 1st line, then strike the remaining vital point.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb]AB[ac][bc][cc][dc][ec][fc][fb][fa](;B[ea](;W[ca];B[da]C[CORRECT])(;W[da];B[ca]C[CORRECT]))(;B[ca];W[ea]C[WRONG])(;B[ba];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-11",
+      "category": "lifeAndDeath",
+      "rankBadge": "2D",
+      "titleZh": "段位方四破眼",
+      "titleEn": "Dan Square-Four Eye Kill",
+      "promptZh": "黑先：角上白棋呈「方四」潜藏做眼手段，先手扑破假眼！",
+      "promptEn": "Black to play: White's corner threatens two eyes — throw in to turn one eye false!",
+      "hintZh": "在角部眼位果断扑入，白棋提子后变成假眼死形。",
+      "hintEn": "Throw in decisively so White's corner eye collapses into a false eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[ca][cb][cc][bc][ac][da][ea][eb]AB[db][dc][dd][cd][bd][ad][ec][fc][fb][fa](;B[ba](;W[aa];B[ab]C[CORRECT])(;W[ab];B[aa]C[CORRECT]))(;B[aa];W[ba]C[WRONG])(;B[ab];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-12",
+      "category": "lifeAndDeath",
+      "rankBadge": "2D",
+      "titleZh": "段位角部妙手活棋",
+      "titleEn": "Dan Corner Miai Life",
+      "promptZh": "黑先：外围白棋重重包围，一子占住角部核心变出见合两眼！",
+      "promptEn": "Black to play: Surrounded heavily — claim the corner key point for miai life!",
+      "hintZh": "寻找同时护住角上和边线两处眼位的唯一急所。",
+      "hintEn": "Find the single key point protecting both corner and side eyes as miai.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ca][cb][cc][bc][ac][da][ea][eb]AW[db][dc][dd][cd][bd][ad][ec][fc][fb][fa](;B[ba]C[CORRECT])(;B[aa];W[ba]C[WRONG])(;B[ab];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-13",
+      "category": "tactics",
+      "rankBadge": "2D",
+      "titleZh": "弃子滚包手筋",
+      "titleEn": "Sacrifice Squeeze Tesuji",
+      "promptZh": "黑先：看似气紧难逃，利用连续叫吃将白棋拧成一团全歼！",
+      "promptEn": "Black to play: Turn shortage of liberties around with a ruthless rolling squeeze!",
+      "hintZh": "第一步叫吃逼白棋接上，紧接着连续打吃提光！",
+      "hintEn": "Initiate the forcing atari sequence to clump White together and capture!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bc][bd][dc][eb][ec][fc][gd]AW[cc][cd][db][dd][de](;B[cb];W[da];B[ca];W[ea];B[fa]C[CORRECT])(;B[da];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-dan-14",
+      "category": "capturingRace",
+      "rankBadge": "2D",
+      "titleZh": "二路立下延气胜",
+      "titleEn": "Dan Corner Liberty Gain",
+      "promptZh": "黑先：高段级精细数气！直接紧气差一气，先在角上立下延气！",
+      "promptEn": "Black to play: High-dan liberty counting! Extend in the corner first to win by 1!",
+      "hintZh": "先给自己长出两口气，再回头轻松收紧白棋。",
+      "hintEn": "Gain two liberties in the corner first — direct approach loses by 1.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cc][dc][ec][eb][ea][fd]AW[ab][ac][ad][bd][cd][dd][ed][fb][fa][cb][db](;B[ba];W[ca];B[aa]C[CORRECT])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-15",
+      "category": "opening",
+      "rankBadge": "2D",
+      "titleZh": "星位双挂冷静守角",
+      "titleEn": "Defending Double Approach",
+      "promptZh": "黑先：右上星位遭到白棋左右双挂，冷静点守「三三」活角！",
+      "promptEn": "Black to play: Double-approached on the 4-4! Drop calmly to 3-3 to live!",
+      "hintZh": "不要急着冲断任何一边，直接守在三三点稳如泰山。",
+      "hintEn": "Stay calm and claim the 3-3 point to secure corner life.",
+      "boardSize": 19,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][dd]AW[nc][qf][dp](;B[qc]C[CORRECT])(;B[oc];W[qc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 18,
+        "minCol": 0,
+        "maxCol": 18
+      }
+    },
+    {
+      "id": "pk-dan-16",
+      "category": "endgame",
+      "rankBadge": "3D",
+      "titleZh": "三段先手大伸腿",
+      "titleEn": "3D Sente Monkey Jump",
+      "promptZh": "黑先：高段官子计算！一路大伸腿后顺势连回，榨干白棋边空！",
+      "promptEn": "Black to play: Execute the 3D Monkey Jump and connect smoothly along the edge!",
+      "hintZh": "不要犹豫贴身扳，直接沿一路深潜伸腿！",
+      "hintEn": "Jump deep along the first line — White cannot cut you off.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bd][be][cd][ce][dc][cc]AW[gc][gd][ge][hc](;B[fa];W[fb];B[ea]C[CORRECT])(;B[eb];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-dan-17",
+      "category": "lifeAndDeath",
+      "rankBadge": "3D",
+      "titleZh": "三段盘角曲四精解",
+      "titleEn": "3D Bent-Four Corner Read",
+      "promptZh": "黑先：精准读出白棋两个抵抗分支，彻底击杀角上盘角曲四！",
+      "promptEn": "Black to play: Read both of White's resistances to finish the corner Bent Four!",
+      "hintZh": "第一手占 2-1 要点，白棋挡哪边都立刻跟进破眼。",
+      "hintEn": "Hit 2-1 first and answer either of White's two corner blocks cleanly.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[da][db][cb][bb][bc][ac][ea]AB[fa][eb][ec][dc][cc][cd][bd][ad](;B[ba](;W[ca];B[aa]C[CORRECT])(;W[ab];B[ca]C[CORRECT]))(;B[aa];W[ba]C[WRONG])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-dan-18",
+      "category": "tactics",
+      "rankBadge": "3D",
+      "titleZh": "三段乌龟不出头",
+      "titleEn": "3D Full Seal Tesuji",
+      "promptZh": "黑先：面对白棋强行突围，一记精准封头让白棋全军覆没！",
+      "promptEn": "Black to play: Seal White's breakout head cleanly on either follow-up!",
+      "hintZh": "当头镇住，白棋左右冲撞都落入接不归！",
+      "hintEn": "Cap directly in front — both follow-up pushes fail.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][db][bc][ec][cd][fd][cf][ef][gd]AW[cc][dc][dd][ed](;B[de](;W[ee];B[fe]C[CORRECT])(;W[ce];B[ee]C[CORRECT]))(;B[ee];W[de]C[WRONG])(;B[ce];W[de]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-dan-19",
+      "category": "capturingRace",
+      "rankBadge": "4D",
+      "titleZh": "四段大眼对杀精算",
+      "titleEn": "4D Big-Eye Liberty Calculation",
+      "promptZh": "黑先：双方均藏大眼暗气，精准抢占唯一先手要点胜出一气！",
+      "promptEn": "Black to play: Both sides hold hidden eye liberties — claim the sole winning point!",
+      "hintZh": "直三大眼价值 3 口气，抢先护住大眼入口！",
+      "hintEn": "Protect the 3-space big eye entrance to outlast White by one tempo.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ca][cb][bb][ab][da][db][dc][dd][ed][fd][gd][ha][hb][hc][hd]AW[ea][eb][ec][fc][gc][ga][gb](;B[fa]C[CORRECT])(;B[fb];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-dan-20",
+      "category": "lifeAndDeath",
+      "rankBadge": "4D",
+      "titleZh": "四段梅花五中心破",
+      "titleEn": "4D Crossed-Five Precision",
+      "promptZh": "黑先：面对复杂包围下的梅花五眼位，一击点穿花心绝杀！",
+      "promptEn": "Black to play: Under heavy surrounding stones, pierce the Crossed Five center!",
+      "hintZh": "认清真正的眼位形状仍是梅花五，正中一子定乾坤。",
+      "hintEn": "Look past the outer stones — the eye shape is a Crossed Five!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[ca][da][ea][bb][fb][bc][fc][bd][cd][dd][ed][fd]AB[ba][fa][ab][ac][ad][ae][be][ce][de][ee][fe][ge][gd][gc][gb][ga][ha](;B[dc]C[CORRECT])(;B[cc];W[dc]C[WRONG])(;B[ec];W[dc]C[WRONG])(;B[db];W[dc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-dan-21",
+      "category": "lifeAndDeath",
+      "rankBadge": "5D",
+      "titleZh": "五段角部缩眼绝杀",
+      "titleEn": "5D Grandmaster Eye Collapse",
+      "promptZh": "黑先：高段死活试炼！外侧紧气缩眼与内部点杀完美衔接！",
+      "promptEn": "Black to play: Master-level reading! Reduce outside first, then collapse the eye!",
+      "hintZh": "切忌急于点内部，先从最右侧一路扳紧气缩成死形。",
+      "hintEn": "Resist playing inside first — hane on the far right 1st line to shrink the space.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb][fb][ga]AB[ac][bc][cc][dc][ec][fc][gc][gb][ha][hb](;B[fa](;W[ca];B[da]C[CORRECT])(;W[da];B[ca]C[CORRECT]))(;B[ca];W[fa]C[WRONG])(;B[da];W[fa]C[WRONG])(;B[ba];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-dan-22",
+      "category": "tactics",
+      "rankBadge": "5D",
+      "titleZh": "五段双线金鸡独立",
+      "titleEn": "5D Master Crane's Leg",
+      "promptZh": "黑先：实战中极难一眼看出的双不入气手筋，一子立下定胜负！",
+      "promptEn": "Black to play: Spot the hidden double-shortage Crane's Leg in a complex fight!",
+      "hintZh": "看似两边危急，实则中间冷静一立令两块白棋同时不入气！",
+      "hintEn": "Ignore both sides and stand calmly in the center — double shortage of liberties!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[da][bc][cc][dc][ec][fc][gb][ga][ad]AW[ba][bb][cb][eb][fb][fa][aa][ab](;B[db]C[CORRECT])(;B[ca];W[db]C[WRONG])(;B[ea];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-dan-23",
+      "category": "endgame",
+      "rankBadge": "5D",
+      "titleZh": "五段一路卡眼收官",
+      "titleEn": "5D First-Line Clamp Endgame",
+      "promptZh": "黑先：精确算清一路气紧反击，凭空刮出白棋角地！",
+      "promptEn": "Black to play: Exploit White's subtle 1st-line shortage of liberties to raid the corner!",
+      "hintZh": "直接一路扳入，白棋挡则立刻切断吃子。",
+      "hintEn": "Hane on the 1st line — White cannot block without losing stones.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cc][cd][dc][eb][ec][fd]AW[bb][bc][bd][ab][db][da][ea](;B[ca];W[ba];B[fa]C[CORRECT])(;B[fa];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-01",
+      "category": "capture",
+      "rankBadge": "28K",
+      "titleZh": "角边提两子",
+      "titleEn": "Corner Pair Capture",
+      "promptZh": "黑先：两颗白子缩在角落里只剩一口气，提掉它们！",
+      "promptEn": "Black to play: Capture the two cornered white stones on their last liberty!",
+      "hintZh": "填上右边边线最后一口气就能提掉两颗白子！",
+      "hintEn": "Fill the last edge liberty to capture both white stones!",
+      "boardSize": 5,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[5]PL[B]AB[ab][bb]AW[aa][ba](;B[ca]C[CORRECT])(;B[cb];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-ex-02",
+      "category": "capture",
+      "rankBadge": "26K",
+      "titleZh": "提子救伙伴",
+      "titleEn": "Rescue By Capturing",
+      "promptZh": "黑先：左边黑子被叫吃了！快提掉中间 1 口气的白子来救它！",
+      "promptEn": "Black to play: Save your endangered stone by capturing the 1-liberty white stone!",
+      "hintZh": "中间白子只剩上方最后 1 口气，提掉它黑子就安全了。",
+      "hintEn": "Capture the center white stone on its top liberty!",
+      "boardSize": 5,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[5]PL[B]AB[bc][cd][dc]AW[cc][bd][ac](;B[cb]C[CORRECT])(;B[bb];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 4
+      }
+    },
+    {
+      "id": "pk-ex-03",
+      "category": "capture",
+      "rankBadge": "25K",
+      "titleZh": "边线连结防断",
+      "titleEn": "Edge Connection",
+      "promptZh": "黑先：白棋虎视眈眈要切断黑棋！快在边线把两块黑棋连成一片！",
+      "promptEn": "Black to play: Connect your two black stones before White cuts them apart!",
+      "hintZh": "下在两颗黑子中间的二路交叉点，稳稳手拉手。",
+      "hintEn": "Play right between your two black stones on the 2nd line.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bb][db][dc]AW[ba][ab][bc][cc](;B[cb]C[CORRECT])(;B[ca];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-04",
+      "category": "capture",
+      "rankBadge": "24K",
+      "titleZh": "一路提三子",
+      "titleEn": "First-Line Triple Capture",
+      "promptZh": "黑先：三颗白子排在边线上只剩最后一口气，一口全吃！",
+      "promptEn": "Black to play: Three white stones on the edge share 1 last liberty — capture them all!",
+      "hintZh": "看边线右边唯一空着的那一口气。",
+      "hintEn": "Take the sole open liberty on the right of the edge stones.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[aa][bb][cb][db][eb]AW[ba][ca][da](;B[ea]C[CORRECT])(;B[fb];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-05",
+      "category": "capture",
+      "rankBadge": "23K",
+      "titleZh": "角上抱吃单子",
+      "titleEn": "Corner Wall Hug",
+      "promptZh": "黑先：把二二位的白子逼向边线吃掉，千万别让它逃向中央！",
+      "promptEn": "Black to play: Push the 2-2 white stone into the corner wall to capture!",
+      "hintZh": "从二路把白棋往左角方向赶！",
+      "hintEn": "Atari from the right so White gets trapped in the corner.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[ac][bc][cb]AW[bb](;B[ba];W[ab];B[aa]C[CORRECT])(;B[ab];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-06",
+      "category": "capture",
+      "rankBadge": "22K",
+      "titleZh": "中腹虎口逃生",
+      "titleEn": "Escape the Tiger Mouth",
+      "promptZh": "黑先：黑棋被三面围攻只剩一口气！往空处长气逃出生天！",
+      "promptEn": "Black to play: Surrounded on three sides with 1 liberty — extend to escape!",
+      "hintZh": "往右侧唯一空旷的方向长出一子。",
+      "hintEn": "Extend right into the open center for more liberties.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[cd]AW[cc][ce][bd](;B[dd]C[CORRECT])(;B[de];W[dd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-07",
+      "category": "capture",
+      "rankBadge": "21K",
+      "titleZh": "虎口双吃小练习",
+      "titleEn": "Simple Double Atari",
+      "promptZh": "黑先：找到同时叫吃两颗白子的宝藏点！",
+      "promptEn": "Black to play: Find the treasure point that puts two white stones in atari!",
+      "hintZh": "两颗白子各剩 2 口气，中间那个共享点就是双打吃！",
+      "hintEn": "Play on the liberty shared by both 2-liberty white stones!",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bc][cd][ec][eb]AW[cc][dc](;B[cb](;W[db];B[dd]C[CORRECT])(;W[dd];B[db]C[CORRECT]))(;B[db];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-08",
+      "category": "capture",
+      "rankBadge": "20K",
+      "titleZh": "门吃两子",
+      "titleEn": "Double-Stone Door Capture",
+      "promptZh": "黑先：两颗白子就在门前，先叫吃逼它们一起钻进门里全吃！",
+      "promptEn": "Black to play: Atari both white stones straight into your door trap!",
+      "hintZh": "从上方叫吃，白棋钻进两颗黑子中间后立刻关门。",
+      "hintEn": "Atari from above so White walks straight into your two doorposts.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[bc][bd][ce][db][ec][fe]AW[cc][cd](;B[cb];W[dc];B[dd]C[CORRECT])(;B[dc];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-09",
+      "category": "lifeAndDeath",
+      "rankBadge": "23K",
+      "titleZh": "识破假眼补真眼",
+      "titleEn": "Fix the Diagonal Eye",
+      "promptZh": "黑先：左边角上已经是真眼，快补住右边斜角缺口做成活棋！",
+      "promptEn": "Black to play: Fix the diagonal corner of your right eye so it becomes a true eye!",
+      "hintZh": "如果让白棋占住这个斜角点，右眼就会变成假眼。",
+      "hintEn": "Protect the diagonal point before White turns your eye false.",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[aa][ab][bb][cb][db][da][ea]AW[ac][bc][cc][dc][ec][fb][fa](;B[eb]C[CORRECT])(;B[ba];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-10",
+      "category": "endgame",
+      "rankBadge": "21K",
+      "titleZh": "抢救边线一子",
+      "titleEn": "Save the Edge Stone",
+      "promptZh": "黑先：边线黑子被白棋打吃了，立刻提掉旁边白子救回地盘！",
+      "promptEn": "Black to play: Your edge stone is in atari — counter-capture the white stone!",
+      "hintZh": "紧挨黑子的那颗白子也只剩 1 口气，直接提掉它！",
+      "hintEn": "Take the last liberty of the adjacent white stone!",
+      "boardSize": 7,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[7]PL[B]AB[ba][cb]AW[aa][ab][ac][ca](;B[da]C[CORRECT])(;B[dc];W[bb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 6,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-11",
+      "category": "tactics",
+      "rankBadge": "19K",
+      "titleZh": "边路接不归入门",
+      "titleEn": "Basic Connect & Die",
+      "promptZh": "黑先：先叫吃边上白子，白棋如果硬连就会撞进接不归！",
+      "promptEn": "Black to play: Atari the edge stones — connecting is fatal for White!",
+      "hintZh": "从二路分断叫吃，白棋粘上后只剩 1 口气。",
+      "hintEn": "Cut on the 2nd line so connecting leaves White with 1 liberty.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][ec][fc][fb][gb][ha]AW[ca][cb][eb][ea][fa](;B[db];W[da];B[ga]C[CORRECT])(;B[da];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 8
+      }
+    },
+    {
+      "id": "pk-ex-12",
+      "category": "tactics",
+      "rankBadge": "18K",
+      "titleZh": "角部宽枷",
+      "titleEn": "Corner Loose Net",
+      "promptZh": "黑先：用轻灵的「枷」罩住出逃白子，千万别直接紧贴叫吃！",
+      "promptEn": "Black to play: Catch the escaping white stone with a loose net!",
+      "hintZh": "在白子斜对角轻松一罩，它往哪边冲都只剩一口气。",
+      "hintEn": "Net diagonally across White's escape path.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][bc][db][bd][ce][ec]AW[cc](;B[dd](;W[dc];B[cd]C[CORRECT])(;W[cd];B[dc]C[CORRECT]))(;B[cd];W[dc]C[WRONG])(;B[dc];W[cd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-ex-13",
+      "category": "tactics",
+      "rankBadge": "17K",
+      "titleZh": "倒扑解危",
+      "titleEn": "Snapback to Escape",
+      "promptZh": "黑先：看似无路可逃，先送一子倒扑吃掉白棋！",
+      "promptEn": "Black to play: Sacrifice one stone to trigger a lifesaving snapback!",
+      "hintZh": "直接扑在白棋虎口里，白棋提掉反而全灭！",
+      "hintEn": "Throw into White's mouth — capturing lets you snap right back!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cc][dc][ec][fb][fa]AW[aa][ab][ba][cb][db][eb][ea](;B[ca];W[da];B[ca]C[CORRECT])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-14",
+      "category": "tactics",
+      "rankBadge": "16K",
+      "titleZh": "二路滚打吃子",
+      "titleEn": "2nd-Line Rolling Atari",
+      "promptZh": "黑先：连续两步叫吃把白棋滚成一团提光！",
+      "promptEn": "Black to play: Two consecutive ataris squeeze and capture White!",
+      "hintZh": "先从左边打吃，白棋粘上后紧接着收尾。",
+      "hintEn": "Atari from the left first, then finish the squeeze!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][dc][eb][ec][fd]AW[cb][cc][db][dd](;B[ca];W[da];B[ea]C[CORRECT])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-15",
+      "category": "lifeAndDeath",
+      "rankBadge": "18K",
+      "titleZh": "边上直四活棋",
+      "titleEn": "Build Straight Four",
+      "promptZh": "黑先：把眼位守稳做成四目空间，白棋再也杀不死！",
+      "promptEn": "Black to play: Expand to a 4-space eye along the edge to guarantee life!",
+      "hintZh": "往右边一路挡住，稳稳围出四目活形。",
+      "hintEn": "Block on the right along the first line to secure 4 living spaces.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bb][cb][db][eb]AW[ac][bc][cc][dc][ec][fc][fb](;B[fa]C[CORRECT])(;B[ba];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-16",
+      "category": "lifeAndDeath",
+      "rankBadge": "16K",
+      "titleZh": "破掉第二只眼",
+      "titleEn": "Break the Second Eye",
+      "promptZh": "黑先：白棋左边已有一只眼，抢先冲破右边眼位杀掉白棋！",
+      "promptEn": "Black to play: White has one eye on the left — destroy the right eye now!",
+      "hintZh": "抢占右边二路要点，把白棋右眼变成假眼。",
+      "hintEn": "Play on the right 2nd-line point to turn White's right eye false.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][da][fa][fb]AB[ac][bc][cc][dc][ec][fc][gc][gb][ga](;B[eb]C[CORRECT])(;B[ea];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-ex-17",
+      "category": "lifeAndDeath",
+      "rankBadge": "14K",
+      "titleZh": "角部曲四活棋",
+      "titleEn": "Corner Bent Four Life",
+      "promptZh": "黑先：角上形成「曲四」宽敞眼位，守住拐点轻松活棋！",
+      "promptEn": "Black to play: Secure the corner bend to guarantee two eyes!",
+      "hintZh": "占住角部 2-1 要点，左右见合两眼活棋。",
+      "hintEn": "Play at the 2-1 bend for effortless corner life.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[da][db][cb][bb][bc][ac]AW[ea][eb][ec][dc][cc][cd][bd][ad](;B[ba]C[CORRECT])(;B[aa];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-ex-18",
+      "category": "capturingRace",
+      "rankBadge": "15K",
+      "titleZh": "紧气赢对杀",
+      "titleEn": "Outside Liberty Sprint",
+      "promptZh": "黑先：双方都在抢气，记住「先紧外气」口诀拿下胜利！",
+      "promptEn": "Black to play: Tight liberty race — fill White's outside liberty first!",
+      "hintZh": "先紧白棋右边外气，别碰中间公气！",
+      "hintEn": "Take the outer right liberty first, never the shared liberty!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][eb][fb][fa]AW[ab][ac][bc][cb][db][da](;B[ea];W[aa];B[ca]C[CORRECT])(;B[ca];W[aa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-19",
+      "category": "opening",
+      "rankBadge": "15K",
+      "titleZh": "急所先于大场",
+      "titleEn": "Urgent Rescue First",
+      "promptZh": "黑先：右上角两颗黑子被叫吃了！记住「急所先于大场」，立刻救棋！",
+      "promptEn": "Black to play: Urgent moves come before big moves — rescue your stones in atari!",
+      "hintZh": "先救出右上角只剩 1 口气的黑子，别急着去拆空边。",
+      "hintEn": "Connect and rescue the endangered stones on the top right first!",
+      "boardSize": 13,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[13]PL[B]AB[dd][dj][jc][jd][id]AW[jj][kc][kd][ic][je](;B[ie]C[CORRECT])(;B[dg];W[ie]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 12,
+        "minCol": 0,
+        "maxCol": 12
+      }
+    },
+    {
+      "id": "pk-ex-20",
+      "category": "opening",
+      "rankBadge": "12K",
+      "titleZh": "13路拆边大场",
+      "titleEn": "13×13 Big Side Extension",
+      "promptZh": "黑先：四个角都已落子，抢占宽阔的左边三路大场！",
+      "promptEn": "Black to play: All four corners are occupied — claim the huge left-side extension!",
+      "hintZh": "在左上与左下两颗黑星位正中间的三路位置拆边。",
+      "hintEn": "Claim the balanced 3rd-line midpoint between your two left corners!",
+      "boardSize": 13,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[13]PL[B]AB[dd][dj]AW[jd][jj][jg](;B[cg]C[CORRECT])(;B[gg];W[cg]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 12,
+        "minCol": 0,
+        "maxCol": 12
+      }
+    },
+    {
+      "id": "pk-ex-21",
+      "category": "endgame",
+      "rankBadge": "13K",
+      "titleZh": "一路立下收官",
+      "titleEn": "1st-Line Stand Endgame",
+      "promptZh": "黑先：一路立下既护住角地又紧住白棋边气！",
+      "promptEn": "Black to play: Stand down on the 1st line to lock down corner territory!",
+      "hintZh": "贴着白棋在一路稳稳立下。",
+      "hintEn": "Stand down solidly on the first line next to White.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cc][cd][db][eb]AW[bb][bc][bd][ac](;B[ba]C[CORRECT])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-ex-22",
+      "category": "endgame",
+      "rankBadge": "12K",
+      "titleZh": "二路虎口补断官子",
+      "titleEn": "2nd-Line Tiger Endgame",
+      "promptZh": "黑先：白棋二路扳过来威胁冲断，稳稳挡住守住大空！",
+      "promptEn": "Black to play: Block White's 2nd-line intrusion cleanly!",
+      "hintZh": "在白棋前面一路挡下，同时防住断点。",
+      "hintEn": "Block firmly in front of White's 2nd-line hane.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][cd][ce][dc]AW[ec][ed][ee][eb](;B[db]C[CORRECT])(;B[da];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-ex-23",
+      "category": "tactics",
+      "rankBadge": "11K",
+      "titleZh": "跨断手筋入门",
+      "titleEn": "Cross-Cut Counter",
+      "promptZh": "黑先：一子跨断白棋飞形，左右必吃一边！",
+      "promptEn": "Black to play: Cross-cut White's knight's move to capture a stone!",
+      "hintZh": "切在白棋两子之间的薄弱交叉点。",
+      "hintEn": "Play on the cutting intersection between White's two stones.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bc][bd][cd][ec][eb][fb]AW[cc][db][dc](;B[cb](;W[ca];B[dd]C[CORRECT])(;W[dd];B[ca]C[CORRECT]))(;B[dd];W[cb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-24",
+      "category": "tactics",
+      "rankBadge": "9K",
+      "titleZh": "二路挖吃联络",
+      "titleEn": "2nd-Line Wedge Connect",
+      "promptZh": "黑先：巧妙一挖让白棋左右首尾难顾，成功吃子联络！",
+      "promptEn": "Black to play: Wedge on the 2nd line to shatter White's block and connect!",
+      "hintZh": "下在两颗二路白子之间，哪边挡吃哪边。",
+      "hintEn": "Wedge right between White's two 2nd-line stones.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][fb][fa]AW[cb][da][eb](;B[db](;W[ca];B[ea]C[CORRECT])(;W[ea];B[ca]C[CORRECT]))(;B[ca];W[db]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-25",
+      "category": "tactics",
+      "rankBadge": "7K",
+      "titleZh": "角部夹吃妙手",
+      "titleEn": "Corner Clamp Rescue",
+      "promptZh": "黑先：沿一路巧妙一夹，白棋无法阻止黑棋两块连回！",
+      "promptEn": "Black to play: Clamp on the 1st line to unite your two groups cleanly!",
+      "hintZh": "在一路正中位置夹入，白棋左右挡不住。",
+      "hintEn": "Clamp at the center 1st-line point — miai to connect!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][bc][eb][ec][fb]AW[cb][cc][cd][dc][dd][db](;B[da](;W[ca];B[ea]C[CORRECT])(;W[ea];B[ca]C[CORRECT]))(;B[ea];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-26",
+      "category": "lifeAndDeath",
+      "rankBadge": "9K",
+      "titleZh": "先缩后点杀四目",
+      "titleEn": "Shrink Four Then Kill",
+      "promptZh": "黑先：一路扳缩白棋四目空间，再精准点杀！",
+      "promptEn": "Black to play: Hane on the 1st line to reduce White's 4-space eye to dead!",
+      "hintZh": "先从右边一路扳进去，把四目缩成直三。",
+      "hintEn": "Hane from the right on the 1st line first.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][eb]AB[ac][bc][cc][dc][ec][fc][fb][fa](;B[ea](;W[ca];B[da]C[CORRECT])(;W[da];B[ca]C[CORRECT]))(;B[ca];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-27",
+      "category": "lifeAndDeath",
+      "rankBadge": "7K",
+      "titleZh": "破眼做假眼",
+      "titleEn": "Turn Eye False",
+      "promptZh": "黑先：一记一路「扑」将白棋的第二只眼化为假眼！",
+      "promptEn": "Black to play: Throw in on the edge to destroy White's second eye!",
+      "hintZh": "扑入右边眼位，白棋提子后变成假眼死棋。",
+      "hintEn": "Throw in on the right — White's capture only makes a false eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AW[aa][ab][bb][cb][db][da][eb]AB[ac][bc][cc][dc][ec][fc][fb][fa](;B[ea];W[ca];B[ba]C[CORRECT])(;B[ba];W[ea]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-28",
+      "category": "capturingRace",
+      "rankBadge": "9K",
+      "titleZh": "长气反杀对杀",
+      "titleEn": "Extend Liberties to Win",
+      "promptZh": "黑先：先在角部立下给自己延气，再反客为主赢下对杀！",
+      "promptEn": "Black to play: Extend in the corner first to flip the liberty count!",
+      "hintZh": "千万别直接撞白棋外气，先给角上黑子长出两口气。",
+      "hintEn": "Stand down in the corner to gain two crucial liberties.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cc][dc][ec][eb][ea]AW[ab][ac][ad][bd][cd][dd][ed][fb][fa][cb][db](;B[ba];W[ca];B[aa]C[CORRECT])(;B[ca];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-29",
+      "category": "capturingRace",
+      "rankBadge": "7K",
+      "titleZh": "角眼制胜对杀",
+      "titleEn": "Corner Eye Wins Race",
+      "promptZh": "黑先：先在角上做出一只稳固真眼，公气全归黑棋！",
+      "promptEn": "Black to play: Make a single true eye in the corner to own every shared liberty!",
+      "hintZh": "「有眼杀无眼」——先补成左上角真眼！",
+      "hintEn": "Make one true corner eye first!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][ea][eb][ec][ed][dd][cd][bd][ad][ae]AW[ca][cb][cc][bc][ac][da](;B[ab];W[db];B[dc]C[CORRECT])(;B[db];W[ab]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 0,
+        "maxCol": 5
+      }
+    },
+    {
+      "id": "pk-ex-30",
+      "category": "opening",
+      "rankBadge": "9K",
+      "titleZh": "19路星位小飞挂",
+      "titleEn": "19×19 Knight Approach",
+      "promptZh": "黑先：19 路经典开局，对左下白星位下出标准小飞挂！",
+      "promptEn": "Black to play: Approach White's bottom-left 4-4 with a Knight's Move!",
+      "hintZh": "在左下白星位右侧三路（F3 位置）小飞挂角。",
+      "hintEn": "Approach on the 3rd line a knight's move right of White's bottom-left star point.",
+      "boardSize": 19,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][pp]AW[dp][dd](;B[fq]C[CORRECT])(;B[jj];W[fq]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 18,
+        "minCol": 0,
+        "maxCol": 18
+      }
+    },
+    {
+      "id": "pk-ex-31",
+      "category": "opening",
+      "rankBadge": "5K",
+      "titleZh": "19路点三三挡宽边",
+      "titleEn": "3-3 Invasion Correct Block",
+      "promptZh": "黑先：白棋直接点三三抢角！黑棋该挡在宽阔且有己方呼应的哪一边？",
+      "promptEn": "Black to play: White invades 3-3! Block on the side cooperating with your corner!",
+      "hintZh": "黑棋右下角有星位呼应，挡在右侧（Q16）筑起面向右边的宏大外势！",
+      "hintEn": "Block on the right side (Q16) to build a wall facing your bottom-right star point!",
+      "boardSize": 19,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[19]PL[B]AB[pd][pp]AW[dp][dd][qc](;B[qd]C[CORRECT])(;B[oc];W[qd]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 18,
+        "minCol": 0,
+        "maxCol": 18
+      }
+    },
+    {
+      "id": "pk-ex-32",
+      "category": "endgame",
+      "rankBadge": "9K",
+      "titleZh": "先手扳粘抢边空",
+      "titleEn": "Sente Edge Hane",
+      "promptZh": "黑先：精准下出二路先手扳粘，白棋只能老实挡住！",
+      "promptEn": "Black to play: Play the 2nd-line sente hane and connect cleanly!",
+      "hintZh": "二路扳入，白棋挡住后立刻粘回。",
+      "hintEn": "Hane on the 2nd line and connect solidly after White blocks.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][cd][ce][dc]AW[ec][ed][ee][fd](;B[eb];W[fb];B[db]C[CORRECT])(;B[db];W[eb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-33",
+      "category": "endgame",
+      "rankBadge": "5K",
+      "titleZh": "大伸腿抢先手",
+      "titleEn": "High-Kyu Monkey Jump",
+      "promptZh": "黑先：沿一路使出大伸腿官子，一举削减白棋大片边空！",
+      "promptEn": "Black to play: Play the 1st-line Monkey Jump to slash White's side territory!",
+      "hintZh": "一路小飞伸腿潜入白棋下方。",
+      "hintEn": "Leap along the first line under White's wall.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[cd][ce][dc][cc]AW[gc][gd][ge](;B[fa];W[fb];B[ea]C[CORRECT])(;B[eb];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 7
+      }
+    },
+    {
+      "id": "pk-ex-34",
+      "category": "lifeAndDeath",
+      "rankBadge": "4K",
+      "titleZh": "四级角部活棋要点",
+      "titleEn": "4K Corner Vital Life",
+      "promptZh": "黑先：空间狭小但暗藏生机，抢占二一路要点见合做活！",
+      "promptEn": "Black to play: Claim the 2-1 vital point to create miai for two eyes!",
+      "hintZh": "下在角部 2-1 核心位置，白棋无法同时破掉两处眼位。",
+      "hintEn": "Play on the 2-1 point for miai corner life.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ea][eb][db][cb][bc][ac]AW[fa][fb][fc][ec][dc][cc][cd][bd][ad](;B[ba](;W[ca];B[ab]C[CORRECT])(;W[ab];B[ca]C[CORRECT]))(;B[ab];W[ba]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-35",
+      "category": "capturingRace",
+      "rankBadge": "4K",
+      "titleZh": "四级扑紧气胜",
+      "titleEn": "4K Throw-In Race",
+      "promptZh": "黑先：一记「扑」破掉白棋真眼，顺势赢下整场对杀！",
+      "promptEn": "Black to play: Throw in to remove White's eye and win the race!",
+      "hintZh": "扑在白棋眼位中心，白棋提子立刻掉气。",
+      "hintEn": "Throw directly into White's eye to win the liberty race.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][bc][cc][dc][ec][fc][fb][fa]AW[ba][bb][cb][db][eb][ea](;B[da];W[ca];B[da]C[CORRECT])(;B[ca];W[da]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-36",
+      "category": "tactics",
+      "rankBadge": "3K",
+      "titleZh": "三级破虎口倒扑",
+      "titleEn": "3K Tiger-Mouth Snapback",
+      "promptZh": "黑先：一眼看穿白棋气紧缺陷，弃一子倒扑全吃！",
+      "promptEn": "Black to play: Spot White's shortage of liberties and execute the snapback!",
+      "hintZh": "一路直接扑入，等白棋提子后反手全提！",
+      "hintEn": "Throw in on the 1st line and snap back after White captures!",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[bb][bc][cc][dc][ec][fb][fa]AW[aa][ab][ac][ba][cb][db][eb][ea](;B[ca];W[da];B[ca]C[CORRECT])(;B[da];W[ca]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-37",
+      "category": "lifeAndDeath",
+      "rankBadge": "2K",
+      "titleZh": "二级双活求生",
+      "titleEn": "2K Corner Seki",
+      "promptZh": "黑先：无法净活时切忌乱扑送死，冷静做出「双活」平安脱险！",
+      "promptEn": "Black to play: Don't self-destruct trying for two eyes — secure a clean Seki!",
+      "hintZh": "立在右侧形成两口公气的双活棋形。",
+      "hintEn": "Stand down calmly on the right to form a peaceful Seki.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[aa][ab][ac][bc][cc][dc][ec][eb]AW[ca][da][cb][db][ad][bd][cd][dd][ed][fd][fc][fb][fa](;B[ea]C[CORRECT])(;B[ba];W[bb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-38",
+      "category": "opening",
+      "rankBadge": "1D",
+      "titleZh": "初段小目一间高挂应手",
+      "titleEn": "1D Komoku High Approach",
+      "promptZh": "黑先：白棋对右上小目「一间高挂」，三路托入角地最简明有力！",
+      "promptEn": "Black to play: White plays the high approach against your 3-4 — attach underneath!",
+      "hintZh": "三路贴身托住白子，准备抢占扎实的角部实地。",
+      "hintEn": "Attach underneath on the 3rd line to claim solid corner cash.",
+      "boardSize": 19,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[19]PL[B]AB[qd][pp]AW[od][dp][dd](;B[oc]C[CORRECT])(;B[qc];W[oc]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 18,
+        "minCol": 0,
+        "maxCol": 18
+      }
+    },
+    {
+      "id": "pk-ex-39",
+      "category": "capturingRace",
+      "rankBadge": "1D",
+      "titleZh": "初段一路先手紧气",
+      "titleEn": "1D Exact 1st-Line Race",
+      "promptZh": "黑先：分毫不差的初段对杀！先抢外侧一路破眼再紧公气！",
+      "promptEn": "Black to play: Exact 1D capturing race — take the outer 1st-line point first!",
+      "hintZh": "先紧白棋最右侧一路，绝不给白棋做眼喘息机会。",
+      "hintEn": "Take the far right 1st-line point first so White has no eye.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[ba][bb][cc][dc][ec][eb][fb]AW[ab][ac][bc][cb][db][da][ea](;B[fa];W[aa];B[ca]C[CORRECT])(;B[ca];W[fa]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 4,
+        "minCol": 0,
+        "maxCol": 6
+      }
+    },
+    {
+      "id": "pk-ex-40",
+      "category": "endgame",
+      "rankBadge": "3D",
+      "titleZh": "三段逆收要点",
+      "titleEn": "3D Reverse Sente Block",
+      "promptZh": "黑先：官子胜负只差一目！抢占二路逆收大官子锁定胜局！",
+      "promptEn": "Black to play: Close game — claim the 2nd-line reverse sente endgame to win!",
+      "hintZh": "抢先在二路挡住，不让白棋先手扳粘！",
+      "hintEn": "Take the 2nd-line point before White gets a sente hane.",
+      "boardSize": 9,
+      "playerColor": 1,
+      "sgf": "(;GM[1]FF[4]SZ[9]PL[B]AB[dc][dd][de][ec][cb]AW[fc][fd][fe][gd](;B[fb];W[gb];B[eb]C[CORRECT])(;B[eb];W[fb]C[WRONG]))",
+      "cropRegion": {
+        "minRow": 0,
+        "maxRow": 5,
+        "minCol": 1,
+        "maxCol": 7
+      }
+    }
+  ]
+}

@@ -570,19 +570,30 @@ enum DojoPuzzleBank {
     }()
 
     static func findPuzzle(withId id: String) -> GoPuzzle? {
-        allDojoPuzzles.first { $0.id == id }
+        if let found = allDojoPuzzlesById[id] { return found }
+        return PuzzlePackLoader.findPuzzle(withId: id)
     }
 
-    static func puzzles(category: PuzzleCategory?, rankBand: DojoRankBand) -> [GoPuzzle] {
-        allDojoPuzzles.filter { p in
+    private static let allDojoPuzzlesById: [String: GoPuzzle] = {
+        Dictionary(uniqueKeysWithValues: allDojoPuzzles.map { ($0.id, $0) })
+    }()
+
+    /// Full combined catalog: 320 Core Dojo puzzles + 800+ External JSON Pack puzzles (1,100+ total, 30K -> 5D).
+    static var fullCatalog: [GoPuzzle] {
+        PuzzlePackLoader.fullCatalog
+    }
+
+    static func puzzles(category: PuzzleCategory?, rankBand: DojoRankBand, includeExpandedPack: Bool = false) -> [GoPuzzle] {
+        let source = includeExpandedPack ? fullCatalog : allDojoPuzzles
+        return source.filter { p in
             if let category, p.category != category { return false }
             return rankBand.matches(p)
         }
     }
 
-    /// Produces a standalone SGF-transformed variant puzzle so every puzzle in the 320-puzzle bank
+    /// Produces a standalone SGF-transformed variant puzzle so every puzzle in the catalog
     /// is independently playable, verifiable, and tracks its own star/SRS mastery!
-    private static func transformedPuzzle(
+    static func transformedPuzzle(
         _ base: GoPuzzle,
         suffix: String,
         zhTag: String,
