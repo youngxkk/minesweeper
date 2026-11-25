@@ -25,17 +25,15 @@
 ## 设备覆盖
 
 ```sh
-TEST_DESTINATION='platform=iOS Simulator,name=iPhone SE (3rd generation),OS=18.1' ./scripts/test-ios.sh device
 TEST_DESTINATION='platform=iOS Simulator,name=iPad (A16),OS=26.5' ./scripts/test-ios.sh device
 ```
 
-如果本机安装的是其他 iOS 运行时，用实际版本替换 `OS`。中文用例在 iPhone 上检查 19 路局部放大、选区不产生落子、后台恢复后仍可确认；在 iPad 上检查同一对局使用全盘。
+如果本机安装的是其他 iOS/iPadOS 运行时，用实际版本替换 `OS`。中文用例在 iPad 上检查 19 路对局使用全盘、后台恢复后待确认落子保留。
 
 ## 发版前真机验收
 
 | 操作 | 通过条件 |
 | --- | --- |
-| 小屏 iPhone 横屏开一局 13 路，再开 19 路，在角上和中央各选一个放大区域 | 棋子、坐标和预选点能看清，确认落子位置准确，随时能回到全盘 |
 | iPad 打开 19 路对局 | 全盘和对局操作同时可用 |
 | 开启音效和触感，落子、提子、尝试非法落子，再关闭开关重试 | 有对应反馈，关闭后无对应反馈 |
 | 开一局限时对局，记下棋钟，切入后台 10 秒并返回 | 对局和待确认点保留，棋钟从暂停位置继续；AI 回合只有一次应手 |

@@ -245,30 +245,14 @@ struct GoCodexView: View {
     }
 
     private func launchPractice(for entry: GoCodexEntry) {
-        if let pid = entry.practicePuzzleId {
-            appState.navigationPath.append(
-                .puzzlePlay(puzzleId: pid, isDailyChallenge: false, isStarterBootcamp: entry.practiceIsBootcamp)
+        appState.navigationPath.append(
+            .puzzlePlay(
+                puzzleId: entry.practicePuzzleId,
+                isDailyChallenge: false,
+                isStarterBootcamp: false,
+                forceRandomTransform: true
             )
-        } else if let cid = entry.practiceClassicId {
-            appState.navigationPath.append(.reviewGame(recordId: cid))
-        } else {
-            let size: BoardSize = entry.demoBoardSize <= 5 ? .five : (entry.demoBoardSize <= 7 ? .seven : (entry.demoBoardSize <= 9 ? .nine : .thirteen))
-            let diff: AIDifficulty = {
-                switch entry.tier {
-                case .starter: return .sprout
-                case .tactics: return .fox
-                case .fighting: return .panda
-                case .mastery: return .crane
-                }
-            }()
-            appState.startNewAIGame(
-                boardSize: size,
-                difficulty: diff,
-                playerColor: .black,
-                handicap: 0,
-                ruleSet: entry.tier == .starter ? .captureRace(target: 3) : .standard
-            )
-        }
+        )
     }
 }
 
@@ -503,12 +487,7 @@ private struct CodexDetailModal: View {
     }
 
     private var practiceButtonLabel: String {
-        if entry.practicePuzzleId != nil {
-            return l10n.t("codex.practiceMove")
-        } else if entry.practiceClassicId != nil {
-            return l10n.t("codex.watchClassic")
-        }
-        return l10n.t("codex.practiceLive")
+        l10n.t("codex.practiceMove")
     }
 
     private func loadDemoStates() {

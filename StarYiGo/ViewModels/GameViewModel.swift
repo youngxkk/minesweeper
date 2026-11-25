@@ -17,6 +17,65 @@ enum CompanionMood: Equatable {
     case cheering
 }
 
+enum BestMoveReason: Equatable, Sendable {
+    case capture(count: Int)
+    case rescue(stoneCount: Int)
+    case doubleAtari
+    case bigAtari(stoneCount: Int)
+    case territoryGain
+
+    func badge(_ l10n: L10n) -> String {
+        switch self {
+        case .capture(let count):
+            return l10n.localized(
+                zh: count >= 2 ? "一举提掉 \(count) 子" : "漂亮提子",
+                en: count >= 2 ? "Captured \(count) stones" : "Clean capture",
+                ja: count >= 2 ? "\(count)子取り" : "ナイス抜き",
+                ko: count >= 2 ? "\(count)점 따냄" : "깔끔한 따내기",
+                zhHant: count >= 2 ? "一舉提掉 \(count) 子" : "漂亮提子"
+            )
+        case .rescue(let stoneCount):
+            return l10n.localized(
+                zh: stoneCount >= 2 ? "绝境救回 \(stoneCount) 子" : "及时逃出叫吃",
+                en: stoneCount >= 2 ? "Saved \(stoneCount) stones" : "Escaped Atari",
+                ja: stoneCount >= 2 ? "\(stoneCount)子を救出" : "アタリ脱出",
+                ko: stoneCount >= 2 ? "\(stoneCount)점 구출" : "단수 탈출",
+                zhHant: stoneCount >= 2 ? "絕境救回 \(stoneCount) 子" : "及時逃出叫吃"
+            )
+        case .doubleAtari:
+            return l10n.localized(
+                zh: "精彩双打吃",
+                en: "Double Atari",
+                ja: "見事な両アタリ",
+                ko: "멋진 양단수",
+                zhHant: "精彩雙打吃"
+            )
+        case .bigAtari(let stoneCount):
+            return l10n.localized(
+                zh: "叫吃对方 \(stoneCount) 子",
+                en: "Atari on \(stoneCount) stones",
+                ja: "\(stoneCount)子にアタリ",
+                ko: "\(stoneCount)점 단수",
+                zhHant: "叫吃對方 \(stoneCount) 子"
+            )
+        case .territoryGain:
+            return l10n.localized(
+                zh: "巧妙围出大空",
+                en: "Big Territory",
+                ja: "大きな地を確保",
+                ko: "큰 집 확보",
+                zhHant: "巧妙圍出大空"
+            )
+        }
+    }
+}
+
+struct TimeHourglassAnalysis: Equatable, Sendable {
+    let bestMoveNumber: Int?
+    let bestMoveReason: BestMoveReason?
+    let turningPointMoveNumber: Int?
+}
+
 @MainActor
 final class GameViewModel: ObservableObject {
     @Published var boardState: GoBoardState
@@ -39,6 +98,8 @@ final class GameViewModel: ObservableObject {
     @Published var endgameReadiness: EndgameReadiness? = nil
     @Published var unsealedWarningPoints: [BoardPoint] = []
     @Published var showUnsealedScoreAlert: Bool = false
+    @Published var showAIResignOfferDialog: Bool = false
+    @Published var aiResignOfferLead: Double = 0
     @Published var highlightedPocketPoints: Set<BoardPoint> = []
     @Published var activeCountingPocketLabel: String? = nil
 
@@ -53,6 +114,7 @@ final class GameViewModel: ObservableObject {
 
     // Time Hourglass Highlight & Turning-Point Analysis
     @Published var bestMoveNumber: Int?
+    @Published var bestMoveReason: BestMoveReason?
     @Published var turningPointMoveNumber: Int?
 
     // Two-Player Tabletop 180° Face-to-Face Mode + Parent-Child Assist
@@ -119,6 +181,9 @@ final class GameViewModel: ObservableObject {
     private var lastTurnStartTime: Date = Date()
     private var lastHumanThinkDuration: TimeInterval?
     private let simulateHumanThinkingPacing: Bool
+    private var consecutiveAIHopelessTurns: Int = 0
+    private var aiResignOfferDeclined: Bool = false
+    private var deferredAIMoveAfterResignOffer: (action: MoveAction, color: StoneColor)? = nil
 
     var isExamMatch: Bool {
         examTier != nil || (appState?.settings.assistPreset == .examSim)
@@ -182,7 +247,7 @@ final class GameViewModel: ObservableObject {
     }
 
     var isHumansTurn: Bool {
-        guard !isGameOver, !isMarkingDeadStones else { return false }
+        guard !isGameOver, !isMarkingDeadStones, !showAIResignOfferDialog else { return false }
         switch mode {
         case .twoPlayer:
             return true
@@ -335,6 +400,11 @@ final class GameViewModel: ObservableObject {
         whiteElapsedSeconds = snapshot.whiteElapsedSeconds
         lastTurnStartTime = Date()
         lastHumanThinkDuration = nil
+        consecutiveAIHopelessTurns = 0
+        aiResignOfferDeclined = false
+        deferredAIMoveAfterResignOffer = nil
+        showAIResignOfferDialog = false
+        aiResignOfferLead = 0
         companionMood = .greeting
         companionEvent = .greet
 
@@ -382,7 +452,7 @@ final class GameViewModel: ObservableObject {
     }
 
     func tickClock() {
-        guard !isSuspended, !isGameOver, !isMarkingDeadStones else { return }
+        guard !isSuspended, !isGameOver, !isMarkingDeadStones, !showAIResignOfferDialog else { return }
         let activeColor = boardState.currentTurn
         if activeColor == .black {
             blackElapsedSeconds += 1
@@ -501,6 +571,9 @@ final class GameViewModel: ObservableObject {
             cancelDeadStoneReview()
         }
         aiTask?.cancel()
+        showAIResignOfferDialog = false
+        deferredAIMoveAfterResignOffer = nil
+        consecutiveAIHopelessTurns = 0
         pendingPoint = nil
         suggestions = []
         statusBanner = nil
@@ -528,12 +601,18 @@ final class GameViewModel: ObservableObject {
         isMarkingDeadStones = false
         markedDeadIndices = []
         deadStonePreviewResult = nil
+        showAIResignOfferDialog = false
+        deferredAIMoveAfterResignOffer = nil
+        consecutiveAIHopelessTurns = 0
+        aiResignOfferDeclined = false
+        aiResignOfferLead = 0
         pendingPoint = nil
         suggestions = []
         statusBanner = nil
         gameResult = nil
         savedRecordId = nil
         bestMoveNumber = nil
+        bestMoveReason = nil
         turningPointMoveNumber = nil
         showTerritoryOverlay = false
         territoryEstimate = nil
@@ -702,11 +781,51 @@ final class GameViewModel: ObservableObject {
         deadStonePreviewResult = GoScoring.score(state: boardState, rule: scoringRule, deadStoneIndices: markedDeadIndices)
     }
 
+    func acceptAIResignation() {
+        guard !isGameOver else { return }
+        aiTask?.cancel()
+        isAIThinking = false
+        showAIResignOfferDialog = false
+        let aiColor = deferredAIMoveAfterResignOffer?.color ?? (humanColor?.opposite ?? boardState.currentTurn)
+        deferredAIMoveAfterResignOffer = nil
+        let result = GameResult(
+            winner: aiColor.opposite,
+            blackScore: 0,
+            whiteScore: 0,
+            komi: boardState.komi,
+            byResignation: true,
+            scoringRule: scoringRule,
+            boardSize: boardSize.rawValue
+        )
+        finishGame(with: result)
+    }
+
+    func declineAIResignation() {
+        showAIResignOfferDialog = false
+        aiResignOfferDeclined = true
+        guard let deferred = deferredAIMoveAfterResignOffer else {
+            triggerAIIfNeeded()
+            return
+        }
+        deferredAIMoveAfterResignOffer = nil
+        guard !isGameOver, boardState.currentTurn == deferred.color else { return }
+        switch boardState.applying(action: deferred.action, color: deferred.color) {
+        case .success(let outcome):
+            applySuccessfulOutcome(outcome, action: deferred.action, color: deferred.color)
+        case .failure:
+            if case .success(let passOut) = boardState.applying(action: .pass, color: deferred.color) {
+                applySuccessfulOutcome(passOut, action: .pass, color: deferred.color)
+            }
+        }
+    }
+
     func resignCurrentPlayer() {
         guard !isGameOver else { return }
         aiTask?.cancel()
         isAIThinking = false
         isMarkingDeadStones = false
+        showAIResignOfferDialog = false
+        deferredAIMoveAfterResignOffer = nil
         pendingPoint = nil
 
         let loser: StoneColor = humanColor ?? boardState.currentTurn
@@ -716,7 +835,9 @@ final class GameViewModel: ObservableObject {
             blackScore: 0,
             whiteScore: 0,
             komi: boardState.komi,
-            byResignation: true
+            byResignation: true,
+            scoringRule: scoringRule,
+            boardSize: boardSize.rawValue
         )
         finishGame(with: result)
     }
@@ -728,12 +849,18 @@ final class GameViewModel: ObservableObject {
         isMarkingDeadStones = false
         markedDeadIndices = []
         deadStonePreviewResult = nil
+        showAIResignOfferDialog = false
+        deferredAIMoveAfterResignOffer = nil
+        consecutiveAIHopelessTurns = 0
+        aiResignOfferDeclined = false
+        aiResignOfferLead = 0
         pendingPoint = nil
         suggestions = []
         statusBanner = nil
         gameResult = nil
         savedRecordId = nil
         bestMoveNumber = nil
+        bestMoveReason = nil
         turningPointMoveNumber = nil
         showTerritoryOverlay = false
         territoryEstimate = nil
@@ -819,7 +946,7 @@ final class GameViewModel: ObservableObject {
 
     private func triggerAIIfNeeded() {
         guard case .vsAI(let difficulty, let humanColor) = mode else { return }
-        guard !isSuspended, !isGameOver, !isMarkingDeadStones, boardState.currentTurn != humanColor else { return }
+        guard !isSuspended, !isGameOver, !isMarkingDeadStones, !showAIResignOfferDialog, boardState.currentTurn != humanColor else { return }
 
         isAIThinking = true
         companionMood = .thinking
@@ -830,28 +957,29 @@ final class GameViewModel: ObservableObject {
         let style = coachingStyle
         let humanThinkDuration = lastHumanThinkDuration
         let clockSnapshot = clock
-        let useHumanPacing = simulateHumanThinkingPacing && (appState?.settings.aiSimulatedThinkingEnabled ?? true)
+        let configuredPace = appState?.settings.aiThinkingPace ?? .brisk
+        let effectivePace: AIThinkingPace = simulateHumanThinkingPacing ? configuredPace : .instant
 
         aiTask?.cancel()
         aiTask = Task { [weak self] in
             let start = Date()
-            let moveAction = await self?.aiEngine.selectMove(
+            let decision = await self?.aiEngine.selectMoveDecision(
                 for: snapshot,
                 color: aiColor,
                 level: difficulty,
                 ruleSet: currentRules,
                 coachingStyle: style
-            ) ?? .pass
-            let targetDuration: TimeInterval = useHumanPacing
-                ? AIThinkingPacer.targetThinkingDuration(
-                    for: snapshot,
-                    difficulty: difficulty,
-                    chosenAction: moveAction,
-                    lastHumanThinkDuration: humanThinkDuration,
-                    clock: clockSnapshot,
-                    aiColor: aiColor
-                )
-                : 0.26
+            ) ?? AIMoveDecision(action: .pass)
+            let moveAction = decision.action
+            let targetDuration: TimeInterval = AIThinkingPacer.targetThinkingDuration(
+                for: snapshot,
+                difficulty: difficulty,
+                chosenAction: moveAction,
+                lastHumanThinkDuration: humanThinkDuration,
+                clock: clockSnapshot,
+                aiColor: aiColor,
+                pace: effectivePace
+            )
             let elapsed = Date().timeIntervalSince(start)
             if elapsed < targetDuration {
                 try? await Task.sleep(nanoseconds: UInt64((targetDuration - elapsed) * 1_000_000_000))
@@ -859,9 +987,40 @@ final class GameViewModel: ObservableObject {
             guard !Task.isCancelled, let self else { return }
             self.isAIThinking = false
 
-            switch self.boardState.applying(action: moveAction, color: aiColor) {
+            let recentMaxCaptureAgainstAI = self.moves
+                .suffix(4)
+                .filter { $0.color == aiColor.opposite }
+                .map { $0.capturedPoints.count }
+                .max() ?? 0
+            let resignCheck = AIResignationEvaluator.evaluate(
+                state: snapshot,
+                aiColor: aiColor,
+                difficulty: difficulty,
+                ruleSet: currentRules,
+                isTacticalScenario: self.tacticalScenario != nil,
+                consecutiveHopelessTurns: self.consecutiveAIHopelessTurns,
+                chosenAction: moveAction,
+                recentMaxCaptureAgainstAI: recentMaxCaptureAgainstAI,
+                neuralWinrateForAI: decision.moverWinrate,
+                neuralScoreLeadForAI: decision.moverScoreLead,
+                neuralOwnershipForAI: decision.ownershipForMover
+            )
+            self.consecutiveAIHopelessTurns = resignCheck.nextConsecutiveHopelessTurns
+
+            if !self.aiResignOfferDeclined && (moveAction == .resign || resignCheck.shouldOfferResign) {
+                let fallbackAction: MoveAction = (moveAction == .resign) ? .pass : moveAction
+                self.deferredAIMoveAfterResignOffer = (action: fallbackAction, color: aiColor)
+                self.aiResignOfferLead = resignCheck.estimatedHumanLead
+                self.companionMood = .surprised
+                self.showAIResignOfferDialog = true
+                SoundAndHapticsManager.shared.playHint()
+                return
+            }
+
+            let effectiveAction: MoveAction = (moveAction == .resign) ? .pass : moveAction
+            switch self.boardState.applying(action: effectiveAction, color: aiColor) {
             case .success(let outcome):
-                self.applySuccessfulOutcome(outcome, action: moveAction, color: aiColor)
+                self.applySuccessfulOutcome(outcome, action: effectiveAction, color: aiColor)
             case .failure:
                 if case .success(let passOut) = self.boardState.applying(action: .pass, color: aiColor) {
                     self.applySuccessfulOutcome(passOut, action: .pass, color: aiColor)
@@ -1106,37 +1265,173 @@ final class GameViewModel: ObservableObject {
 
     private func computeTimeHourglassMoments() {
         let perspective = humanColor ?? .black
-        var bestGain = -Double.infinity
-        var bestIdx: Int?
-        var worstDrop = Double.infinity
-        var worstIdx: Int?
+        let analysis = Self.analyzeTimeHourglassMoments(
+            moves: moves,
+            stateHistory: stateHistory,
+            humanLeadHistory: humanLeadHistory,
+            perspective: perspective,
+            boardSize: boardSize.rawValue
+        )
+        bestMoveNumber = analysis.bestMoveNumber
+        bestMoveReason = analysis.bestMoveReason
+        turningPointMoveNumber = analysis.turningPointMoveNumber
+    }
+
+    /// Evaluates real tactical highlights (captures, Atari rescues, double/big Atari, and stabilized midgame territory gains)
+    /// while excluding empty-board opening flood-fill spikes so Move 1 never falsely dominates "Best Move".
+    static func analyzeTimeHourglassMoments(
+        moves: [GoMove],
+        stateHistory: [GoBoardState],
+        humanLeadHistory: [Double],
+        perspective: StoneColor,
+        boardSize: Int
+    ) -> TimeHourglassAnalysis {
+        let openingSkipPlies: Int = {
+            if boardSize <= 7 { return 2 }
+            if boardSize <= 9 { return 4 }
+            return 6
+        }()
+
+        var bestScore: Double = 0
+        var bestMove: Int?
+        var bestReason: BestMoveReason?
+
+        var worstSeverity: Double = 0
+        var worstMove: Int?
 
         for (i, move) in moves.enumerated() where move.color == perspective {
-            let before = humanLeadHistory[i]
-            let after = humanLeadHistory[min(i + 1, humanLeadHistory.count - 1)]
-            let delta = (after - before) + Double(move.capturedPoints.count) * 2.5
+            guard case .place = move.action else { continue }
+            guard i + 1 < stateHistory.count else { continue }
 
-            if delta > bestGain {
-                bestGain = delta
-                bestIdx = move.moveNumber
+            let stateBefore = stateHistory[i]
+            let stateAfter = stateHistory[i + 1]
+            let blackBefore = stateBefore.grid.reduce(0) { $0 + ($1 == .black ? 1 : 0) }
+            let whiteBefore = stateBefore.grid.reduce(0) { $0 + ($1 == .white ? 1 : 0) }
+            let bothSidesEstablished = move.moveNumber > openingSkipPlies && blackBefore >= 3 && whiteBefore >= 3
+
+            // 1. Tactical: Captures
+            let capturedCount = move.capturedPoints.count
+            let captureScore: Double = capturedCount > 0 ? (12.0 + Double(capturedCount) * 7.5) : 0
+
+            // 2. Tactical: Rescuing a friendly group that was in Atari (1 liberty -> >= 2 liberties)
+            var rescuedStones = 0
+            let beforeGroups = stateBefore.allGroups()
+            let endangeredBefore = beforeGroups.filter { $0.color == perspective && $0.liberties.count == 1 }
+            if !endangeredBefore.isEmpty {
+                for g in endangeredBefore {
+                    if let anchor = g.stones.first,
+                       stateAfter.grid[anchor] == perspective,
+                       let afterGroup = stateAfter.groupAndLiberties(at: anchor),
+                       afterGroup.liberties.count >= 2 {
+                        rescuedStones = max(rescuedStones, g.stones.count)
+                    }
+                }
             }
-            if delta < worstDrop {
-                worstDrop = delta
-                worstIdx = move.moveNumber
+            let rescueScore: Double = rescuedStones > 0 ? (10.0 + Double(rescuedStones) * 4.5) : 0
+
+            // 3. Tactical: Double Atari or Big Atari on opponent groups
+            let oppColor = perspective.opposite
+            let beforeOppAtariAnchors: Set<Int> = Set(
+                beforeGroups
+                    .filter { $0.color == oppColor && $0.liberties.count == 1 }
+                    .flatMap(\.stones)
+            )
+            let newlyAtariedOppGroups = stateAfter.allGroups().filter { group in
+                group.color == oppColor
+                    && group.liberties.count == 1
+                    && group.stones.contains { !beforeOppAtariAnchors.contains($0) }
+            }
+            let isDoubleAtari = newlyAtariedOppGroups.count >= 2
+            let maxAtariedOppStones = newlyAtariedOppGroups.map(\.stones.count).max() ?? 0
+            let attackScore: Double = {
+                if isDoubleAtari { return 26.0 }
+                if maxAtariedOppStones >= 2 { return 9.0 + Double(maxAtariedOppStones) * 3.0 }
+                return 0
+            }()
+
+            // 4. Positional: Stabilized mid/endgame territory gain (never on empty opening boards!)
+            let rawDelta: Double = {
+                guard i + 1 < humanLeadHistory.count else { return 0 }
+                return humanLeadHistory[i + 1] - humanLeadHistory[i]
+            }()
+            let clampedDelta = min(14.0, max(-14.0, rawDelta))
+            let territoryScore: Double = (bothSidesEstablished && clampedDelta >= 3.0) ? (clampedDelta * 0.9) : 0
+
+            let hasTacticalHighlight = captureScore > 0 || rescueScore > 0 || attackScore > 0
+            if move.moveNumber <= openingSkipPlies && !hasTacticalHighlight {
+                continue
+            }
+
+            let moveScore = max(captureScore, max(rescueScore, max(attackScore, territoryScore)))
+                + (hasTacticalHighlight && bothSidesEstablished && clampedDelta > 0 ? min(4.0, clampedDelta * 0.25) : 0)
+
+            let candidateReason: BestMoveReason? = {
+                if captureScore >= rescueScore && captureScore >= attackScore && captureScore > 0 {
+                    return .capture(count: capturedCount)
+                }
+                if rescueScore >= attackScore && rescueScore > 0 {
+                    return .rescue(stoneCount: rescuedStones)
+                }
+                if isDoubleAtari {
+                    return .doubleAtari
+                }
+                if maxAtariedOppStones >= 2 {
+                    return .bigAtari(stoneCount: maxAtariedOppStones)
+                }
+                if territoryScore > 0 {
+                    return .territoryGain
+                }
+                return nil
+            }()
+
+            if let candidateReason, moveScore > bestScore {
+                bestScore = moveScore
+                bestMove = move.moveNumber
+                bestReason = candidateReason
+            }
+
+            // Turning point evaluation (only after opening settles, or when opponent immediately captures >= 2 stones)
+            var blunderSeverity: Double = 0
+            if bothSidesEstablished && rawDelta < -2.5 {
+                blunderSeverity = max(blunderSeverity, min(20.0, -rawDelta))
+            }
+            if i + 1 < moves.count {
+                let oppReply = moves[i + 1]
+                if oppReply.color == oppColor && oppReply.capturedPoints.count >= 2 {
+                    blunderSeverity = max(blunderSeverity, 8.0 + Double(oppReply.capturedPoints.count) * 4.0)
+                }
+            }
+            if blunderSeverity > worstSeverity {
+                worstSeverity = blunderSeverity
+                worstMove = move.moveNumber
             }
         }
 
-        let hasCapture = moves.contains { $0.color == perspective && !$0.capturedPoints.isEmpty }
-        if moves.count >= 6 || hasCapture {
-            bestMoveNumber = bestIdx
+        let hasAnyTactical = bestReason != nil && bestReason != .territoryGain
+        let finalBestMove: Int?
+        let finalBestReason: BestMoveReason?
+        if bestScore >= 3.5 && (moves.count >= 6 || hasAnyTactical) {
+            finalBestMove = bestMove
+            finalBestReason = bestReason
         } else {
-            bestMoveNumber = nil
+            finalBestMove = nil
+            finalBestReason = nil
         }
-        if let worstIdx, worstDrop < -1.0 {
-            turningPointMoveNumber = worstIdx
+
+        let finalTurningPoint: Int?
+        if let worstMove {
+            finalTurningPoint = worstMove
+        } else if moves.count >= openingSkipPlies + 3 {
+            finalTurningPoint = max(openingSkipPlies + 1, moves.count - 3)
         } else {
-            turningPointMoveNumber = moves.count >= 4 ? max(1, moves.count - 3) : nil
+            finalTurningPoint = nil
         }
+
+        return TimeHourglassAnalysis(
+            bestMoveNumber: finalBestMove,
+            bestMoveReason: finalBestReason,
+            turningPointMoveNumber: finalTurningPoint
+        )
     }
 
     private func popOnePly() {

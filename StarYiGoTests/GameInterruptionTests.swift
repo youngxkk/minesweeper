@@ -173,7 +173,7 @@ struct GameInterruptionTests {
         }
     }
 
-    @Test func aiThinkingPacerScalesWithBoardDensityRankAndClockSafety() {
+    @Test func aiThinkingPacerScalesWithBoardDensityRankAndClockSafety() throws {
         let unlimitedClock = GoClock(timeControl: .unlimited)
         let fixedRandom: () -> Double = { 0.5 }
 
@@ -193,6 +193,7 @@ struct GameInterruptionTests {
             lastHumanThinkDuration: nil,
             clock: unlimitedClock,
             aiColor: .white,
+            pace: .brisk,
             randomUnit: fixedRandom
         )
         let midgameDelay = AIThinkingPacer.targetThinkingDuration(
@@ -202,12 +203,49 @@ struct GameInterruptionTests {
             lastHumanThinkDuration: nil,
             clock: unlimitedClock,
             aiColor: .white,
+            pace: .brisk,
             randomUnit: fixedRandom
         )
-        #expect(openingDelay >= 1.2 && openingDelay < midgameDelay)
-        #expect(midgameDelay >= 2.8 && midgameDelay <= 8.5)
+        #expect(openingDelay >= 0.9 && openingDelay < midgameDelay)
+        #expect(midgameDelay >= 1.3 && midgameDelay <= 3.6)
 
-        // 2. Higher rank thinks longer in midgame than beginner rank
+        // 2. Pace presets scale monotonically: instant < brisk < human < deep
+        let instantDelay = AIThinkingPacer.targetThinkingDuration(
+            for: midgameBoard,
+            difficulty: .rabbit,
+            chosenAction: .place(BoardPoint(row: 4, col: 4)),
+            lastHumanThinkDuration: nil,
+            clock: unlimitedClock,
+            aiColor: .white,
+            pace: .instant,
+            randomUnit: fixedRandom
+        )
+        let humanDelay = AIThinkingPacer.targetThinkingDuration(
+            for: midgameBoard,
+            difficulty: .rabbit,
+            chosenAction: .place(BoardPoint(row: 4, col: 4)),
+            lastHumanThinkDuration: nil,
+            clock: unlimitedClock,
+            aiColor: .white,
+            pace: .human,
+            randomUnit: fixedRandom
+        )
+        let deepDelay = AIThinkingPacer.targetThinkingDuration(
+            for: midgameBoard,
+            difficulty: .rabbit,
+            chosenAction: .place(BoardPoint(row: 4, col: 4)),
+            lastHumanThinkDuration: nil,
+            clock: unlimitedClock,
+            aiColor: .white,
+            pace: .deep,
+            randomUnit: fixedRandom
+        )
+        #expect(instantDelay == 0.26)
+        #expect(instantDelay < midgameDelay)
+        #expect(midgameDelay < humanDelay)
+        #expect(humanDelay < deepDelay)
+
+        // 3. Higher rank thinks slightly longer in midgame than beginner, but gap stays tight (<= 1.2s)
         let danMidgameDelay = AIThinkingPacer.targetThinkingDuration(
             for: midgameBoard,
             difficulty: .phoenix,
@@ -215,34 +253,60 @@ struct GameInterruptionTests {
             lastHumanThinkDuration: nil,
             clock: unlimitedClock,
             aiColor: .white,
+            pace: .brisk,
             randomUnit: fixedRandom
         )
         #expect(danMidgameDelay > midgameDelay)
+        #expect(danMidgameDelay - midgameDelay <= 1.2)
 
-        // 3. Impulsive 0.2s human click still keeps AI calm (>= 2.8s in midgame)
+        // 4. Anti-impulsive steady tempo:
+        //    - Impulsive 0.2s human click slows AI down relative to normal to steady the child's rhythm
+        //    - Patient 15s human thinking lets AI respond faster without stacking another long wait
         let afterImpulsiveHuman = AIThinkingPacer.targetThinkingDuration(
             for: midgameBoard,
-            difficulty: .sprout,
+            difficulty: .rabbit,
             chosenAction: .place(BoardPoint(row: 4, col: 4)),
             lastHumanThinkDuration: 0.2,
             clock: unlimitedClock,
             aiColor: .white,
+            pace: .brisk,
             randomUnit: fixedRandom
         )
-        #expect(afterImpulsiveHuman >= 2.8)
+        let afterPatientHuman = AIThinkingPacer.targetThinkingDuration(
+            for: midgameBoard,
+            difficulty: .rabbit,
+            chosenAction: .place(BoardPoint(row: 4, col: 4)),
+            lastHumanThinkDuration: 15.0,
+            clock: unlimitedClock,
+            aiColor: .white,
+            pace: .brisk,
+            randomUnit: fixedRandom
+        )
+        #expect(afterImpulsiveHuman > midgameDelay)
+        #expect(afterPatientHuman < midgameDelay)
+        #expect(afterPatientHuman >= 1.3)
 
-        // 4. Byoyomi clock safety caps thinking time so AI never flags
+        // 5. Byoyomi clock safety caps thinking time so AI never flags
         let tightByoyomi = GoClock(timeControl: .byoyomi(mainMinutes: 0, periodSeconds: 5, periods: 1))
         let safeByoyomiDelay = AIThinkingPacer.targetThinkingDuration(
             for: midgameBoard,
             difficulty: .kirin,
             chosenAction: .place(BoardPoint(row: 4, col: 4)),
-            lastHumanThinkDuration: 9.0,
+            lastHumanThinkDuration: 0.2,
             clock: tightByoyomi,
             aiColor: .white,
+            pace: .deep,
             randomUnit: fixedRandom
         )
         #expect(safeByoyomiDelay <= 2.5)
+
+        // 6. Legacy AppSettings JSON without aiThinkingPace migrates cleanly from aiSimulatedThinkingEnabled
+        let legacyOffJSON = #"{"aiSimulatedThinkingEnabled":false}"#.data(using: .utf8)!
+        let legacyOnJSON = #"{"aiSimulatedThinkingEnabled":true}"#.data(using: .utf8)!
+        let decodedOff = try JSONDecoder().decode(AppSettings.self, from: legacyOffJSON)
+        let decodedOn = try JSONDecoder().decode(AppSettings.self, from: legacyOnJSON)
+        #expect(decodedOff.aiThinkingPace == .instant)
+        #expect(decodedOn.aiThinkingPace == .brisk)
     }
 
     @Test func stonePlacementModesRespectDoubleTapDefaultAndConfirmButton() async throws {

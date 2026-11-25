@@ -44,6 +44,16 @@ final class PuzzleViewModel: ObservableObject {
     private var responseTask: Task<Void, Never>?
     let isDailyChallenge: Bool
     let isStarterBootcamp: Bool
+    let forceRandomTransform: Bool
+    let dailyDojoQueueIds: [String]
+
+    var dailyDojoProgress: (current: Int, total: Int)? {
+        guard isDailyChallenge, !dailyDojoQueueIds.isEmpty,
+              let idx = dailyDojoQueueIds.firstIndex(of: puzzle.id) else {
+            return nil
+        }
+        return (idx + 1, dailyDojoQueueIds.count)
+    }
 
     var effectivePlayerColor: StoneColor {
         activeTransform.apply(to: puzzle.playerColor)
@@ -58,17 +68,29 @@ final class PuzzleViewModel: ObservableObject {
         appState: AppState? = nil,
         isDailyChallenge: Bool = false,
         isStarterBootcamp: Bool = false,
-        isExamMode: Bool = false
+        isExamMode: Bool = false,
+        forceRandomTransform: Bool = false,
+        dailyDojoQueueIds: [String] = []
     ) {
         self.puzzle = puzzle
         self.appState = appState
         self.isDailyChallenge = isDailyChallenge
         self.isStarterBootcamp = isStarterBootcamp
         self.isExamMode = isExamMode
+        self.forceRandomTransform = forceRandomTransform
+        self.dailyDojoQueueIds = dailyDojoQueueIds
 
         let initialTransform: PuzzleTransform
-        if !isStarterBootcamp && (appState?.settings.autoTransformPuzzles == true) {
-            initialTransform = .random(allowColorSwap: true)
+        if forceRandomTransform || (!isStarterBootcamp && (appState?.settings.autoTransformPuzzles == true)) {
+            var candidate = PuzzleTransform.random(allowColorSwap: true)
+            if forceRandomTransform && candidate.isIdentity {
+                candidate = PuzzleTransform(
+                    rotation: Int.random(in: 1..<4),
+                    mirrored: Bool.random(),
+                    swapColors: Bool.random()
+                )
+            }
+            initialTransform = candidate
         } else {
             initialTransform = .identity
         }
@@ -106,8 +128,23 @@ final class PuzzleViewModel: ObservableObject {
         lastCapturedPoints = []
         illegalFlashPoint = nil
 
-        if !isStarterBootcamp && (appState?.settings.autoTransformPuzzles == true) {
-            activeTransform = .random(allowColorSwap: true)
+        let shouldTransformDailyTwist: Bool = {
+            guard isDailyChallenge, let idx = dailyDojoQueueIds.firstIndex(of: newPuzzle.id) else {
+                return false
+            }
+            return idx == 1 // Stage 2 (承 · 变向) always uses rotated/mirrored/color-swapped view
+        }()
+
+        if forceRandomTransform || shouldTransformDailyTwist || (!isStarterBootcamp && !isDailyChallenge && (appState?.settings.autoTransformPuzzles == true)) {
+            var candidate = PuzzleTransform.random(allowColorSwap: true)
+            if (forceRandomTransform || shouldTransformDailyTwist) && candidate.isIdentity {
+                candidate = PuzzleTransform(
+                    rotation: Int.random(in: 1..<4),
+                    mirrored: Bool.random(),
+                    swapColors: Bool.random()
+                )
+            }
+            activeTransform = candidate
         } else {
             activeTransform = .identity
         }
@@ -151,7 +188,8 @@ final class PuzzleViewModel: ObservableObject {
     }
 
     func showHint() {
-        guard !isExamMode, status == .playing, let node = currentNode else { return }
+        // Daily Dojo forbids hints so kids build genuine reading & perseverance!
+        guard !isExamMode, !isDailyChallenge, status == .playing, let node = currentNode else { return }
         usedHint = true
         showHintText = true
         highlightedHintPoint = GoPuzzle.firstCorrectMove(from: node)
@@ -161,7 +199,7 @@ final class PuzzleViewModel: ObservableObject {
 
     /// Plays the official correct Principal Variation step-by-step on the board so kids see the exact solution!
     func playCorrectSolution() {
-        guard let root = rootNode else { return }
+        guard !isExamMode, !isDailyChallenge, let root = rootNode else { return }
         let line = GoPuzzle.solutionLine(from: root)
         guard !line.isEmpty else { return }
 
@@ -354,7 +392,13 @@ final class PuzzleViewModel: ObservableObject {
     }
 
     func nextPuzzleInLibrary() -> GoPuzzle? {
-        guard !isDailyChallenge else { return nil }
+        if isDailyChallenge {
+            guard let idx = dailyDojoQueueIds.firstIndex(of: puzzle.id),
+                  idx + 1 < dailyDojoQueueIds.count else {
+                return nil
+            }
+            return appState?.findAnyPuzzle(withId: dailyDojoQueueIds[idx + 1])
+        }
         if isStarterBootcamp {
             let all = StarterBootcamp.puzzles
             guard let idx = all.firstIndex(where: { $0.id == puzzle.id }), idx + 1 < all.count else {
@@ -394,6 +438,9 @@ final class PuzzleViewModel: ObservableObject {
         status = .solved(stars: stars)
         SoundAndHapticsManager.shared.playSuccess()
         SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.12)
+        if isDailyChallenge {
+            appState?.recordDailyDojoCorePuzzleSolved(puzzleId: puzzle.id, firstTry: wrongCount == 0)
+        }
         unlockedCodexEntry = appState?.recordPuzzleSolved(
             puzzleId: puzzle.id,
             stars: stars,

@@ -33,6 +33,10 @@ final class StarYiGoUITests: XCTestCase {
         app.launch()
         let quest = app.buttons["HomePuzzleQuestButton"]
         XCTAssertTrue(quest.waitForExistence(timeout: 10))
+        let mistakesButton = app.buttons["HomeMistakeBookButton"]
+        XCTAssertTrue(mistakesButton.waitForExistence(timeout: 5), "HomeMistakeBookButton should exist on Home")
+        XCTAssertGreaterThanOrEqual(mistakesButton.frame.minY, quest.frame.maxY - 2, "Mistake book entry should sit below StarYi Adventure")
+        XCTAssertGreaterThanOrEqual(mistakesButton.frame.minX, quest.frame.minX - 2, "Mistake book entry should align under StarYi Adventure")
         quest.tap()
 
         let landmarks = ["IslandPin_s1-reef", "IslandPinLocked_s2-wind", "IslandPinLocked_s3-pine", "IslandPinLocked_s4-mist", "IslandPinLocked_s5-forge"]
@@ -72,6 +76,87 @@ final class StarYiGoUITests: XCTestCase {
     }
 
     @MainActor
+    func testCampaignEdgeFlyButtons() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = makeApp()
+        app.launch()
+
+        let quest = app.buttons["HomePuzzleQuestButton"]
+        XCTAssertTrue(quest.waitForExistence(timeout: 10))
+        let mistakesButton = app.buttons["HomeMistakeBookButton"]
+        XCTAssertTrue(mistakesButton.waitForExistence(timeout: 5), "HomeMistakeBookButton should exist on Home")
+        XCTAssertGreaterThanOrEqual(mistakesButton.frame.minY, quest.frame.maxY - 2, "Mistake book entry should sit below StarYi Adventure")
+        XCTAssertGreaterThanOrEqual(mistakesButton.frame.minX, quest.frame.minX - 2, "Mistake book entry should align under StarYi Adventure")
+        quest.tap()
+
+        let nextButton = app.buttons["FlyNextSeaButton"]
+        let prevButton = app.buttons["FlyPrevSeaButton"]
+        XCTAssertTrue(nextButton.waitForExistence(timeout: 5), "FlyNextSeaButton should exist on Sea 1")
+        XCTAssertTrue(nextButton.isHittable, "FlyNextSeaButton should be hittable on Sea 1")
+
+        // Tap right edge button to navigate from Sea 1 -> Sea 2 -> Sea 3
+        nextButton.tap()
+        let sea2Tab = app.buttons["SeaTab_sea-2"]
+        let sea2Selected = NSPredicate(format: "label CONTAINS %@", "Sea 2")
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: sea2Selected, object: sea2Tab)], timeout: 5),
+            .completed,
+            "Tapping FlyNextSeaButton should switch to Sea 2"
+        )
+        let sea2Pin = app.buttons["IslandPinLocked_s2-wind"]
+        let sea2Settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            sea2Pin.exists && sea2Pin.frame.midX >= app.frame.width * 0.1 && sea2Pin.frame.midX <= app.frame.width * 0.4
+        }, object: nil)
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [sea2Settled], timeout: 5),
+            .completed,
+            "Map should scroll to Sea 2 (app.frame=\(app.frame), sea1Pin=\(app.buttons["IslandPin_s1-reef"].frame), sea2Pin=\(sea2Pin.frame))"
+        )
+
+        XCTAssertTrue(prevButton.waitForExistence(timeout: 5), "FlyPrevSeaButton should exist on Sea 2")
+        XCTAssertTrue(prevButton.isHittable, "FlyPrevSeaButton should be hittable on Sea 2")
+        nextButton.tap()
+        let sea3Tab = app.buttons["SeaTab_sea-3"]
+        let sea3Selected = NSPredicate(format: "label CONTAINS %@", "Sea 3")
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: sea3Selected, object: sea3Tab)], timeout: 5),
+            .completed,
+            "Tapping FlyNextSeaButton again should switch to Sea 3"
+        )
+        let sea3Pin = app.buttons["IslandPinLocked_s3-pine"]
+        let sea3Settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            sea3Pin.exists && sea3Pin.frame.midX >= app.frame.width * 0.1 && sea3Pin.frame.midX <= app.frame.width * 0.4
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [sea3Settled], timeout: 5), .completed, "Map should scroll to Sea 3")
+
+        // Tap left edge button to navigate back from Sea 3 -> Sea 2 -> Sea 1
+        prevButton.tap()
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: sea2Selected, object: sea2Tab)], timeout: 5),
+            .completed,
+            "Tapping FlyPrevSeaButton should switch back to Sea 2"
+        )
+        let sea2BackSettled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            sea2Pin.exists && sea2Pin.frame.midX >= app.frame.width * 0.1 && sea2Pin.frame.midX <= app.frame.width * 0.4
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [sea2BackSettled], timeout: 5), .completed, "Map should scroll back to Sea 2")
+
+        prevButton.tap()
+        let sea1Tab = app.buttons["SeaTab_sea-1"]
+        let sea1Selected = NSPredicate(format: "label CONTAINS %@", "Sea 1")
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: sea1Selected, object: sea1Tab)], timeout: 5),
+            .completed,
+            "Tapping FlyPrevSeaButton again should switch back to Sea 1"
+        )
+        let sea1Pin = app.buttons["IslandPin_s1-reef"]
+        let sea1BackSettled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            sea1Pin.exists && sea1Pin.frame.midX >= app.frame.width * 0.1 && sea1Pin.frame.midX <= app.frame.width * 0.4
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [sea1BackSettled], timeout: 5), .completed, "Map should scroll back to Sea 1")
+    }
+
+    @MainActor
     func testPlayAIAndReopenSavedMatchAfterRelaunch() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = makeApp()
@@ -101,20 +186,51 @@ final class StarYiGoUITests: XCTestCase {
         app.terminate()
         app.launch()
         XCTAssertTrue(start.waitForExistence(timeout: 10))
-        let archive = app.buttons["HomeArchiveButton"]
-        reveal(archive, in: app.scrollViews.firstMatch)
-        XCTAssertTrue(archive.isHittable)
-        archive.tap()
+        let passport = app.buttons["HomePassportButton"]
+        XCTAssertTrue(passport.waitForExistence(timeout: 5))
+        passport.tap()
 
-        let myGames = app.buttons["ArchiveMyGamesTab"]
-        XCTAssertTrue(myGames.waitForExistence(timeout: 5))
-        myGames.tap()
         let record = app.buttons.matching(identifier: "ArchiveGameRecord").firstMatch
         XCTAssertTrue(record.waitForExistence(timeout: 5))
         record.tap()
         XCTAssertTrue(board.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["W+R"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.sliders.firstMatch.waitForExistence(timeout: 5), "The saved SGF must load into the replay timeline")
+    }
+
+    @MainActor
+    func testGamePlayVoiceToggleButton() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = makeApp()
+        app.launch()
+
+        let startButton = app.buttons["HomeStartMatchButton"]
+        XCTAssertTrue(startButton.waitForExistence(timeout: 10))
+        startButton.tap()
+
+        let soundToggle = app.buttons["GameSoundToggleButton"]
+        let voiceToggle = app.buttons["GameVoiceToggleButton"]
+        let stoneToggle = app.buttons["GameStoneDisplayToggleButton"]
+        XCTAssertTrue(soundToggle.waitForExistence(timeout: 5), "GameSoundToggleButton should appear in top bar")
+        XCTAssertTrue(voiceToggle.waitForExistence(timeout: 5), "GameVoiceToggleButton should appear in top bar")
+        XCTAssertTrue(stoneToggle.waitForExistence(timeout: 5), "GameStoneDisplayToggleButton should appear in top bar")
+        XCTAssertLessThanOrEqual(soundToggle.frame.maxX, voiceToggle.frame.minX + 1, "Sound toggle should sit to the left of voice toggle")
+        XCTAssertLessThanOrEqual(voiceToggle.frame.maxX, stoneToggle.frame.minX + 1, "Voice toggle should sit to the left of stone display toggle")
+        XCTAssertTrue(soundToggle.label.contains("On"), "Sound toggle should start On")
+        XCTAssertTrue(voiceToggle.label.contains("On"), "Voice toggle should start On")
+
+        soundToggle.tap()
+        XCTAssertTrue(soundToggle.label.contains("Off"), "Tapping sound toggle should mute sound effects")
+        XCTAssertTrue(voiceToggle.label.contains("On"), "Muting sound effects should leave voice toggle independent")
+
+        soundToggle.tap()
+        XCTAssertTrue(soundToggle.label.contains("On"), "Tapping sound toggle again should re-enable sound effects")
+
+        voiceToggle.tap()
+        XCTAssertTrue(voiceToggle.label.contains("Off"), "Tapping voice toggle should mute voice lines")
+
+        voiceToggle.tap()
+        XCTAssertTrue(voiceToggle.label.contains("On"), "Tapping voice toggle again should re-enable voice lines")
     }
 
     @MainActor
@@ -153,11 +269,15 @@ final class StarYiGoUITests: XCTestCase {
         XCTAssertTrue(confirmModeBtn.waitForExistence(timeout: 3))
         confirmModeBtn.tap()
         actions.tap()
+        _ = confirmModeBtn.waitForNonExistence(timeout: 2)
 
         board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let confirmById = app.buttons["GameConfirmPlaceButton"]
         let confirmZh = app.buttons["确认落子"]
         let confirmEn = app.buttons["Place Stone"]
-        let confirmBtn = confirmZh.waitForExistence(timeout: 3) ? confirmZh : confirmEn
+        let confirmBtn = confirmById.waitForExistence(timeout: 3)
+            ? confirmById
+            : (confirmZh.exists ? confirmZh : confirmEn)
         reveal(confirmBtn, in: app.scrollViews.firstMatch)
         XCTAssertTrue(confirmBtn.isHittable, "Confirm button should appear in fixed dock")
 

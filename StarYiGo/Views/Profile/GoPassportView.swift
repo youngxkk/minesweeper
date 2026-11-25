@@ -57,6 +57,7 @@ struct GoPassportView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         passportIdentityCard
+                        mySavedGamesCard
                         radarChartCard
                         stoneCabinetCard
                         islandStampBookCard
@@ -97,9 +98,9 @@ struct GoPassportView: View {
                 ),
                 subtitle: l10n.localized(
                     zh: "星弈群岛官方段位认证与集章册",
-                    en: "Official StarYi Rank Seal & 20-Island Stamp Book",
-                    ja: "星囲諸島 公式棋力認定＆20島スタンプ帳",
-                    ko: "별바둑 군도 공식 급단 인증 및 20개 섬 스탬프북",
+                    en: "Official StarYi Rank Seal & \(StarYiCampaign.allIslands.count)-Island Stamp Book",
+                    ja: "星囲諸島 公式棋力認定＆\(StarYiCampaign.allIslands.count)島スタンプ帳",
+                    ko: "별바둑 군도 공식 급단 인증 및 \(StarYiCampaign.allIslands.count)개 섬 스탬프북",
                     zhHant: "星弈群島官方段位認證與集章冊"
                 )
             )
@@ -163,7 +164,7 @@ struct GoPassportView: View {
 
                 HStack(spacing: 12) {
                     statChip("⭐", "\(appState.puzzleProgress.totalStars)")
-                    statChip("👑", "\(appState.puzzleProgress.defeatedBossIslandIds.count)/20")
+                    statChip("👑", "\(appState.puzzleProgress.defeatedBossIslandIds.count)/\(StarYiCampaign.allIslands.count)")
                     statChip("🔥", "\(appState.puzzleProgress.bestPuzzleRushScore)")
                     statChip("🪙", "\(appState.profile.starCoins)")
                 }
@@ -221,6 +222,114 @@ struct GoPassportView: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
         .background(Capsule().fill(Color.white.opacity(0.9)))
+    }
+
+    // MARK: - 1.5 Personal Match History (我的对局记录)
+
+    private var mySavedGamesCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label {
+                    Text("\(l10n.t("archive.tab.myGames")) (\(appState.savedGames.count))")
+                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                } icon: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundColor(AppTheme.grapeBottom)
+                }
+                Spacer()
+                Text(l10n.localized(
+                    zh: "AI 复盘与战绩记录",
+                    en: "AI Review & Replays",
+                    ja: "AI復習＆対局記録",
+                    ko: "AI 복기 및 대국 기록",
+                    zhHant: "AI 復盤與戰績記錄"
+                ))
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(AppTheme.inkSecondary)
+            }
+
+            if appState.savedGames.isEmpty {
+                HStack(spacing: 10) {
+                    Text("📜").font(.system(size: 26))
+                    Text(l10n.localized(
+                        zh: "完成任意对局后会自动保存在这里，随时可以回看复盘！",
+                        en: "Finished matches are saved right here for replay and AI review!",
+                        ja: "対局が終わると自動的にここに保存され、いつでも見返せます！",
+                        ko: "대국을 마치면 자동으로 여기에 저장되어 언제든 복기할 수 있어요!",
+                        zhHant: "完成任意對局後會自動保存在這裡，隨時可以回看復盤！"
+                    ))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(AppTheme.inkSecondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AppTheme.canvasBackground))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(appState.savedGames.prefix(20)) { record in
+                        HStack(spacing: 10) {
+                            Button {
+                                appState.navigationPath.append(.reviewGame(recordId: record.id))
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Text("\(record.boardSize)×\(record.boardSize)")
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(AppTheme.skyBottom))
+
+                                    Text(record.resultString)
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(AppTheme.sunBottom))
+
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("\(record.blackName) vs \(record.whiteName)")
+                                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                                            .foregroundColor(AppTheme.inkPrimary)
+                                            .lineLimit(1)
+                                        Text("\(l10n.t("game.moveCount", record.moveCount)) · \(record.date.formatted(date: .abbreviated, time: .shortened))")
+                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                            .foregroundColor(AppTheme.inkSecondary)
+                                    }
+
+                                    Spacer()
+
+                                    Image(systemName: "play.circle.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(AppTheme.grapeBottom)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.white.opacity(0.95))
+                                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1.5))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("ArchiveGameRecord")
+
+                            Button(role: .destructive) {
+                                appState.deleteSavedGame(id: record.id)
+                            } label: {
+                                Image(systemName: "trash.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(AppTheme.coralBottom)
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(AppTheme.coralTop.opacity(0.12)))
+                            }
+                            .tactileButton(scale: 0.9)
+                        }
+                    }
+                }
+            }
+        }
+        .warmCard(cornerRadius: 24, padding: 16)
     }
 
     // MARK: - 2. Six-Axis Go Ability Radar Chart
@@ -397,17 +506,19 @@ struct GoPassportView: View {
             .shadow(color: .black.opacity(0.2), radius: 3, y: 2)
     }
 
-    // MARK: - 4. 20-Island Voyage Stamp Book
+    // MARK: - 4. Multi-Sea Voyage Stamp Book
 
     private var islandStampBookCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let seaCount = StarYiCampaign.allSeas.count
+        let islandCount = StarYiCampaign.allIslands.count
+        return VStack(alignment: .leading, spacing: 14) {
             Label {
                 Text(l10n.localized(
-                    zh: "四大海域 · 20 岛航海集章册",
-                    en: "4 Seas · 20-Island Voyage Stamp Book",
-                    ja: "4海域・20島 航海スタンプ帳",
-                    ko: "4대 해역 · 20개 섬 항해 스탬프북",
-                    zhHant: "四大海域 · 20 島航海集章冊"
+                    zh: "\(seaCount) 大海域 · \(islandCount) 岛航海集章册",
+                    en: "\(seaCount) Seas · \(islandCount)-Island Voyage Stamp Book",
+                    ja: "\(seaCount)海域・\(islandCount)島 航海スタンプ帳",
+                    ko: "\(seaCount)대 해역 · \(islandCount)개 섬 항해 스탬프북",
+                    zhHant: "\(seaCount) 大海域 · \(islandCount) 島航海集章冊"
                 ))
                 .font(.system(size: 16, weight: .black, design: .rounded))
                 .foregroundColor(AppTheme.inkPrimary)

@@ -71,19 +71,25 @@ struct HomeView: View {
 
             GeometryReader { geo in
                 let width = geo.size.width
-                let halfHeight = geo.size.height / 2
+                let height = geo.size.height
+                let halfHeight = height / 2
                 let isCompact = width < 700
-                let heroHeight = isCompact ? 114 : min(168, max(114, halfHeight * 0.41))
-                let logoHeight = min(halfHeight * 0.82, width * 0.78)
+                let heroHeight = isCompact ? 114 : min(168, max(114, halfHeight * 0.40))
+                let logoHeight = min(halfHeight * 0.78, width * 0.72)
                 let horizontalPadding: CGFloat = isCompact ? 16 : 36
+                let moduleSectionSpacing: CGFloat = isCompact ? 28 : min(44, max(24, height * 0.048))
 
                 ZStack(alignment: .top) {
-                    VStack(spacing: 0) {
-                        homeTitleLogo(height: logoHeight)
-                            .frame(width: width, height: halfHeight)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: isCompact ? 62 : 24)
 
-                        ScrollView(.vertical, showsIndicators: false) {
-                            VStack(spacing: isCompact ? 40 : 52) {
+                            homeTitleLogo(height: logoHeight)
+                                .frame(maxWidth: .infinity)
+
+                            Spacer(minLength: isCompact ? 20 : 16)
+
+                            VStack(spacing: moduleSectionSpacing) {
                                 if isCompact {
                                     VStack(spacing: 24) {
                                         aiPlayHeroColumn(height: heroHeight, isCompact: true)
@@ -111,7 +117,7 @@ struct HomeView: View {
                                     .zIndex(5)
 
                                     LazyVGrid(
-                                        columns: Array(repeating: GridItem(.flexible(), spacing: 24), count: width < 1040 ? 2 : 4),
+                                        columns: Array(repeating: GridItem(.flexible(), spacing: 24), count: width < 1000 ? 2 : 4),
                                         spacing: 20
                                     ) {
                                         tabletopTwoPlayerModuleCard
@@ -127,18 +133,20 @@ struct HomeView: View {
                             }
                             .frame(maxWidth: 1100)
                             .padding(.horizontal, horizontalPadding)
-                            .padding(.vertical, 16)
-                            .frame(minHeight: halfHeight)
-                            .frame(maxWidth: .infinity)
+
+                            Spacer(minLength: isCompact ? 24 : 20)
                         }
-                        .frame(height: halfHeight)
+                        .frame(width: width)
+                        .frame(minHeight: height)
                     }
+                    .scrollBounceBehavior(.always)
+                    .scrollClipDisabled()
 
                     edgeTopBar(isCompact: isCompact)
                         .padding(.horizontal, isCompact ? 16 : 32)
                         .padding(.top, isCompact ? 10 : 18)
                 }
-                .frame(width: width, height: geo.size.height)
+                .frame(width: width, height: height)
             }
         }
         .environment(\.minimumButtonFaceHeight, 0)
@@ -317,12 +325,13 @@ struct HomeView: View {
                 .tactileButton(scale: 0.95)
                 .accessibilityLabel("\(appState.profile.nickname), \(l10n.t("rank.label", appState.profile.rankString)), Level \(appState.profile.adventureLevel)")
                 .accessibilityHint(l10n.localized(zh: "打开围棋航海护照", en: "Open Go Sailor Passport", ja: "航海パスポートを開く", ko: "바둑 항해 여권 열기", zhHant: "開啟圍棋航海護照"))
+                .accessibilityIdentifier("HomePassportButton")
             }
 
             Spacer()
 
-            let done = min(appState.profile.dailyCompletedCount, appState.profile.dailyGoalTarget)
-            let target = max(1, appState.profile.dailyGoalTarget)
+            let done = min(appState.dailyDojoStationsDoneCount, 3)
+            let target = 3
             let progress = Double(done) / Double(target)
 
             HStack(spacing: isCompact ? 8 : 10) {
@@ -466,36 +475,6 @@ struct HomeView: View {
                     .accessibilityIdentifier("HomePhotoJudgeButton")
                 }
 
-                let mistakes = appState.puzzleProgress.mistakeBookIds.count
-                GameCircleButton(
-                    icon: "bookmark.fill",
-                    palette: .snow,
-                    tint: mistakes > 0 ? AppTheme.coralBottom : AppTheme.inkSecondary,
-                    size: isCompact ? 40 : 44
-                ) {
-                    appState.navigationPath.append(.puzzleHub(initialMistakesOnly: true))
-                }
-                .overlay(alignment: .topTrailing) {
-                    if mistakes > 0 {
-                        Text(mistakes > 99 ? "99+" : "\(mistakes)")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundColor(.white)
-                            .padding(.horizontal, mistakes >= 10 ? 5 : 0)
-                            .frame(minWidth: 18, minHeight: 18)
-                            .background(
-                                Capsule()
-                                    .fill(LinearGradient(colors: [AppTheme.coralTop, AppTheme.coralBottom], startPoint: .top, endPoint: .bottom))
-                                    .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
-                                    .shadow(color: AppTheme.coralRim.opacity(0.45), radius: 3, y: 1.5)
-                            )
-                            .offset(x: 4, y: -4)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .accessibilityLabel(l10n.t("home.puzzleCard.mistakes", mistakes))
-                .accessibilityIdentifier("HomeMistakeBookButton")
-
                 GameCircleButton(
                     icon: appState.settings.bgmEnabled ? "music.note" : "music.note.slash",
                     palette: appState.settings.bgmEnabled ? .mint : .snow,
@@ -637,25 +616,24 @@ struct HomeView: View {
                         .foregroundColor(AppTheme.coralBottom)
                 }
 
-                // 4. Daily Goal
+                // 4. Daily Dojo (3 Stations + Stamp Calendar)
                 statusGuideRow(
-                    title: l10n.localized(zh: "每日目标", en: "Daily Goal", ja: "今日の目標", ko: "오늘의 목표", zhHant: "每日目標"),
+                    title: l10n.localized(zh: "每日道场", en: "Daily Dojo", ja: "毎日道場", ko: "매일 도장", zhHant: "每日道場"),
                     valueText: "\(done)/\(target)",
                     valueColor: AppTheme.mintBottom,
                     description: l10n.localized(
-                        zh: "记录今天完成的练习和对局次数（目标 \(target) 次），每天零点重置。",
-                        en: "Tracks today's completed puzzles & games (goal: \(target)). Resets daily.",
-                        ja: "今日の練習・対局数（目標 \(target) 回）を表示し、毎日リセットされます。",
-                        ko: "오늘 완료한 연습과 대국 횟수(목표 \(target)회)를 기록하며 매일 초기화돼요.",
-                        zhHant: "記錄今天完成的練習和對局次數（目標 \(target) 次），每天零點重置。"
+                        zh: "每天 3 站（热身 + 无提示三连战 + 棋道一问），完成后盖下印章领宝箱！",
+                        en: "3 daily stations (Warmup + No-Hint Trial + Go Wisdom) — complete all 3 to stamp your calendar!",
+                        ja: "毎日3ステージ（ウォームアップ＋ヒントなし3連戦＋囲碁クイズ）クリアでスタンプ獲得！",
+                        ko: "매일 3단계(워밍업 + 힌트 없는 3연전 + 바둑 퀴즈) 완료 후 도장을 찍어 보상을 받아요!",
+                        zhHant: "每天 3 站（熱身 + 無提示三連戰 + 棋道一問），完成後蓋下印章領寶箱！"
                     ),
-                    actionTitle: l10n.localized(zh: "每日任务", en: "Daily", ja: "デイリー", ko: "오늘 미션", zhHant: "每日任務"),
+                    actionTitle: l10n.localized(zh: "去道场", en: "Open Dojo", ja: "道場へ", ko: "도장 가기", zhHant: "去道場"),
                     actionTint: AppTheme.mintBottom,
                     action: {
-                        let dailyPuzzle = appState.adaptiveDailyPuzzle()
                         showStatusGuide = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                            appState.navigationPath.append(.puzzlePlay(puzzleId: dailyPuzzle.id, isDailyChallenge: true, isStarterBootcamp: false))
+                            appState.navigationPath.append(.dailyDojo)
                         }
                     }
                 ) {
@@ -1037,6 +1015,7 @@ struct HomeView: View {
         let totalStages = StarYiCampaign.allIslands.count
         let totalNodes = StarYiCampaign.allNodes.count
         let clearedNodes = StarYiCampaign.totalClearedNodes(progress: appState.puzzleProgress)
+        let mistakes = appState.puzzleProgress.mistakeBookIds.count
 
         return VStack(spacing: 12) {
             Button {
@@ -1098,6 +1077,25 @@ struct HomeView: View {
                 )
             )
             .accessibilityIdentifier("HomePuzzleQuestButton")
+
+            HStack(spacing: isCompact ? 5 : 8) {
+                Button {
+                    appState.navigationPath.append(.puzzleHub(initialMistakesOnly: true))
+                } label: {
+                    compactGlossChip(
+                        title: l10n.t("home.puzzleCard.mistakes", mistakes),
+                        icon: "bookmark.fill",
+                        accent: mistakes > 0 ? AppTheme.coralBottom : AppTheme.inkSecondary,
+                        trailingIcon: "chevron.right",
+                        isCompact: isCompact
+                    )
+                }
+                .tactileButton(scale: 0.93)
+                .accessibilityIdentifier("HomeMistakeBookButton")
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
         }
         .frame(maxWidth: .infinity)
     }
@@ -1105,7 +1103,9 @@ struct HomeView: View {
     // MARK: - Secondary Home Modes
 
     private var dailyChallengeModuleCard: some View {
-        let dailyPuzzle = appState.adaptiveDailyPuzzle()
+        let plan = appState.todayDailyDojoPlan()
+        let doneStations = appState.dailyDojoStationsDoneCount
+        let readyToStamp = appState.isDailyDojoReadyToStamp
         let cleared = appState.isDailyChallengeClearedToday
         let teal = GlossyPalette(
             top: Color(red: 0.02, green: 0.48, blue: 0.53),
@@ -1113,19 +1113,53 @@ struct HomeView: View {
             rim: Color(red: 0.01, green: 0.25, blue: 0.29),
             glow: Color(red: 0.02, green: 0.48, blue: 0.53)
         )
+        let subtitleText: String = {
+            if cleared {
+                return l10n.localized(
+                    zh: "今日已盖章 · 累计 \(appState.profile.dailyDojoStampDates.count) 枚",
+                    en: "Stamped Today · \(appState.profile.dailyDojoStampDates.count) Stamps",
+                    ja: "本日スタンプ済・累計\(appState.profile.dailyDojoStampDates.count)個",
+                    ko: "오늘 도장 완료 · 누적 \(appState.profile.dailyDojoStampDates.count)개",
+                    zhHant: "今日已蓋章 · 累計 \(appState.profile.dailyDojoStampDates.count) 枚"
+                )
+            }
+            if readyToStamp {
+                return l10n.localized(
+                    zh: "3/3 全部通关！快来盖下今日印章",
+                    en: "3/3 Clear! Tap to Stamp Today",
+                    ja: "3/3 クリア！スタンプを押そう",
+                    ko: "3/3 완료! 오늘 도장 찍으러 가요",
+                    zhHant: "3/3 全部通關！快來蓋下今日印章"
+                )
+            }
+            return l10n.localized(
+                zh: "\(plan.themeCodex.term(l10n)) · 进度 \(doneStations)/3",
+                en: "\(plan.themeCodex.term(l10n)) · \(doneStations)/3 Done",
+                ja: "\(plan.themeCodex.term(l10n)) · \(doneStations)/3",
+                ko: "\(plan.themeCodex.term(l10n)) · \(doneStations)/3",
+                zhHant: "\(plan.themeCodex.term(l10n)) · 進度 \(doneStations)/3"
+            )
+        }()
 
         return Button {
-            appState.navigationPath.append(.puzzlePlay(puzzleId: dailyPuzzle.id, isDailyChallenge: true, isStarterBootcamp: false))
+            appState.navigationPath.append(.dailyDojo)
         } label: {
             moduleCapsuleContent(
-                icon: cleared ? "crown.fill" : "sun.max.fill",
-                iconColors: cleared ? [AppTheme.sunBottom, AppTheme.sunRim] : [teal.top, teal.bottom],
+                icon: cleared ? "crown.fill" : (readyToStamp ? "seal.fill" : "sun.max.fill"),
+                iconColors: (cleared || readyToStamp) ? [AppTheme.sunBottom, AppTheme.sunRim] : [teal.top, teal.bottom],
                 rimColor: teal.rim,
-                title: l10n.t("home.dailyCard.title"),
-                subtitle: cleared ? l10n.t("home.dailyCard.done") : dailyPuzzle.title(l10n)
+                title: l10n.localized(
+                    zh: "每日道场",
+                    en: "Daily Dojo",
+                    ja: "毎日道場",
+                    ko: "매일 도장",
+                    zhHant: "每日道場"
+                ),
+                subtitle: subtitleText
             )
         }
         .buttonStyle(GlossyCapsuleButtonStyle(palette: teal, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
+        .accessibilityIdentifier("HomeDailyDojoButton")
     }
 
     private var codexModuleCard: some View {

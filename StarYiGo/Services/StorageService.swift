@@ -27,6 +27,17 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
     var unlockedStoneStyleIds: Set<String> = [StoneStyle.classicSlateShell.rawValue]
     /// Authentic Go Terms & Tactics collected in the Go Codex
     var unlockedCodexIds: Set<String> = GoTermCodex.defaultUnlockedIds
+    /// Academy masterpieces / principles / openings / wonders stamped as "已赏析 ★"
+    var studiedAcademyIds: Set<String> = []
+    /// Nintendo-style Daily Dojo (每日道场) daily state & Stamp Calendar
+    var dailyDojoDateStamp: String = ""
+    var dailyDojoWarmupDone: Bool = false
+    var dailyDojoCoreSolvedIds: Set<String> = []
+    var dailyDojoCoreFirstTryIds: Set<String> = []
+    var dailyDojoKnowledgeDone: Bool = false
+    var dailyDojoStampClaimedToday: Bool = false
+    var dailyDojoStampDates: Set<String> = []
+    var claimedStampMilestones: Set<Int> = []
 
     /// Fun Nintendo Adventure Level (always grows with play, distinct from Certified Go Rank).
     var adventureLevel: Int {
@@ -65,7 +76,16 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         certifiedRankTier: Int = 0,
         unlockedThemeIds: Set<String> = ["kayaWood", "bambooJade", "midnightStar"],
         unlockedStoneStyleIds: Set<String> = [StoneStyle.classicSlateShell.rawValue],
-        unlockedCodexIds: Set<String> = GoTermCodex.defaultUnlockedIds
+        unlockedCodexIds: Set<String> = GoTermCodex.defaultUnlockedIds,
+        studiedAcademyIds: Set<String> = [],
+        dailyDojoDateStamp: String = "",
+        dailyDojoWarmupDone: Bool = false,
+        dailyDojoCoreSolvedIds: Set<String> = [],
+        dailyDojoCoreFirstTryIds: Set<String> = [],
+        dailyDojoKnowledgeDone: Bool = false,
+        dailyDojoStampClaimedToday: Bool = false,
+        dailyDojoStampDates: Set<String> = [],
+        claimedStampMilestones: Set<Int> = []
     ) {
         self.id = id
         self.nickname = nickname
@@ -84,6 +104,15 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         self.unlockedThemeIds = unlockedThemeIds
         self.unlockedStoneStyleIds = unlockedStoneStyleIds
         self.unlockedCodexIds = unlockedCodexIds
+        self.studiedAcademyIds = studiedAcademyIds
+        self.dailyDojoDateStamp = dailyDojoDateStamp
+        self.dailyDojoWarmupDone = dailyDojoWarmupDone
+        self.dailyDojoCoreSolvedIds = dailyDojoCoreSolvedIds
+        self.dailyDojoCoreFirstTryIds = dailyDojoCoreFirstTryIds
+        self.dailyDojoKnowledgeDone = dailyDojoKnowledgeDone
+        self.dailyDojoStampClaimedToday = dailyDojoStampClaimedToday
+        self.dailyDojoStampDates = dailyDojoStampDates
+        self.claimedStampMilestones = claimedStampMilestones
     }
 
     /// Backwards-compatible decoder so existing saved profiles migrate smoothly with zero data loss.
@@ -106,6 +135,15 @@ struct UserProfile: Identifiable, Codable, Equatable, Sendable {
         unlockedThemeIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedThemeIds) ?? ["kayaWood", "bambooJade", "midnightStar"]
         unlockedStoneStyleIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedStoneStyleIds) ?? [StoneStyle.classicSlateShell.rawValue]
         unlockedCodexIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedCodexIds) ?? GoTermCodex.defaultUnlockedIds
+        studiedAcademyIds = try c.decodeIfPresent(Set<String>.self, forKey: .studiedAcademyIds) ?? []
+        dailyDojoDateStamp = try c.decodeIfPresent(String.self, forKey: .dailyDojoDateStamp) ?? ""
+        dailyDojoWarmupDone = try c.decodeIfPresent(Bool.self, forKey: .dailyDojoWarmupDone) ?? false
+        dailyDojoCoreSolvedIds = try c.decodeIfPresent(Set<String>.self, forKey: .dailyDojoCoreSolvedIds) ?? []
+        dailyDojoCoreFirstTryIds = try c.decodeIfPresent(Set<String>.self, forKey: .dailyDojoCoreFirstTryIds) ?? []
+        dailyDojoKnowledgeDone = try c.decodeIfPresent(Bool.self, forKey: .dailyDojoKnowledgeDone) ?? false
+        dailyDojoStampClaimedToday = try c.decodeIfPresent(Bool.self, forKey: .dailyDojoStampClaimedToday) ?? false
+        dailyDojoStampDates = try c.decodeIfPresent(Set<String>.self, forKey: .dailyDojoStampDates) ?? []
+        claimedStampMilestones = try c.decodeIfPresent(Set<Int>.self, forKey: .claimedStampMilestones) ?? []
     }
 }
 
@@ -405,6 +443,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var showLiveLiberties: Bool = true
     var zenDojoMode: Bool = false
     var aiSimulatedThinkingEnabled: Bool = true
+    var aiThinkingPace: AIThinkingPace = .brisk
     var autoTransformPuzzles: Bool = false
     var soundEnabled: Bool = true
     var bgmEnabled: Bool = true
@@ -438,6 +477,8 @@ struct AppSettings: Codable, Equatable, Sendable {
         showLiveLiberties = try c.decodeIfPresent(Bool.self, forKey: .showLiveLiberties) ?? true
         zenDojoMode = try c.decodeIfPresent(Bool.self, forKey: .zenDojoMode) ?? false
         aiSimulatedThinkingEnabled = try c.decodeIfPresent(Bool.self, forKey: .aiSimulatedThinkingEnabled) ?? true
+        aiThinkingPace = try c.decodeIfPresent(AIThinkingPace.self, forKey: .aiThinkingPace)
+            ?? (aiSimulatedThinkingEnabled ? .brisk : .instant)
         autoTransformPuzzles = try c.decodeIfPresent(Bool.self, forKey: .autoTransformPuzzles) ?? false
         soundEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
         bgmEnabled = try c.decodeIfPresent(Bool.self, forKey: .bgmEnabled) ?? true
@@ -676,6 +717,14 @@ final class StorageService {
         if profile.dailyDateStamp != today {
             profile.dailyDateStamp = today
             profile.dailyCompletedCount = 0
+        }
+        if profile.dailyDojoDateStamp != today {
+            profile.dailyDojoDateStamp = today
+            profile.dailyDojoWarmupDone = false
+            profile.dailyDojoCoreSolvedIds = []
+            profile.dailyDojoCoreFirstTryIds = []
+            profile.dailyDojoKnowledgeDone = false
+            profile.dailyDojoStampClaimedToday = profile.dailyDojoStampDates.contains(today)
         }
     }
 

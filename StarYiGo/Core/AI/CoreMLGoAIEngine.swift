@@ -85,6 +85,23 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         ruleSet: GameRuleSet,
         coachingStyle: AICoachingStyle = .standard
     ) async -> MoveAction {
+        let decision = await selectMoveDecision(
+            for: state,
+            color: color,
+            level: level,
+            ruleSet: ruleSet,
+            coachingStyle: coachingStyle
+        )
+        return decision.action
+    }
+
+    func selectMoveDecision(
+        for state: GoBoardState,
+        color: StoneColor,
+        level: AIDifficulty,
+        ruleSet: GameRuleSet,
+        coachingStyle: AICoachingStyle = .standard
+    ) async -> AIMoveDecision {
         // Use real KataGo b6c96 + PUCT MCTS for standard 7x7..19x19 matches from Deer (12K) up to Kirin (5D)!
         // Keep beginner levels (Sprout 25K, Rabbit 20K, Fox 15K), 5x5, Capture Race, and themed drills on LocalMCTSGoEngine.
         if let model,
@@ -94,17 +111,18 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
            state.size <= supportedBoardSize,
            let profile = rankProfile(for: level) {
             return await Task.detached(priority: .userInitiated) {
-                self.selectKataGoMoveSync(model: model, state: state, color: color, profile: profile)
+                self.selectKataGoDecisionSync(model: model, state: state, color: color, profile: profile)
             }.value
         }
 
-        return await fallbackEngine.selectMove(
+        let action = await fallbackEngine.selectMove(
             for: state,
             color: color,
             level: level,
             ruleSet: ruleSet,
             coachingStyle: coachingStyle
         )
+        return AIMoveDecision(action: action)
     }
 
     func suggestMoves(
@@ -183,6 +201,7 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         let passProb: Double
         let moverWinrate: Double  // [0.001, 0.999]
         let scoreLeadForMover: Double
+        let ownershipForMover: [Double]? // length = size * size, +1 = mover, -1 = opponent
     }
 
     /// Backwards-compatible spatial tensor helper returning the 22-plane KataGo V7 spatial tensor.
@@ -335,27 +354,34 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         let eL = exp(vLoss - vMax)
         let moverWR = min(0.995, max(0.005, eW / max(1e-9, eW + eL)))
 
-        // Ownership head -> estimated score lead for mover
+        // Ownership head -> estimated score lead for mover + per-point ownership map
         var lead = (moverWR - 0.5) * 20.0
+        var ownershipForMover: [Double]? = nil
         if let ownArr = output.featureValue(for: "ownership")?.multiArrayValue {
             var ownSum = 0.0
+            var ownMap = [Double](repeating: 0.0, count: total)
             for r in 0..<s {
                 for c in 0..<s {
                     let idx = r * supportedBoardSize + c
                     if idx < ownArr.count {
-                        ownSum += ownArr[idx].doubleValue
+                        let raw = ownArr[idx].doubleValue
+                        let clamped = min(1.0, max(-1.0, raw.isFinite ? raw : 0.0))
+                        ownMap[r * s + c] = clamped
+                        ownSum += clamped
                     }
                 }
             }
             let selfKomi = (color == .white) ? state.komi : -state.komi
             lead = ownSum + selfKomi
+            ownershipForMover = ownMap
         }
 
         return KataGoEvalOutput(
             boardPolicy: probs,
             passProb: passProb,
             moverWinrate: moverWR,
-            scoreLeadForMover: lead
+            scoreLeadForMover: lead,
+            ownershipForMover: ownershipForMover
         )
     }
 
@@ -488,47 +514,152 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         return root
     }
 
-    private func selectKataGoMoveSync(
+    /// Returns true if placing at `pt` is a pointless throw into a sealed, unlivable opponent pocket
+    /// (e.g. a 2x6 dead strip or deeply settled opponent territory when losing) that neither captures
+    /// nor threatens any opponent group.
+    private func isHopelessDeadSpaceThrow(
+        point pt: BoardPoint,
+        state: GoBoardState,
+        color: StoneColor,
+        hopelessMask: [Bool],
+        ownershipForMover: [Double]?,
+        moverWinrate: Double
+    ) -> Bool {
+        let idx = state.index(row: pt.row, col: pt.col)
+        let inDeadPocket = idx < hopelessMask.count && hopelessMask[idx]
+        let deepOpponentControl: Bool = {
+            guard moverWinrate < 0.15,
+                  let own = ownershipForMover,
+                  idx < own.count,
+                  own[idx] < -0.88 else {
+                return false
+            }
+            return true
+        }()
+        guard inDeadPocket || deepOpponentControl else { return false }
+
+        // Never suppress genuine captures or ataris against weak opponent walls!
+        guard case .success(let outcome) = state.applying(action: .place(pt), color: color) else {
+            return true
+        }
+        if !outcome.capturedPoints.isEmpty { return false }
+        let opp = color.opposite
+        for n in outcome.nextState.neighbors(of: idx) where outcome.nextState.grid[n] == opp {
+            if let oppG = outcome.nextState.groupAndLiberties(at: n), oppG.liberties.count == 1 {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func selectKataGoDecisionSync(
         model: MLModel,
         state: GoBoardState,
         color: StoneColor,
         profile: KataGoRankProfile
-    ) -> MoveAction {
+    ) -> AIMoveDecision {
+        let rootEval = evaluateSync(model: model, state: state, color: color)
+        let groups = state.allGroups()
+        var groupIndexAt = Array(repeating: -1, count: state.size * state.size)
+        for (gIdx, g) in groups.enumerated() {
+            for sIdx in g.stones { groupIndexAt[sIdx] = gIdx }
+        }
+        let hopelessMask = LocalMCTSGoEngine.computeHopelessOpponentPocketMask(
+            state: state,
+            for: color,
+            groups: groups,
+            groupIndexAt: groupIndexAt
+        )
+
         // Pure-policy fast path for 12K / 10K (soft temperature sampling from real KataGo policy)
         if profile.playouts <= 1 {
-            guard let eval = evaluateSync(model: model, state: state, color: color) else {
-                return .pass
+            guard let eval = rootEval else {
+                return AIMoveDecision(action: .pass)
             }
             let s = state.size
             var candidates: [(action: MoveAction, prob: Double)] = []
             for i in 0..<(s * s) where eval.boardPolicy[i] > 0.001 {
-                candidates.append((.place(BoardPoint(row: i / s, col: i % s)), eval.boardPolicy[i]))
+                let pt = BoardPoint(row: i / s, col: i % s)
+                if isHopelessDeadSpaceThrow(
+                    point: pt,
+                    state: state,
+                    color: color,
+                    hopelessMask: hopelessMask,
+                    ownershipForMover: eval.ownershipForMover,
+                    moverWinrate: eval.moverWinrate
+                ) {
+                    continue
+                }
+                candidates.append((.place(pt), eval.boardPolicy[i]))
             }
             if eval.passProb > 0.35 || candidates.isEmpty {
                 candidates.append((.pass, max(eval.passProb, candidates.isEmpty ? 1.0 : 0.0)))
             }
             candidates.sort { $0.prob > $1.prob }
             let pool = Array(candidates.prefix(max(1, profile.topKCap)))
-            return sampleWithTemperature(pool: pool, temperature: profile.policyTemperature)
+            let action = sampleWithTemperature(pool: pool, temperature: profile.policyTemperature)
+            return AIMoveDecision(
+                action: action,
+                moverWinrate: eval.moverWinrate,
+                moverScoreLead: eval.scoreLeadForMover,
+                ownershipForMover: eval.ownershipForMover
+            )
         }
 
         // Full KataGo PUCT MCTS for 5K / 3K / 1D / 3D / 5D
         let root = runPUCT(model: model, state: state, color: color, playouts: profile.playouts)
-        guard !root.children.isEmpty else { return .pass }
+        guard !root.children.isEmpty else {
+            return AIMoveDecision(
+                action: .pass,
+                moverWinrate: rootEval?.moverWinrate,
+                moverScoreLead: rootEval?.scoreLeadForMover,
+                ownershipForMover: rootEval?.ownershipForMover
+            )
+        }
 
         let sorted = root.children.sorted { a, b in
             if a.visits != b.visits { return a.visits > b.visits }
             return a.meanQ > b.meanQ
         }
+        let effectiveWR = sorted.first?.meanQ ?? rootEval?.moverWinrate ?? 0.5
+        let effectiveLead = rootEval?.scoreLeadForMover
 
+        let filtered = sorted.filter { child in
+            guard case .place(let pt) = child.action else { return true }
+            return !isHopelessDeadSpaceThrow(
+                point: pt,
+                state: state,
+                color: color,
+                hopelessMask: hopelessMask,
+                ownershipForMover: rootEval?.ownershipForMover,
+                moverWinrate: effectiveWR
+            )
+        }
+        guard !filtered.isEmpty else {
+            return AIMoveDecision(
+                action: .pass,
+                moverWinrate: effectiveWR,
+                moverScoreLead: effectiveLead,
+                ownershipForMover: rootEval?.ownershipForMover
+            )
+        }
+
+        let chosenAction: MoveAction
         if profile.policyTemperature <= 0.01 || profile.topKCap <= 1 {
-            return sorted[0].action ?? .pass
+            chosenAction = filtered[0].action ?? .pass
+        } else {
+            let topPool = filtered.prefix(profile.topKCap).map { child in
+                (action: child.action ?? .pass, prob: Double(max(1, child.visits)))
+            }
+            chosenAction = sampleWithTemperature(pool: topPool, temperature: profile.policyTemperature)
         }
 
-        let topPool = sorted.prefix(profile.topKCap).map { child in
-            (action: child.action ?? .pass, prob: Double(max(1, child.visits)))
-        }
-        return sampleWithTemperature(pool: topPool, temperature: profile.policyTemperature)
+        return AIMoveDecision(
+            action: chosenAction,
+            moverWinrate: effectiveWR,
+            moverScoreLead: effectiveLead,
+            ownershipForMover: rootEval?.ownershipForMover
+        )
     }
 
     private func sampleWithTemperature(

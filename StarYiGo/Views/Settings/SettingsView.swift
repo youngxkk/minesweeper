@@ -53,6 +53,7 @@ struct SettingsView: View {
                                 boardThemeCard
                                 scoringRuleCard
                                 assistsCard
+                                aiThinkingPaceCard
                                 audioAndEyeCareCard
                                 aboutFooterCard
                             }
@@ -70,6 +71,7 @@ struct SettingsView: View {
                                 VStack(spacing: 18) {
                                     scoringRuleCard
                                     assistsCard
+                                    aiThinkingPaceCard
                                     audioAndEyeCareCard
                                     aboutFooterCard
                                 }
@@ -623,6 +625,51 @@ struct SettingsView: View {
                 set: { v in appState.updateSettings { $0.zenDojoMode = v; $0.assistPreset = .custom } }
             ))
         }
+        .warmCard(cornerRadius: 24, padding: 18)
+    }
+
+    private var aiThinkingPaceCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                l10n.localized(
+                    zh: "AI 思考节奏",
+                    en: "AI Thinking Pace",
+                    ja: "AIの思考ペース",
+                    ko: "AI 생각 속도",
+                    zhHant: "AI 思考節奏"
+                ),
+                icon: "cpu.fill",
+                color: AppTheme.skyBottom
+            )
+
+            HStack(spacing: 6) {
+                ForEach(AIThinkingPace.allCases) { pace in
+                    let selected = appState.settings.aiThinkingPace == pace
+                    Button {
+                        appState.updateSettings {
+                            $0.aiThinkingPace = pace
+                            $0.aiSimulatedThinkingEnabled = (pace != .instant)
+                        }
+                    } label: {
+                        Text(pace.shortTitle(l10n))
+                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .foregroundColor(selected ? .white : AppTheme.inkPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .accessibilityIdentifier("SettingsAIPace_\(pace.rawValue)")
+                }
+            }
+
+            Text(appState.settings.aiThinkingPace.summaryText(l10n))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .warmCard(cornerRadius: 24, padding: 18)
     }
 

@@ -11,6 +11,7 @@ struct GoMiniDrillPlayView: View {
     var campaignNodeId: String? = nil
     var startOffset: Int = 0
     var targetQuestionCount: Int? = nil
+    var isDailyDojoWarmup: Bool = false
 
     @State private var index: Int = 0
     @State private var questionsDone: Int = 0
@@ -161,7 +162,9 @@ struct GoMiniDrillPlayView: View {
             if let stars = campaignClearedStars {
                 VStack(spacing: 12) {
                     Text("🏆").font(.system(size: 46))
-                    Text(isZh ? "专项闯关完成！" : "Mini-Drill Cleared!")
+                    Text(isDailyDojoWarmup
+                         ? (isZh ? "今日热身完成！" : "Daily Warmup Done!")
+                         : (isZh ? "专项闯关完成！" : "Mini-Drill Cleared!"))
                         .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                     HStack(spacing: 6) {
@@ -431,6 +434,15 @@ struct GoMiniDrillPlayView: View {
 
     private func advanceToNext() {
         questionsDone += 1
+        if isDailyDojoWarmup && questionsDone >= goalCount {
+            let ratio = Double(score) / Double(max(1, goalCount))
+            let stars = ratio >= 0.99 ? 3 : (ratio >= 0.5 ? 2 : 1)
+            appState.recordDailyDojoWarmupCompleted(score: score, total: goalCount)
+            campaignClearedStars = stars
+            SoundAndHapticsManager.shared.playVictoryFanfare()
+            SoundAndHapticsManager.shared.playVoice(.victory, delay: 0.22)
+            return
+        }
         if let nodeId = campaignNodeId, questionsDone >= goalCount {
             let ratio = Double(score) / Double(max(1, goalCount))
             let stars = ratio >= 0.99 ? 3 : (ratio >= 0.65 ? 2 : 1)

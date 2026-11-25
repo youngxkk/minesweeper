@@ -53,11 +53,8 @@ struct GoCodexEntry: Identifiable, Hashable, Sendable {
     let demoBoardSize: Int
     let demoSGF: String
     let demoCrop: BoardCropRegion?
-    /// Optional direct practice puzzle ID so players can tap "Practice This Move →" right from the Codex!
-    let practicePuzzleId: String?
-    let practiceIsBootcamp: Bool
-    /// Optional built-in classic study game UUID for Joseki/Opening entries
-    let practiceClassicId: UUID?
+    /// Direct practice puzzle ID so every Codex entry lets players tap "Practice This Move →"!
+    let practicePuzzleId: String
     /// Starter concepts already stamped "Mastered" or ready from day 1
     let unlockedByDefault: Bool
 
@@ -78,9 +75,7 @@ struct GoCodexEntry: Identifiable, Hashable, Sendable {
         demoBoardSize: Int,
         demoSGF: String,
         demoCrop: BoardCropRegion? = nil,
-        practicePuzzleId: String? = nil,
-        practiceIsBootcamp: Bool = false,
-        practiceClassicId: UUID? = nil,
+        practicePuzzleId: String,
         unlockedByDefault: Bool = false
     ) {
         self.id = id
@@ -100,8 +95,6 @@ struct GoCodexEntry: Identifiable, Hashable, Sendable {
         self.demoSGF = demoSGF
         self.demoCrop = demoCrop
         self.practicePuzzleId = practicePuzzleId
-        self.practiceIsBootcamp = practiceIsBootcamp
-        self.practiceClassicId = practiceClassicId
         self.unlockedByDefault = unlockedByDefault
     }
 
@@ -123,9 +116,115 @@ struct GoCodexEntry: Identifiable, Hashable, Sendable {
 }
 
 enum GoTermCodex {
-    private static let classic9Id = UUID(uuidString: "11111111-1111-1111-1111-111111111101")!
-    private static let classic13Id = UUID(uuidString: "11111111-1111-1111-1111-111111111102")!
-    private static let classic19Id = UUID(uuidString: "11111111-1111-1111-1111-111111111103")!
+    /// Dedicated practice puzzles for Codex entries that previously had no direct tsumego/drill puzzle,
+    /// spanning 5×5, 9×9, 13×13, and 19×19 boards with full rotate/flip/color-swap support.
+    static let codexPracticePuzzles: [GoPuzzle] = [
+        GoPuzzle(
+            id: "codex-suicide",
+            category: .capture,
+            rankBadge: "24K",
+            titleZh: "禁入点与反提例外",
+            titleEn: "Suicide Rule & Capture Exception",
+            promptZh: "黑先：角上看似没气的交叉点，落子瞬间能提掉白子就完全合法！快提掉白棋救回黑子！",
+            promptEn: "Black to play: Playing in the corner looks like 0 liberties — unless it captures White immediately!",
+            hintZh: "点在左上角 1-1 的空点，落子瞬间提掉两颗白子，不算自杀手！",
+            hintEn: "Play on the 1-1 corner point to capture both white stones at once!",
+            boardSize: 5,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[5]PL[B]AW[ba][ab][da]AB[ca][bb][ac](;B[aa]C[CORRECT])(;B[db];W[cb]C[WRONG]))",
+            cropRegion: BoardCropRegion.full(size: 5)
+        ),
+        GoPuzzle(
+            id: "codex-basic-steps",
+            category: .tactics,
+            rankBadge: "17K",
+            titleZh: "行棋步法 · 二子头必扳",
+            titleEn: "Basic Steps: Hane at the Head",
+            promptZh: "黑先：面对两颗并立的白子，用经典的「扳」拐弯拦住白棋出头！",
+            promptEn: "Black to play: Play the classic Hane at the head of White's two stones!",
+            hintZh: "不要直直爬在边上，拐个弯扳在白棋两子的头顶上！",
+            hintEn: "Turn around the head of White's two stones with a sharp Hane.",
+            boardSize: 9,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[9]PL[B]AB[cc][cd]AW[dd][de][ec](;B[df];W[ef];B[cf]C[CORRECT])(;B[ce];W[df]C[WRONG]))",
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 7, minCol: 0, maxCol: 7)
+        ),
+        GoPuzzle(
+            id: "codex-ko",
+            category: .tactics,
+            rankBadge: "9K",
+            titleZh: "打劫提子与粘劫",
+            titleEn: "Start & Win the Ko",
+            promptZh: "黑先：先提掉白子开劫，等白棋在别处落子后立刻粘上赢下打劫！",
+            promptEn: "Black to play: Capture to start the Ko, then connect to win it when White plays elsewhere!",
+            hintZh: "先提掉中间只剩一口气的白子，下一手粘回劫点巩固形状。",
+            hintEn: "Capture the white stone in atari first, then fill the Ko point to win!",
+            boardSize: 9,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[9]PL[B]AB[cb][cd][bc]AW[cc][db][dd][ec](;B[dc];W[fg];B[cc]C[CORRECT])(;B[da];W[dc]C[WRONG]))",
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 7, minCol: 0, maxCol: 7)
+        ),
+        GoPuzzle(
+            id: "codex-komi",
+            category: .endgame,
+            rankBadge: "12K",
+            titleZh: "贴目胜负 · 先手抢目",
+            titleEn: "Beating Komi: Big Sente Endgame",
+            promptZh: "黑先：13路盘白棋有 6.5 目贴目，找出边界价值最大的二路先手扳粘逆转目数！",
+            promptEn: "Black to play: Overcome White's 6.5 Komi on 13×13 with the biggest 2nd-line sente hane!",
+            hintZh: "在上方二路贴着白棋扳下去，逼白棋挡住后粘回，稳赚大官子！",
+            hintEn: "Hane on the 2nd line along the top border to force White back and gain crucial points.",
+            boardSize: 13,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[13]PL[B]AB[fc][fd][fe][gc]AW[hc][hd][he][id](;B[hb];W[ib];B[gb]C[CORRECT])(;B[gb];W[hb]C[WRONG]))",
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 7, minCol: 3, maxCol: 11)
+        ),
+        GoPuzzle(
+            id: "codex-sansan-joseki",
+            category: .opening,
+            rankBadge: "1K",
+            titleZh: "19路 · 星位点三三定式",
+            titleEn: "19×19: 3-3 Invasion Joseki",
+            promptZh: "黑先：白棋直接点进三三抢角！请按现代招牌定式挡住并顺势筑起厚实外势！",
+            promptEn: "Black to play: White invades at 3-3 on 19×19! Block cleanly and build an imposing outside wall!",
+            hintZh: "贴身挡住白棋（宽阔一侧），白棋长出后继续长并三路扳头封锁！",
+            hintEn: "Block directly on the wider side, extend smoothly, and hane on the 3rd line to seal!",
+            boardSize: 19,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[19]PL[B]AB[pd]AW[qc](;B[qd];W[pc];B[od];W[oc];B[nc]C[CORRECT])(;B[pc];W[qd];B[pe]C[CORRECT])(;B[oc];W[qd]C[WRONG]))",
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 9, minCol: 9, maxCol: 18)
+        ),
+        GoPuzzle(
+            id: "codex-sabaki",
+            category: .opening,
+            rankBadge: "1D",
+            titleZh: "13路 · 打入与腾挪治孤",
+            titleEn: "13×13: Invasion & Sabaki",
+            promptZh: "黑先：白棋在上方拆得太宽！请果断打入正中，借力腾挪轻松安定！",
+            promptEn: "Black to play: White's top framework is too wide — invade the center and use light Sabaki!",
+            hintZh: "直接空降在两颗白星位正中间（四路），白棋尖顶时顺势靠扳腾挪。",
+            hintEn: "Invade right between White's two 4-4 stones and maneuver lightly when White presses.",
+            boardSize: 13,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[13]PL[B]AW[dd][jd](;B[gd];W[gc];B[fc];W[fd];B[ec]C[CORRECT])(;B[gg];W[gd]C[WRONG]))",
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 8, minCol: 0, maxCol: 12)
+        ),
+        GoPuzzle(
+            id: "codex-sacrifice",
+            category: .tactics,
+            rankBadge: "1D",
+            titleZh: "弃子整形 · 丢小捡大",
+            titleEn: "Sacrifice for Shape",
+            promptZh: "黑先：不要硬救残子，果断从外侧打吃整形并顺势封锁！",
+            promptEn: "Black to play: Don't drag heavy stones — sacrifice lightly to squeeze and build outside shape!",
+            hintZh: "先在右侧厚实长出/打吃，白棋补角后再从下方顺势封锁整形。",
+            hintEn: "Extend strongly on the outside first, then seal cleanly from below!",
+            boardSize: 9,
+            playerColor: .black,
+            sgf: "(;GM[1]FF[4]SZ[9]PL[B]AB[dd][ed][ec]AW[dc][cd][de][ee](;B[fd];W[cc];B[ef]C[CORRECT])(;B[cc];W[fd]C[WRONG]))",
+            cropRegion: BoardCropRegion(minRow: 0, maxRow: 7, minCol: 0, maxCol: 8)
+        )
+    ]
 
     /// Complete 4-Tier × 36 Authentic Go Moves Curriculum (all open to learn anytime + Mastered Stamp!).
     static let allEntries: [GoCodexEntry] = [
@@ -149,7 +248,6 @@ enum GoTermCodex {
             demoBoardSize: 5,
             demoSGF: "(;GM[1]FF[4]SZ[5]AB[cc];W[cb];B[dc];W[bc])",
             practicePuzzleId: "boot-01",
-            practiceIsBootcamp: true,
             unlockedByDefault: true
         ),
         GoCodexEntry(
@@ -169,7 +267,6 @@ enum GoTermCodex {
             demoBoardSize: 5,
             demoSGF: "(;GM[1]FF[4]SZ[5]AB[cb][cd]AW[cc];B[bc];W[dc])",
             practicePuzzleId: "boot-02",
-            practiceIsBootcamp: true,
             unlockedByDefault: true
         ),
         GoCodexEntry(
@@ -263,8 +360,7 @@ enum GoTermCodex {
             explanationEn: "Three stones surrounding one empty point form a Tiger's Mouth. It is a super efficient defensive shape that protects cuts and helps make eyes.",
             demoBoardSize: 5,
             demoSGF: "(;GM[1]FF[4]SZ[5]AB[bc][cd]AW[dd][bd];B[cb];W[db];B[dc])",
-            practicePuzzleId: "boot-03",
-            practiceIsBootcamp: true
+            practicePuzzleId: "boot-03"
         ),
         GoCodexEntry(
             id: "cutAndConnect",
@@ -301,7 +397,6 @@ enum GoTermCodex {
             demoBoardSize: 5,
             demoSGF: "(;GM[1]FF[4]SZ[5]AB[aa][ab][bb][cb][db][eb][ea]AW[ac][bc][cc][dc][ec];B[ca])",
             practicePuzzleId: "boot-04",
-            practiceIsBootcamp: true,
             unlockedByDefault: true
         ),
         GoCodexEntry(
@@ -319,7 +414,8 @@ enum GoTermCodex {
             explanationZh: "围棋禁止下完后令己方棋块气数为 0 且未提掉对方棋子的着法。但如果落子瞬间能把对手提掉，则完全合法！",
             explanationEn: "Playing a stone that leaves your own group with 0 liberties is forbidden, unless that exact move captures opponent stones first.",
             demoBoardSize: 5,
-            demoSGF: "(;GM[1]FF[4]SZ[5]AW[ba][ab]AB[ca][bb][ac];B[aa])"
+            demoSGF: "(;GM[1]FF[4]SZ[5]AW[ba][ab]AB[ca][bb][ac];B[aa])",
+            practicePuzzleId: "codex-suicide"
         ),
 
         // =========================================================================
@@ -341,7 +437,7 @@ enum GoTermCodex {
             explanationEn: "Extend for solidity, One-Space Jump to escape smoothly, Knight's Move to claim territory swiftly, Diagonal to stay connected, and Hane to turn around enemy stones.",
             demoBoardSize: 7,
             demoSGF: "(;GM[1]FF[4]SZ[7];B[cc];W[ee];B[ce];W[ec];B[dc];W[ed];B[fd])",
-            practiceClassicId: classic9Id
+            practicePuzzleId: "codex-basic-steps"
         ),
         GoCodexEntry(
             id: "baseTwoSpace",
@@ -359,7 +455,7 @@ enum GoTermCodex {
             explanationEn: "Extending two intersections along the third line creates a sturdy living base on the side — wide enough for territory yet tight enough to make two eyes easily.",
             demoBoardSize: 9,
             demoSGF: "(;GM[1]FF[4]SZ[9];B[cc];W[gg];B[fc];W[cg];B[gc];W[dc];B[dd])",
-            practiceClassicId: classic13Id
+            practicePuzzleId: "dojo-open-02"
         ),
         GoCodexEntry(
             id: "ladder",
@@ -452,7 +548,8 @@ enum GoTermCodex {
             explanationZh: "通过连续不断的正手叫吃甚至弃子扑吃，迫使对方棋子挤成没有效率的愚形（气紧、无眼），从而轻松提子或竖起铁厚外势。",
             explanationEn: "A thrilling chain of consecutive Ataris that forces the opponent's stones into a heavy, gasping clump — either capturing them outright or building a mighty wall.",
             demoBoardSize: 7,
-            demoSGF: "(;GM[1]FF[4]SZ[7]AB[bc][bd][dc][eb][ec]AW[cc][cd][db][dd][de];B[cb];W[da];B[ca];W[ea];B[fa])"
+            demoSGF: "(;GM[1]FF[4]SZ[7]AB[bc][bd][dc][eb][ec]AW[cc][cd][db][dd][de];B[cb];W[da];B[ca];W[ea];B[fa])",
+            practicePuzzleId: "dojo-tac-04"
         ),
         GoCodexEntry(
             id: "cranesLeg",
@@ -507,7 +604,8 @@ enum GoTermCodex {
             explanationZh: "当黑白两块棋互相包围且都做不出两眼，却共同拥有公气，任何一方先紧气都会立刻陷入叫吃而被对方提掉。此时谁都不动，双方共同存活，称为「双活」。",
             explanationEn: "An extraordinary Go standoff where neither black nor white has two eyes, yet neither can attack without committing suicide. Both groups survive peacefully together!",
             demoBoardSize: 5,
-            demoSGF: "(;GM[1]FF[4]SZ[5]AB[aa][ab][ac][bc][cc][dc][ec][eb]AW[ca][da][cb][ad][bd][cd][dd][ed][be][de];B[ea];W[db])"
+            demoSGF: "(;GM[1]FF[4]SZ[5]AB[aa][ab][ac][bc][cc][dc][ec][eb]AW[ca][da][cb][ad][bd][cd][dd][ed][be][de];B[ea];W[db])",
+            practicePuzzleId: "dojo-lad-10"
         ),
 
         // =========================================================================
@@ -528,7 +626,8 @@ enum GoTermCodex {
             explanationZh: "单子互提触发打劫规则：不能立刻回提还原局面。必须先在别处寻找「劫材」（对手不得不应的严厉威胁），等对方应后再回提，是围棋最具戏剧性的心理战。",
             explanationEn: "You cannot immediately recapture a Ko. Play a forcing threat elsewhere (a Ko threat); if your opponent answers it, you may return and recapture the Ko!",
             demoBoardSize: 5,
-            demoSGF: "(;GM[1]FF[4]SZ[5]AB[cb][cd][bc]AW[cc][db][dd][ec];B[dc];W[aa];B[ab];W[cc])"
+            demoSGF: "(;GM[1]FF[4]SZ[5]AB[cb][cd][bc]AW[cc][db][dd][ec];B[dc];W[aa];B[ab];W[cc])",
+            practicePuzzleId: "codex-ko"
         ),
         GoCodexEntry(
             id: "capturingRace",
@@ -564,7 +663,8 @@ enum GoTermCodex {
             explanationZh: "对杀中，如果己方拥有 1 只真眼而对手无眼，则双方的公气会全部变成己方的「专属气」（对手无法先入眼位），这就是著名的「有眼杀无眼」。",
             explanationEn: "In a capturing race where you have 1 true eye and your opponent has none, all shared liberties belong solely to you because your opponent cannot enter your eye first!",
             demoBoardSize: 7,
-            demoSGF: "(;GM[1]FF[4]SZ[7]AB[ba][bb][ab][ea][eb][ec][dc][dd][cd][bd][ad]AW[ca][cb][cc][bc][ac];B[da];W[fe];B[db])"
+            demoSGF: "(;GM[1]FF[4]SZ[7]AB[ba][bb][ab][ea][eb][ec][dc][dd][cd][bd][ad]AW[ca][cb][cc][bc][ac];B[da];W[fe];B[db])",
+            practicePuzzleId: "dojo-race-02"
         ),
         GoCodexEntry(
             id: "bigEyeVsSmallEye",
@@ -581,7 +681,8 @@ enum GoTermCodex {
             explanationZh: "大眼内部需要对手花好几手才能破掉，因此拥有极多隐藏气数（俗称「大眼气数歌：三三、四五、五八、六十二」）。实战对杀时要努力做大己方眼位、缩小对手眼位。",
             explanationEn: "Larger eye spaces take many moves for the opponent to fill in, granting huge hidden liberties (3-space = 3, 4-space = 5, 5-space = 8, 6-space = 12 liberties!).",
             demoBoardSize: 7,
-            demoSGF: "(;GM[1]FF[4]SZ[7]AB[ca][cb][bb][ab][da][db][dc][dd][ed][fd][gd]AW[ea][eb][ec][fc][gc][ga];B[fb];W[gb];B[fa])"
+            demoSGF: "(;GM[1]FF[4]SZ[7]AB[ca][cb][bb][ab][da][db][dc][dd][ed][fd][gd]AW[ea][eb][ec][fc][gc][ga];B[fb];W[gb];B[fa])",
+            practicePuzzleId: "dojo-race-05"
         ),
         GoCodexEntry(
             id: "throwIn",
@@ -655,7 +756,8 @@ enum GoTermCodex {
             explanationZh: "封锁对手向中央逃跑的「出头」方向，使其被迫在狭小空间苦苦求活，同时自己顺势筑起辐射全盘的强大外势。",
             explanationEn: "Relentlessly seal an opponent group's escape toward the center. Even if they barely live inside, your surrounding wall dominates the entire board.",
             demoBoardSize: 7,
-            demoSGF: "(;GM[1]FF[4]SZ[7]AW[cc][dc]AB[cb][db][bc][ec][cd];W[dd];B[ed];W[de];B[ee];W[ce];B[df])"
+            demoSGF: "(;GM[1]FF[4]SZ[7]AW[cc][dc]AB[cb][db][bc][ec][cd];W[dd];B[ed];W[de];B[ee];W[ce];B[df])",
+            practicePuzzleId: "dojo-tac-10"
         ),
 
         // =========================================================================
@@ -677,6 +779,7 @@ enum GoTermCodex {
             explanationEn: "Chinese Area Scoring counts living stones plus surrounded empty territory, adding Komi to White (5.5 on 9×9, 6.5 on 13×13, 7.5 on 19×19) to balance Black's first-move advantage.",
             demoBoardSize: 5,
             demoSGF: "(;GM[1]FF[4]SZ[5];B[cc];W[bb];B[dd];W[bd])",
+            practicePuzzleId: "codex-komi",
             unlockedByDefault: true
         ),
         GoCodexEntry(
@@ -695,7 +798,7 @@ enum GoTermCodex {
             explanationEn: "The supreme opening principle of Go: corners require the fewest stones to secure territory, sides second, center most. Opening flow: claim corners -> approach/enclose -> extend on sides -> center.",
             demoBoardSize: 13,
             demoSGF: "(;GM[1]FF[4]SZ[13];B[dd];W[jj];B[dj];W[jd];B[fj];W[jf])",
-            practiceClassicId: classic13Id
+            practicePuzzleId: "dojo-open-01"
         ),
         GoCodexEntry(
             id: "sanSanJoseki",
@@ -714,7 +817,7 @@ enum GoTermCodex {
             demoBoardSize: 19,
             demoSGF: "(;GM[1]FF[4]SZ[19];B[pd];W[qc];B[qd];W[pc];B[od];W[oc];B[nc];W[ob];B[rc];W[rb])",
             demoCrop: BoardCropRegion(minRow: 0, maxRow: 8, minCol: 10, maxCol: 18),
-            practiceClassicId: classic19Id
+            practicePuzzleId: "codex-sansan-joseki"
         ),
         GoCodexEntry(
             id: "knightApproachJoseki",
@@ -733,7 +836,7 @@ enum GoTermCodex {
             demoBoardSize: 19,
             demoSGF: "(;GM[1]FF[4]SZ[19];B[pd];W[nc];B[qf];W[kc])",
             demoCrop: BoardCropRegion(minRow: 0, maxRow: 8, minCol: 9, maxCol: 18),
-            practiceClassicId: classic19Id
+            practicePuzzleId: "dojo-open-04"
         ),
         GoCodexEntry(
             id: "wallExtension",
@@ -751,7 +854,7 @@ enum GoTermCodex {
             explanationEn: "A classic structural proverb: extend 2 spaces from 1 stone, 3 spaces from a 2-stone wall, and 4 spaces from a 3-stone wall. Use thickness boldly to attack!",
             demoBoardSize: 13,
             demoSGF: "(;GM[1]FF[4]SZ[13];B[dd];W[jj];B[dc];W[jd];B[hd])",
-            practiceClassicId: classic13Id
+            practicePuzzleId: "dojo-open-03"
         ),
         GoCodexEntry(
             id: "invasionAndSabaki",
@@ -769,7 +872,8 @@ enum GoTermCodex {
             explanationEn: "Invading a massive enemy framework and using light, flexible contact moves (Sabaki) to settle quickly or escape is the hallmark of Dan-level play.",
             demoBoardSize: 13,
             demoSGF: "(;GM[1]FF[4]SZ[13]AW[dd][jd];B[gd];W[gc];B[fc];W[fd];B[ec];W[ed];B[hc])",
-            demoCrop: BoardCropRegion(minRow: 0, maxRow: 7, minCol: 0, maxCol: 12)
+            demoCrop: BoardCropRegion(minRow: 0, maxRow: 7, minCol: 0, maxCol: 12),
+            practicePuzzleId: "codex-sabaki"
         ),
         GoCodexEntry(
             id: "sacrificeShape",
@@ -787,7 +891,8 @@ enum GoTermCodex {
             explanationEn: "Rather than dragging heavy, dying stones across the board, willingly sacrifice them to squeeze from the outside, fix your shape, and take Sente (initiative) elsewhere.",
             demoBoardSize: 9,
             demoSGF: "(;GM[1]FF[4]SZ[9]AB[dd][ed][ec]AW[dc][cd][de][ee];B[fd];W[cc];B[ef];W[df];B[dg])",
-            demoCrop: BoardCropRegion(minRow: 0, maxRow: 6, minCol: 0, maxCol: 8)
+            demoCrop: BoardCropRegion(minRow: 0, maxRow: 6, minCol: 0, maxCol: 8),
+            practicePuzzleId: "codex-sacrifice"
         ),
         GoCodexEntry(
             id: "monkeyJumpEndgame",
@@ -805,7 +910,8 @@ enum GoTermCodex {
             explanationEn: "Endgame priority: Double Sente > Sente > Gote. The famous Monkey Jump leaps deep along the 1st line under an enemy side stone, slashing up to 8–9 points in one stroke!",
             demoBoardSize: 9,
             demoSGF: "(;GM[1]FF[4]SZ[9]AW[gc][gd][ge]AB[cd][ce][dc];B[fa];W[fb];B[ea];W[eb];B[da])",
-            demoCrop: BoardCropRegion(minRow: 0, maxRow: 5, minCol: 0, maxCol: 8)
+            demoCrop: BoardCropRegion(minRow: 0, maxRow: 5, minCol: 0, maxCol: 8),
+            practicePuzzleId: "dojo-end-02"
         )
     ]
 
@@ -821,22 +927,39 @@ enum GoTermCodex {
     static func codexTermId(forPuzzleId puzzleId: String) -> String? {
         switch puzzleId {
         case "boot-01", "cap-01": return "capture"
-        case "cap-02": return "doorCapture"
+        case "cap-02", "dojo-cap-02": return "doorCapture"
         case "boot-02", "end-04": return "atari"
         case "cap-03": return "hugCapture"
         case "boot-03", "end-01": return "cutAndConnect"
         case "boot-04", "lad-01", "lad-02", "lad-03": return "twoEyes"
+        case "codex-suicide": return "suicide"
+        case "codex-basic-steps": return "basicSteps"
+        case "dojo-open-02": return "baseTwoSpace"
         case "lad-04", "lad-05": return "basicLifeDeathShapes"
         case "cap-04": return "doubleAtari"
         case "cap-05": return "net"
         case "tac-01": return "snapback"
         case "tac-02": return "connectAndDie"
         case "tac-03": return "ladder"
+        case "dojo-tac-04": return "squeeze"
         case "tac-04": return "wedgeAndClamp"
         case "tac-05": return "cranesLeg"
+        case "dojo-lad-10": return "seki"
+        case "codex-ko": return "ko"
         case "end-02": return "capturingRace"
+        case "dojo-race-02": return "eyeVsNoEye"
+        case "dojo-race-05": return "bigEyeVsSmallEye"
         case "end-03": return "firstLineConnect"
         case "end-05": return "throwIn"
+        case "dojo-tac-10": return "cranesNest"
+        case "codex-komi": return "komi"
+        case "dojo-open-01": return "cornersSidesCenter"
+        case "codex-sansan-joseki": return "sanSanJoseki"
+        case "dojo-open-04": return "knightApproachJoseki"
+        case "dojo-open-03": return "wallExtension"
+        case "codex-sabaki": return "invasionAndSabaki"
+        case "codex-sacrifice": return "sacrificeShape"
+        case "dojo-end-02": return "monkeyJumpEndgame"
         default: return nil
         }
     }

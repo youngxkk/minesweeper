@@ -61,6 +61,7 @@ struct GamePlayView: View {
             if showActionsMenu {
                 Color.black.opacity(0.18)
                     .ignoresSafeArea()
+                    .allowsHitTesting(showActionsMenu)
                     .onTapGesture {
                         withAnimation(.spring(response: 0.22, dampingFraction: 0.82)) {
                             showActionsMenu = false
@@ -122,6 +123,7 @@ struct GamePlayView: View {
                         ? (l10n.language.isChinese ? "返回岛屿" : "Back to Island")
                         : l10n.t("result.backHome"),
                     bestMove: viewModel.bestMoveNumber,
+                    bestMoveReason: viewModel.bestMoveReason,
                     turningPoint: viewModel.turningPointMoveNumber,
                     l10n: l10n,
                     onRewind: { moveNum in
@@ -274,6 +276,50 @@ struct GamePlayView: View {
                 }
             ]
         )
+        .gameDialog(
+            isPresented: $viewModel.showAIResignOfferDialog,
+            title: l10n.localized(
+                zh: "对手提出认输",
+                en: "AI Offers Resignation",
+                ja: "AIが投了を申し出ました",
+                ko: "AI가 기권을 요청했어요",
+                zhHant: "對手提出認輸"
+            ),
+            message: l10n.localized(
+                zh: "你已经建立起明显优势，对手觉得难以翻盘，想要中盘认输。要直接接受胜利，还是继续把棋下完？",
+                en: "You have a decisive lead and your AI opponent wants to resign. Would you like to accept victory now or keep playing?",
+                ja: "あなたの優勢が決定的となり、AIが中押し負け（投了）を申し出ています。このまま勝利を受け取りますか？それとも最後まで打ち続けますか？",
+                ko: "이미 확실한 우세를 점해 AI가 불계패(기권)를 요청했습니다. 지금 승리를 받아들이시겠어요, 아니면 끝까지 계속 두시겠어요?",
+                zhHant: "你已經建立起明顯優勢，對手覺得難以翻盤，想要中盤認輸。要直接接受勝利，還是繼續把棋下完？"
+            ),
+            icon: "flag.checkered",
+            accentPalette: .mint,
+            actions: [
+                .secondary(
+                    l10n.localized(
+                        zh: "继续下完",
+                        en: "Keep Playing",
+                        ja: "最後まで打つ",
+                        ko: "계속 두기",
+                        zhHant: "繼續下完"
+                    )
+                ) {
+                    viewModel.declineAIResignation()
+                },
+                .primary(
+                    l10n.localized(
+                        zh: "接受胜利",
+                        en: "Accept Victory",
+                        ja: "勝利を受け取る",
+                        ko: "승리 수락",
+                        zhHant: "接受勝利"
+                    ),
+                    palette: .mint
+                ) {
+                    viewModel.acceptAIResignation()
+                }
+            ]
+        )
     }
 
     // MARK: - Standard Landscape Arena (Immutable Board Left + Glossy Controls Right)
@@ -333,105 +379,157 @@ struct GamePlayView: View {
     // MARK: - Two-Player Tabletop Face-to-Face Mode (with Parent-Child Kid Assist!)
 
     private func tabletopTwoPlayerLayout(w: CGFloat, h: CGFloat, pad: CGFloat) -> some View {
-        let wingWidth: CGFloat = 216
-        let boardSide = max(260, min(w - wingWidth * 2 - pad * 4, h - pad * 2))
+        let isPortrait = h > w
+        let outerPad: CGFloat = 12
+        let gap: CGFloat = 12
 
-        return HStack(spacing: pad) {
-            tabletopPlayerWing(color: .white, rotation: .degrees(90))
-                .frame(width: wingWidth)
+        return Group {
+            if isPortrait {
+                let dockHeight: CGFloat = 104
+                let dockWidth = max(280, min(w - outerPad * 2, 620))
+                let boardSide = max(240, min(w - outerPad * 2, h - dockHeight * 2 - outerPad * 2 - gap * 2 - 56))
 
-            boardView
-                .frame(width: boardSide, height: boardSide)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: gap) {
+                    tabletopPlayerDock(color: .white, length: dockWidth, thickness: dockHeight, rotation: .degrees(180))
+                    boardView
+                        .frame(width: boardSide, height: boardSide)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    tabletopPlayerDock(color: .black, length: dockWidth, thickness: dockHeight, rotation: .degrees(0))
+                }
+                .padding(.horizontal, outerPad)
+                .padding(.top, 56)
+                .padding(.bottom, outerPad)
+            } else {
+                let dockThickness: CGFloat = 106
+                let dockLength = max(340, min(h - 140, 620))
+                let boardSide = max(260, min(w - dockThickness * 2 - outerPad * 2 - gap * 2, h - outerPad * 2))
 
-            tabletopPlayerWing(color: .black, rotation: .degrees(-90))
-                .frame(width: wingWidth)
+                HStack(spacing: gap) {
+                    tabletopPlayerDock(color: .white, length: dockLength, thickness: dockThickness, rotation: .degrees(90))
+                        .frame(width: dockThickness, height: dockLength)
+                        .frame(maxHeight: .infinity, alignment: .center)
+
+                    boardView
+                        .frame(width: boardSide, height: boardSide)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    tabletopPlayerDock(color: .black, length: dockLength, thickness: dockThickness, rotation: .degrees(-90))
+                        .frame(width: dockThickness, height: dockLength)
+                        .frame(maxHeight: .infinity, alignment: .center)
+                }
+                .padding(outerPad)
+            }
         }
-        .padding(pad)
         .overlay(alignment: .topLeading) {
             GameBackButton(title: l10n.t("common.back")) {
-                appState.popRoute()
+                if viewModel.shouldConfirmBeforeLeaving {
+                    showLeaveMatchConfirm = true
+                } else {
+                    appState.popRoute()
+                }
             }
-            .padding(16)
+            .padding(14)
         }
         .overlay(alignment: .topTrailing) {
-            GameCircleButton(icon: "rectangle.portrait.rotate", palette: .mint, tint: .white) {
+            GameCircleButton(icon: "rectangle.portrait.rotate", palette: .mint, tint: .white, size: 46) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     viewModel.isTabletopFaceToFace.toggle()
                 }
             }
-            .padding(16)
+            .padding(14)
         }
     }
 
-    private func tabletopPlayerWing(color: StoneColor, rotation: Angle) -> some View {
+    /// Sleek horizontal player dock designed in the player's own upright frame, then rotated ±90° (or 180°)
+    /// so it spans naturally along their edge of the table while maximizing the Go board size!
+    private func tabletopPlayerDock(
+        color: StoneColor,
+        length: CGFloat,
+        thickness: CGFloat,
+        rotation: Angle
+    ) -> some View {
         let isTurn = !viewModel.isGameOver && viewModel.boardState.currentTurn == color
         let captures = color == .black ? viewModel.boardState.blackCaptures : viewModel.boardState.whiteCaptures
         let hasKidAssist = viewModel.tabletopKidAssistColor == color
 
-        return VStack(spacing: 11) {
-            WoodenGoBowlView(capturedColor: color.opposite, count: captures)
-                .scaleEffect(1.18)
+        return HStack(spacing: 14) {
+            // Left: Captured-stones bowl + Player identity & turn status
+            HStack(spacing: 12) {
+                WoodenGoBowlView(capturedColor: color.opposite, count: captures)
 
-            Text(l10n.t(color == .black ? "stone.black" : "stone.white"))
-                .font(.system(size: 19, weight: .black, design: .rounded))
-                .foregroundColor(AppTheme.inkPrimary)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(l10n.t(color == .black ? "stone.black" : "stone.white"))
+                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .foregroundColor(AppTheme.inkPrimary)
 
-            if let target = viewModel.ruleSet.captureTarget {
-                Text("\(l10n.t("game.captureGoalBadge", captures, target))")
-                    .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.coralBottom)
+                        if let target = viewModel.ruleSet.captureTarget {
+                            Text(l10n.t("game.captureGoalBadge", captures, target))
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .foregroundColor(AppTheme.coralBottom)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(AppTheme.coralTop.opacity(0.14)))
+                        }
+                    }
+
+                    Text(isTurn ? l10n.t(color == .black ? "game.turn.black" : "game.turn.white") : l10n.t("game.moveCount", viewModel.moves.count))
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .foregroundColor(isTurn ? .white : AppTheme.inkSecondary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(
+                                isTurn
+                                ? AnyShapeStyle(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom))
+                                : AnyShapeStyle(AppTheme.canvasBackground)
+                            )
+                        )
+                }
             }
 
-            Text(isTurn ? l10n.t(color == .black ? "game.turn.black" : "game.turn.white") : l10n.t("game.moveCount", viewModel.moves.count))
-                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
-                .foregroundColor(isTurn ? .white : AppTheme.inkSecondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule().fill(
-                        isTurn
-                        ? AnyShapeStyle(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom))
-                        : AnyShapeStyle(AppTheme.canvasBackground)
-                    )
-                )
+            Spacer(minLength: 8)
 
-            HStack(spacing: 8) {
-                GameCircleButton(icon: "arrow.uturn.backward", palette: .snow, tint: AppTheme.inkPrimary, size: 42, playTapSound: false) {
+            // Right: Action buttons & Parent-Child Kid Assist toggle
+            HStack(spacing: 9) {
+                GameCircleButton(icon: "arrow.uturn.backward", palette: .snow, tint: AppTheme.inkPrimary, size: 44, playTapSound: false) {
                     viewModel.undo()
                 }
                 .disabled(!viewModel.isUndoAllowed)
+                .opacity(viewModel.isUndoAllowed ? 1 : 0.45)
 
                 if hasKidAssist {
-                    GameCircleButton(icon: "lightbulb.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 42) {
+                    GameCircleButton(icon: "lightbulb.fill", palette: .sun, tint: .white, size: 44) {
                         viewModel.requestHint()
                     }
                     .disabled(!isTurn)
+                    .opacity(isTurn ? 1 : 0.45)
                 }
 
-                GameCircleButton(icon: "hand.raised.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 42) {
+                GameCircleButton(icon: "hand.raised.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 44) {
                     viewModel.passTurn()
                 }
                 .disabled(!isTurn)
-            }
+                .opacity(isTurn ? 1 : 0.45)
 
-            // Parent-Child Asymmetric Assist toggle
-            Button {
-                viewModel.tabletopKidAssistColor = hasKidAssist ? nil : color
-                SoundAndHapticsManager.shared.playUITap()
-            } label: {
-                Label(l10n.t("game.tabletop.kidAssist"), systemImage: hasKidAssist ? "sparkles" : "sparkle")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
-                    .foregroundColor(hasKidAssist ? .white : AppTheme.sunBottom)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .frame(minHeight: AppTheme.buttonFaceHeight)
-                    .background(Capsule().fill(hasKidAssist ? AppTheme.sunBottom : AppTheme.softGoldBg))
+                Button {
+                    viewModel.tabletopKidAssistColor = hasKidAssist ? nil : color
+                    SoundAndHapticsManager.shared.playUITap()
+                } label: {
+                    Label(l10n.t("game.tabletop.kidAssist"), systemImage: hasKidAssist ? "sparkles" : "sparkle")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundColor(hasKidAssist ? .white : AppTheme.sunBottom)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: AppTheme.buttonFaceHeight)
+                        .background(Capsule().fill(hasKidAssist ? AppTheme.sunBottom : AppTheme.softGoldBg))
+                }
+                .tactileButton(scale: 0.94, sound: false)
             }
-            .tactileButton(scale: 0.94, sound: false)
         }
-        .padding(14)
-        .warmCard(cornerRadius: 28, padding: 12)
+        .padding(.horizontal, 18)
+        .frame(width: length, height: thickness)
+        .warmCard(cornerRadius: 28, padding: 0)
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(isTurn ? AppTheme.skyTop : Color.clear, lineWidth: 3.5)
@@ -540,6 +638,10 @@ struct GamePlayView: View {
                     }
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                 }
+
+                soundToggleButton
+
+                voiceToggleButton
 
                 stoneDisplayToggleButton
 
@@ -681,6 +783,100 @@ struct GamePlayView: View {
                 Color(red: 0.03, green: 0.12, blue: 0.14)
             ]
         }
+    }
+
+    private var soundToggleButton: some View {
+        let isOn = appState.settings.soundEnabled
+        let palette: GlossyPalette = isOn ? .sky : .snow
+
+        return Button {
+            let nextValue = !appState.settings.soundEnabled
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
+                appState.updateSettings { $0.soundEnabled = nextValue }
+                if showActionsMenu {
+                    showActionsMenu = false
+                }
+            }
+            if nextValue {
+                SoundAndHapticsManager.shared.playUITap(weight: .light)
+            }
+        } label: {
+            Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                .font(.system(size: 17, weight: .black))
+                .foregroundColor(isOn ? .white : AppTheme.inkSecondary.opacity(0.75))
+                .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
+                .background(
+                    ZStack {
+                        Circle()
+                            .fill(palette.rim)
+                            .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                            .offset(y: 5)
+                        Circle()
+                            .fill(LinearGradient(colors: [palette.top, palette.bottom], startPoint: .top, endPoint: .bottom))
+                            .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                    }
+                )
+                .padding(.bottom, 5)
+        }
+        .tactileButton(scale: 0.92, sound: false)
+        .accessibilityLabel(
+            isOn
+                ? l10n.localized(zh: "落子与按钮音效：开", en: "Sound Effects: On", ja: "効果音：オン", ko: "효과음: 켜짐", zhHant: "落子與按鈕音效：開")
+                : l10n.localized(zh: "落子与按钮音效：关", en: "Sound Effects: Off", ja: "効果音：オフ", ko: "효과음: 꺼짐", zhHant: "落子與按鈕音效：關")
+        )
+        .accessibilityIdentifier("GameSoundToggleButton")
+    }
+
+    private var voiceToggleButton: some View {
+        let isOn = appState.settings.voiceEnabled
+        let palette: GlossyPalette = isOn ? .sky : .snow
+
+        return Button {
+            SoundAndHapticsManager.shared.playUITap(weight: .light)
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
+                appState.updateSettings { $0.voiceEnabled.toggle() }
+                if showActionsMenu {
+                    showActionsMenu = false
+                }
+            }
+        } label: {
+            ZStack {
+                Image(systemName: "person.wave.2.fill")
+                    .font(.system(size: 17, weight: .black))
+                    .foregroundColor(isOn ? .white : AppTheme.inkSecondary.opacity(0.75))
+
+                if !isOn {
+                    Capsule()
+                        .fill(AppTheme.coralBottom)
+                        .frame(width: 24, height: 2.6)
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.white.opacity(0.95), lineWidth: 0.8)
+                        )
+                        .rotationEffect(.degrees(-40))
+                }
+            }
+            .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
+            .background(
+                ZStack {
+                    Circle()
+                        .fill(palette.rim)
+                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                        .offset(y: 5)
+                    Circle()
+                        .fill(LinearGradient(colors: [palette.top, palette.bottom], startPoint: .top, endPoint: .bottom))
+                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                }
+            )
+            .padding(.bottom, 5)
+        }
+        .tactileButton(scale: 0.92, sound: false)
+        .accessibilityLabel(
+            isOn
+                ? l10n.localized(zh: "人声语音：开", en: "Voice Lines: On", ja: "音声ガイド：オン", ko: "음성 안내: 켜짐", zhHant: "人聲語音：開")
+                : l10n.localized(zh: "人声语音：关", en: "Voice Lines: Off", ja: "音声ガイド：オフ", ko: "음성 안내: 꺼짐", zhHant: "人聲語音：關")
+        )
+        .accessibilityIdentifier("GameVoiceToggleButton")
     }
 
     private var stoneDisplayToggleButton: some View {
@@ -844,19 +1040,63 @@ struct GamePlayView: View {
             }
 
             if !viewModel.isTwoPlayer {
-                actionsMenuRow(
-                    title: l10n.localized(
-                        zh: "AI 思考时间",
-                        en: "AI Thinking Time",
-                        ja: "AIの思考時間",
-                        ko: "AI 생각 시간",
-                        zhHant: "AI 思考時間"
-                    ),
-                    icon: appState.settings.aiSimulatedThinkingEnabled ? "checkmark.circle.fill" : "clock"
-                ) {
-                    appState.updateSettings { $0.aiSimulatedThinkingEnabled.toggle() }
-                    SoundAndHapticsManager.shared.playUITap(weight: .light)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(l10n.localized(
+                        zh: "AI 思考节奏",
+                        en: "AI Thinking Pace",
+                        ja: "AIの思考ペース",
+                        ko: "AI 생각 속도",
+                        zhHant: "AI 思考節奏"
+                    ))
+                    .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                    .foregroundColor(Color.white.opacity(0.66))
+                    .padding(.horizontal, 4)
+
+                    HStack(spacing: 3) {
+                        ForEach(AIThinkingPace.allCases) { pace in
+                            let selected = appState.settings.aiThinkingPace == pace
+                            Button {
+                                appState.updateSettings {
+                                    $0.aiThinkingPace = pace
+                                    $0.aiSimulatedThinkingEnabled = (pace != .instant)
+                                }
+                                SoundAndHapticsManager.shared.playUITap(weight: .light)
+                            } label: {
+                                Text(pace.shortTitle(l10n))
+                                    .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.76)
+                                    .foregroundColor(selected ? .white : Color.white.opacity(0.72))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(
+                                                selected
+                                                    ? LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)
+                                                    : LinearGradient(colors: [.clear, .clear], startPoint: .top, endPoint: .bottom)
+                                            )
+                                    )
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("GameAIPace_\(pace.rawValue)")
+                        }
+                    }
+                    .padding(3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(Color.white.opacity(0.10))
+                    )
                 }
+                .padding(.horizontal, 6)
+                .padding(.top, 2)
+                .padding(.bottom, 6)
+
+                Divider()
+                    .background(Color.white.opacity(0.20))
+                    .padding(.bottom, 2)
             }
 
             actionsMenuRow(
@@ -1532,6 +1772,7 @@ struct GamePlayView: View {
                 .padding(.vertical, 10)
         }
         .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+        .accessibilityIdentifier("GameConfirmPlaceButton")
     }
 
     private func glossyActionTile(
@@ -1616,6 +1857,7 @@ private struct GameResultOverlayCard: View {
     let isBossVictory: Bool
     let backButtonTitle: String
     let bestMove: Int?
+    let bestMoveReason: BestMoveReason?
     let turningPoint: Int?
     let l10n: L10n
     let onRewind: (Int) -> Void
@@ -1664,9 +1906,12 @@ private struct GameResultOverlayCard: View {
             if bestMove != nil || turningPoint != nil {
                 VStack(spacing: 10) {
                     if let bestMove {
-                        Label(l10n.t("result.bestMove", bestMove), systemImage: "star.fill")
+                        let baseTitle = l10n.t("result.bestMove", bestMove)
+                        let fullTitle = bestMoveReason.map { "\(baseTitle) · \($0.badge(l10n))" } ?? baseTitle
+                        Label(fullTitle, systemImage: "star.fill")
                             .font(.system(size: 14, weight: .heavy, design: .rounded))
                             .foregroundColor(AppTheme.sunBottom)
+                            .multilineTextAlignment(.center)
                     }
                     if let turningPoint {
                         Button {

@@ -219,15 +219,15 @@ struct StarYiGoEngineTests {
         let daily = StarYiIslands.dailyChallengePuzzle()
         #expect(SGFParser.parse(daily.sgf) != nil)
 
-        // Built-in Classic Study SGF games all replay legally
+        // Built-in Classic Study SGF games (Go Academy) all replay legally
         let classics = BuiltInClassicGames.records(l10n: L10n(language: .en))
-        #expect(classics.count == 3)
+        #expect(classics.count == GoAcademyLibrary.allEntries.count)
         for rec in classics {
             guard let root = SGFParser.parse(rec.sgf) else {
                 Issue.record("Failed to parse classic game \(rec.blackName)")
                 continue
             }
-            var state = GoBoardState(size: rec.boardSize, komi: rec.komi, handicap: rec.handicap)
+            var state = root.initialBoard(size: rec.boardSize, komi: rec.komi, handicap: rec.handicap)
             var node = root.children.first
             var played = 0
             while let cur = node {
@@ -324,19 +324,12 @@ struct StarYiGoEngineTests {
         #expect(GoTermCodex.allEntries.filter { $0.tier == .fighting }.count == 8)
         #expect(GoTermCodex.allEntries.filter { $0.tier == .mastery }.count == 8)
 
-        let classicIds = Set(BuiltInClassicGames.records(l10n: L10n(language: .en)).map(\.id))
-
         for entry in GoTermCodex.allEntries {
             guard let root = SGFParser.parse(entry.demoSGF) else {
                 Issue.record("Failed to parse Codex demo SGF \(entry.id)")
                 continue
             }
-            if let pid = entry.practicePuzzleId {
-                #expect(StarYiIslands.findAnyPuzzle(withId: pid) != nil, "Invalid practicePuzzleId \(pid) in Codex \(entry.id)")
-            }
-            if let cid = entry.practiceClassicId {
-                #expect(classicIds.contains(cid), "Invalid practiceClassicId in Codex \(entry.id)")
-            }
+            #expect(StarYiIslands.findAnyPuzzle(withId: entry.practicePuzzleId) != nil, "Invalid practicePuzzleId \(entry.practicePuzzleId) in Codex \(entry.id)")
 
             var state = GoBoardState(size: entry.demoBoardSize, komi: 0)
             for pt in root.addedBlackPoints { state.setSetupStone(.black, at: pt) }
@@ -361,6 +354,67 @@ struct StarYiGoEngineTests {
                 node = n.children.first
             }
             #expect(steps >= 1, "Codex \(entry.id) demo should have at least 1 move")
+        }
+
+        // 3. Verify all dedicated Codex practice puzzles replay legally and contain a CORRECT leaf
+        for puzzle in GoTermCodex.codexPracticePuzzles {
+            let root = try #require(SGFParser.parse(puzzle.sgf), "Failed to parse Codex puzzle \(puzzle.id)")
+            let initial = puzzle.initialBoardState()
+            for g in initial.allGroups() {
+                #expect(!g.liberties.isEmpty, "Setup group has 0 liberties in Codex puzzle \(puzzle.id)")
+            }
+            #expect(GoPuzzle.firstCorrectMove(from: root) != nil, "Missing firstCorrectMove in Codex puzzle \(puzzle.id)")
+            var foundCorrect = false
+            func walkCodex(_ node: SGFNode, _ state: GoBoardState) {
+                if let c = node.comment?.uppercased(), c.contains("CORRECT") { foundCorrect = true }
+                for ch in node.children {
+                    guard let mv = ch.move else { continue }
+                    guard case .success(let out) = state.applying(action: mv.action, color: mv.color) else {
+                        Issue.record("Illegal move \(mv) in Codex puzzle \(puzzle.id)")
+                        return
+                    }
+                    walkCodex(ch, out.nextState)
+                }
+            }
+            walkCodex(root, initial)
+            #expect(foundCorrect, "Missing CORRECT leaf in Codex puzzle \(puzzle.id)")
+        }
+
+        // 4. Verify all 4 Go Academy halls, 16 entries, highlights, master quizzes & counter-examples replay legally
+        #expect(GoAcademyLibrary.allEntries.count == 16)
+        for hall in AcademyHall.allCases {
+            #expect(!GoAcademyLibrary.entries(in: hall, level: .all).isEmpty, "Academy hall \(hall.rawValue) should not be empty")
+        }
+        #expect(Set(GoAcademyLibrary.allEntries.map(\.id)).count == GoAcademyLibrary.allEntries.count)
+        #expect(Set(GoAcademyLibrary.allEntries.map(\.recordId)).count == GoAcademyLibrary.allEntries.count)
+
+        for entry in GoAcademyLibrary.allEntries {
+            for sgf in [entry.sgfZh, entry.sgfEn, entry.counterExampleSgfZh, entry.counterExampleSgfEn].compactMap({ $0 }) {
+                let root = try #require(SGFParser.parse(sgf), "Failed to parse Academy SGF in \(entry.id)")
+                var state = root.initialBoard(size: entry.boardSize, komi: entry.komi, handicap: 0)
+                var moveCount = 0
+                var node = root.children.first
+                while let n = node {
+                    if let mv = n.move {
+                        guard case .success(let out) = state.applying(action: mv.action, color: mv.color) else {
+                            Issue.record("Illegal move \(mv) in Academy entry \(entry.id)")
+                            break
+                        }
+                        state = out.nextState
+                        moveCount += 1
+                    }
+                    node = n.children.first
+                }
+                #expect(moveCount >= 2, "Academy entry \(entry.id) should have at least 2 moves")
+                if sgf == entry.sgfZh {
+                    for h in entry.highlights {
+                        #expect(h.moveIndex >= 1 && h.moveIndex <= moveCount, "Out-of-bounds highlight in \(entry.id)")
+                    }
+                    if let quiz = entry.quizStep {
+                        #expect(quiz.beforeMoveIndex >= 0 && quiz.beforeMoveIndex < moveCount, "Out-of-bounds quizStep in \(entry.id)")
+                    }
+                }
+            }
         }
     }
 
@@ -914,6 +968,393 @@ struct StarYiGoEngineTests {
         for lead in report.scoreLeadHistory {
             #expect(abs(lead) < 25.0, "Opening score lead should stay realistic, got \(lead)")
         }
+    }
+
+    @Test func aiAvoidsThrowingIntoSealedTwoLineOpponentStrip() async {
+        var state = GoBoardState(size: 9, komi: 6.5)
+        // Black builds a solid vertical wall on col 2, completely sealing cols 0..1 (a 2-line dead strip).
+        for r in 0..<9 {
+            state.grid[state.index(row: r, col: 2)] = .black
+        }
+        // White has a group on col 6 with open playable territory on cols 3..8.
+        for r in 2...6 {
+            state.grid[state.index(row: r, col: 6)] = .white
+        }
+        state.moveCount = 24
+        state.currentTurn = .white
+        // Simulate Black having just played on the wall (e.g. finishing a capture inside cols 0..1).
+        state.lastMove = .place(BoardPoint(row: 4, col: 2))
+
+        let groups = state.allGroups()
+        var groupIndexAt = Array(repeating: -1, count: 81)
+        for (gIdx, g) in groups.enumerated() {
+            for s in g.stones { groupIndexAt[s] = gIdx }
+        }
+        let mask = LocalMCTSGoEngine.computeHopelessOpponentPocketMask(
+            state: state,
+            for: .white,
+            groups: groups,
+            groupIndexAt: groupIndexAt
+        )
+        for r in 0..<9 {
+            for c in 0...1 {
+                #expect(mask[state.index(row: r, col: c)], "Cell (\(r),\(c)) in sealed 2-line Black strip should be marked hopeless for White")
+            }
+        }
+        #expect(!mask[state.index(row: 4, col: 4)], "Open center cell should not be marked hopeless")
+
+        let engine = LocalMCTSGoEngine()
+        for level in [AIDifficulty.sprout, .rabbit, .fox] {
+            let move = await engine.selectMove(for: state, color: .white, level: level, ruleSet: .standard)
+            if case .place(let pt) = move {
+                #expect(pt.col > 1, "\(level) AI should not throw a stone into sealed 2-line Black strip, got \(pt)")
+            }
+        }
+    }
+
+    @Test func aiPassesWhenOnlyHopelessOpponentPocketAndOwnTerritoryRemain() async {
+        var state = GoBoardState(size: 9, komi: 6.5)
+        // Cols 0..1: empty 2-line strip sealed by Black on cols 2..4.
+        for r in 0..<9 {
+            state.grid[state.index(row: r, col: 2)] = .black
+            state.grid[state.index(row: r, col: 3)] = .black
+            state.grid[state.index(row: r, col: 4)] = .black
+            // Cols 5..7: White solid block with two secure single-point eyes on col 8 (rows 1 and 7).
+            state.grid[state.index(row: r, col: 5)] = .white
+            state.grid[state.index(row: r, col: 6)] = .white
+            state.grid[state.index(row: r, col: 7)] = .white
+            if r != 1 && r != 7 {
+                state.grid[state.index(row: r, col: 8)] = .white
+            }
+        }
+        state.moveCount = 60
+        state.currentTurn = .white
+        state.lastMove = .place(BoardPoint(row: 4, col: 2))
+
+        let engine = LocalMCTSGoEngine()
+        let move = await engine.selectMove(for: state, color: .white, level: .rabbit, ruleSet: .standard)
+        #expect(move == .pass, "AI should pass when only sealed opponent dead strip and own eyes remain, got \(move)")
+    }
+
+    @Test func aiStillAllowsPlayingInsidePocketWhenOpponentWallIsInDanger() {
+        var state = GoBoardState(size: 9, komi: 6.5)
+        // Small 2-point Black eye on (0,0) and (0,1), surrounded by Black on (1,0), (1,1), (0,2),
+        // and White completely enclosing the outside so Black's wall has only 2 liberties!
+        state.grid[state.index(row: 1, col: 0)] = .black
+        state.grid[state.index(row: 1, col: 1)] = .black
+        state.grid[state.index(row: 0, col: 2)] = .black
+        state.grid[state.index(row: 1, col: 2)] = .black
+
+        state.grid[state.index(row: 2, col: 0)] = .white
+        state.grid[state.index(row: 2, col: 1)] = .white
+        state.grid[state.index(row: 2, col: 2)] = .white
+        state.grid[state.index(row: 0, col: 3)] = .white
+        state.grid[state.index(row: 1, col: 3)] = .white
+
+        let groups = state.allGroups()
+        var groupIndexAt = Array(repeating: -1, count: 81)
+        for (gIdx, g) in groups.enumerated() {
+            for s in g.stones { groupIndexAt[s] = gIdx }
+        }
+        let mask = LocalMCTSGoEngine.computeHopelessOpponentPocketMask(
+            state: state,
+            for: .white,
+            groups: groups,
+            groupIndexAt: groupIndexAt
+        )
+        #expect(!mask[state.index(row: 0, col: 0)], "Pocket bordering a 2-liberty opponent group must NOT be suppressed")
+        #expect(!mask[state.index(row: 0, col: 1)], "Pocket bordering a 2-liberty opponent group must NOT be suppressed")
+    }
+
+    @Test func hopelessPocketMaskSuppressesSealed2x6PocketEvenWithTrappedOwnStone() {
+        var state = GoBoardState(size: 9, komi: 6.5)
+        // Black seals rows 0..5, cols 0..1 (a 2x6 pocket) with solid walls on col 2 and row 6.
+        for r in 0...6 {
+            state.grid[state.index(row: r, col: 2)] = .black
+        }
+        state.grid[state.index(row: 6, col: 0)] = .black
+        state.grid[state.index(row: 6, col: 1)] = .black
+        // One doomed White remnant stone sits inside the 2x6 pocket at (2, 0).
+        state.grid[state.index(row: 2, col: 0)] = .white
+        // White has an open living group elsewhere so the board isn't trivial.
+        for r in 2...6 {
+            state.grid[state.index(row: r, col: 6)] = .white
+        }
+
+        let groups = state.allGroups()
+        var groupIndexAt = Array(repeating: -1, count: 81)
+        for (gIdx, g) in groups.enumerated() {
+            for s in g.stones { groupIndexAt[s] = gIdx }
+        }
+        let mask = LocalMCTSGoEngine.computeHopelessOpponentPocketMask(
+            state: state,
+            for: .white,
+            groups: groups,
+            groupIndexAt: groupIndexAt
+        )
+
+        for r in 0...5 {
+            for c in 0...1 {
+                let idx = state.index(row: r, col: c)
+                if state.grid[idx] == nil {
+                    #expect(mask[idx], "Empty cell (\(r),\(c)) in sealed 2x6 pocket with trapped stone should be marked hopeless")
+                }
+            }
+        }
+        #expect(!mask[state.index(row: 4, col: 4)], "Open center cell must not be marked hopeless")
+    }
+
+    @Test func aiResignationEvaluatorRespectsGuardsAndConsecutiveStreak() {
+        var state = GoBoardState(size: 9, komi: 5.5)
+        state.moveCount = 30
+        // Settled 9x9 ownership map from White (AI)'s perspective: Black solidly owns 52 points, White owns 24, 5 unsettled.
+        var settledOwnership = Array(repeating: 0.0, count: 81)
+        for i in 0..<52 { settledOwnership[i] = -0.95 }
+        for i in 52..<76 { settledOwnership[i] = 0.90 }
+
+        // 1. Capture Race and Tactical Scenarios never trigger resignation.
+        let capEval = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            ruleSet: .captureRace(target: 3),
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 5,
+            neuralWinrateForAI: 0.005,
+            neuralScoreLeadForAI: -40.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(!capEval.shouldOfferResign)
+
+        let scenarioEval = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            ruleSet: .standard,
+            isTacticalScenario: true,
+            consecutiveHopelessTurns: 5,
+            neuralWinrateForAI: 0.005,
+            neuralScoreLeadForAI: -40.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(!scenarioEval.shouldOfferResign)
+
+        // 2. Neural winrate + score lead + settled ownership requires 3 consecutive hopeless turns
+        //    when AI still has a non-pass move to play.
+        let samplePlace = MoveAction.place(BoardPoint(row: 4, col: 4))
+        let turn1 = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .panda,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 0,
+            chosenAction: samplePlace,
+            neuralWinrateForAI: 0.02,
+            neuralScoreLeadForAI: -22.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(turn1.isPositionHopeless)
+        #expect(!turn1.shouldOfferResign)
+        #expect(turn1.nextConsecutiveHopelessTurns == 1)
+
+        let turn2 = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .panda,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: turn1.nextConsecutiveHopelessTurns,
+            chosenAction: samplePlace,
+            neuralWinrateForAI: 0.02,
+            neuralScoreLeadForAI: -22.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(!turn2.shouldOfferResign)
+        #expect(turn2.nextConsecutiveHopelessTurns == 2)
+
+        let turn3 = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .panda,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: turn2.nextConsecutiveHopelessTurns,
+            chosenAction: samplePlace,
+            neuralWinrateForAI: 0.02,
+            neuralScoreLeadForAI: -22.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(turn3.shouldOfferResign)
+        #expect(turn3.estimatedHumanLead == 22.0)
+
+        // 3. Move exhaustion (.pass) with large deficit offers resignation immediately,
+        //    while close endgame (.pass with small deficit) does NOT resign.
+        let exhaustedLoss = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .panda,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 0,
+            chosenAction: .pass,
+            neuralWinrateForAI: 0.01,
+            neuralScoreLeadForAI: -18.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(exhaustedLoss.shouldOfferResign, "Passing while hopelessly behind should offer resignation immediately")
+
+        let closeEndgamePass = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .panda,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 0,
+            chosenAction: .pass,
+            neuralWinrateForAI: 0.04,
+            neuralScoreLeadForAI: -5.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(!closeEndgamePass.shouldOfferResign, "Close endgame pass should go to normal scoring, not resign")
+
+        // 4. Recent major capture (>= 5 stones on 9x9) accelerates resignation on settled board to streak 2.
+        let majorCaptureTurn2 = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .panda,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 1,
+            chosenAction: samplePlace,
+            recentMaxCaptureAgainstAI: 6,
+            neuralWinrateForAI: 0.02,
+            neuralScoreLeadForAI: -22.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(majorCaptureTurn2.shouldOfferResign, "Major capture on a settled board should accelerate resignation to 2 consecutive turns")
+
+        // 5. Rank calibration: 15K Fox is more resilient than 3D Phoenix at the same borderline deficit.
+        let foxEval = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .fox,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 2,
+            chosenAction: samplePlace,
+            neuralWinrateForAI: 0.02,
+            neuralScoreLeadForAI: -14.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        let phoenixEval = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            difficulty: .phoenix,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 2,
+            chosenAction: samplePlace,
+            neuralWinrateForAI: 0.02,
+            neuralScoreLeadForAI: -14.0,
+            neuralOwnershipForAI: settledOwnership
+        )
+        #expect(!foxEval.shouldOfferResign, "15K Fox should keep fighting at -14 pts on 9x9")
+        #expect(phoenixEval.shouldOfferResign, "3D Phoenix should offer resignation at -14 pts on settled 9x9")
+    }
+
+    @Test func aiDoesNotResignEarlyWhenTopHalfOf19x19BoardIsStillWideOpen() {
+        var state = GoBoardState(size: 19, komi: 7.5)
+        state.moveCount = 121
+        // Mirror the real midgame scenario: Black dominates a big fight in the bottom half,
+        // while the top half (rows 0..8) is still wide open with only scattered stones.
+        for r in 11...17 {
+            for c in 2...14 {
+                if (r + c) % 2 == 0 {
+                    state.grid[state.index(row: r, col: c)] = .black
+                }
+            }
+        }
+        // Scattered White stones in the bottom and top half
+        state.grid[state.index(row: 12, col: 1)] = .white
+        state.grid[state.index(row: 13, col: 1)] = .white
+        state.grid[state.index(row: 5, col: 1)] = .white
+        state.grid[state.index(row: 4, col: 15)] = .white
+        state.grid[state.index(row: 3, col: 3)] = .black
+        state.grid[state.index(row: 3, col: 9)] = .black
+
+        let eval = AIResignationEvaluator.evaluate(
+            state: state,
+            aiColor: .white,
+            ruleSet: .standard,
+            isTacticalScenario: false,
+            consecutiveHopelessTurns: 5
+        )
+        #expect(eval.unsettledRatio > 0.30, "Top half of 19x19 board should be recognized as wide-open unsettled space")
+        #expect(eval.solidOpponentPoints < AIResignationEvaluator.guaranteedMajorityThreshold(for: 19))
+        #expect(!eval.shouldOfferResign, "AI must NOT offer resignation while half the 19x19 board is still open for a comeback")
+    }
+
+    @Test @MainActor func gameViewModelSoftResignAcceptAndDeclineFlow() async throws {
+        final class ResigningStubAI: GoAIEngine, @unchecked Sendable {
+            let engineName = "ResigningStubAI"
+            func selectMove(for state: GoBoardState, color: StoneColor, level: AIDifficulty) async -> MoveAction { .resign }
+            func selectMoveDecision(
+                for state: GoBoardState,
+                color: StoneColor,
+                level: AIDifficulty,
+                ruleSet: GameRuleSet,
+                coachingStyle: AICoachingStyle
+            ) async -> AIMoveDecision {
+                AIMoveDecision(action: .resign, moverWinrate: 0.01, moverScoreLead: -35.0)
+            }
+            func suggestMoves(for state: GoBoardState, color: StoneColor, count: Int) async -> [MoveSuggestion] { [] }
+            func analyzePosition(for state: GoBoardState, color: StoneColor, maxVariations: Int) async -> PositionAnalysis {
+                PositionAnalysis(blackWinrate: 0.99, blackScoreLead: 35.0, topVariations: [])
+            }
+            func analyzeGame(initialState: GoBoardState, moves: [GoMove]) async -> GameReviewReport {
+                GameReviewReport(initialBlackWinrate: 0.5, winrateHistory: [0.5], scoreLeadHistory: [0.0], reviewedMoves: [])
+            }
+        }
+
+        // Case 1: Human accepts AI resignation -> Black wins by resignation (B+R).
+        let vmAccept = GameViewModel(
+            boardSize: .nine,
+            mode: .vsAI(difficulty: .rabbit, playerColor: .black),
+            aiEngine: ResigningStubAI(),
+            simulateHumanThinkingPacing: false
+        )
+        vmAccept.handleBoardTap(at: BoardPoint(row: 4, col: 4))
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        #expect(vmAccept.showAIResignOfferDialog, "AI should present soft resign offer dialog")
+        #expect(!vmAccept.isGameOver, "Game should wait for player choice before ending")
+
+        vmAccept.acceptAIResignation()
+        #expect(!vmAccept.showAIResignOfferDialog)
+        #expect(vmAccept.isGameOver)
+        #expect(vmAccept.gameResult?.winner == .black)
+        #expect(vmAccept.gameResult?.byResignation == true)
+        #expect(vmAccept.gameResult?.sgfResultString == "B+R")
+
+        // Case 2: Human declines AI resignation -> game continues and AI does not re-offer.
+        let vmDecline = GameViewModel(
+            boardSize: .nine,
+            mode: .vsAI(difficulty: .rabbit, playerColor: .black),
+            aiEngine: ResigningStubAI(),
+            simulateHumanThinkingPacing: false
+        )
+        vmDecline.handleBoardTap(at: BoardPoint(row: 4, col: 4))
+        try await Task.sleep(nanoseconds: 450_000_000)
+        #expect(vmDecline.showAIResignOfferDialog)
+
+        vmDecline.declineAIResignation()
+        #expect(!vmDecline.showAIResignOfferDialog)
+        #expect(!vmDecline.isGameOver)
+        #expect(vmDecline.moves.last?.action == .pass)
+
+        // Next human move triggers AI again; AI must NOT pop up resign dialog a second time.
+        vmDecline.handleBoardTap(at: BoardPoint(row: 2, col: 2))
+        try await Task.sleep(nanoseconds: 450_000_000)
+        #expect(!vmDecline.showAIResignOfferDialog, "AI must not nag with resign offer after player chose Keep Playing")
     }
 }
 

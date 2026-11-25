@@ -94,11 +94,7 @@ enum VoiceCue: String, CaseIterable, Sendable {
 final class SoundAndHapticsManager {
     static let shared = SoundAndHapticsManager()
 
-    var soundEnabled: Bool = true {
-        didSet {
-            if !soundEnabled { stopVoice() }
-        }
-    }
+    var soundEnabled: Bool = true
     var bgmEnabled: Bool = true {
         didSet { updateBGMPlayback() }
     }
@@ -305,7 +301,7 @@ final class SoundAndHapticsManager {
     // MARK: - Nintendo-Style Kid Voice Encouragement
 
     /// Plays a bundled kid-voice encouragement clip for the active language pack.
-    /// Automatically respects `soundEnabled`, `voiceEnabled`, and `zenDojoMode`, ducks BGM,
+    /// Automatically respects `voiceEnabled` and `zenDojoMode`, ducks BGM,
     /// avoids repeating the same variant twice in a row, and cleanly interrupts overlapping clips.
     func playVoice(
         _ cue: VoiceCue,
@@ -313,7 +309,7 @@ final class SoundAndHapticsManager {
         cooldown: TimeInterval = 0.0,
         interrupt: Bool = true
     ) {
-        guard soundEnabled, voiceEnabled, !zenDojoMode else { return }
+        guard voiceEnabled, !zenDojoMode else { return }
         // Avoid talking over VoiceOver accessibility announcements
         guard !UIAccessibility.isVoiceOverRunning else { return }
         let now = ProcessInfo.processInfo.systemUptime

@@ -184,6 +184,11 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
             if candidates[0].heuristicScore < 1.8 && state.moveCount > (state.size * state.size * 2) / 3 && readiness.isReadyToScore {
                 return .pass
             }
+            // If every remaining legal move has negative value (e.g. only hopeless opponent pockets,
+            // own secure territory fills, or self-atari left), pass instead of throwing dead stones.
+            if candidates[0].heuristicScore < 0.0 && state.moveCount >= state.size {
+                return .pass
+            }
         }
 
         // Immediate winning capture in Capture Race
@@ -375,7 +380,8 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
             coachingStyle: coachingStyle,
             enableLadderReading: enableLadder
         )
-        let shortlist = Array(cands.prefix(maxChildren))
+        let viableCands = cands.filter { $0.heuristicScore >= -5.0 }
+        let shortlist = Array((viableCands.isEmpty ? cands : viableCands).prefix(maxChildren))
         guard !shortlist.isEmpty else {
             node.isExpanded = true
             return
@@ -818,6 +824,14 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         for (gIdx, g) in groups.enumerated() {
             for s in g.stones { groupIndexAt[s] = gIdx }
         }
+        let hopelessOpponentPocketMask: [Bool] = isCaptureRace
+            ? Array(repeating: false, count: total)
+            : Self.computeHopelessOpponentPocketMask(
+                state: state,
+                for: color,
+                groups: groups,
+                groupIndexAt: groupIndexAt
+            )
 
         let lastPt: BoardPoint? = {
             if case .place(let p) = state.lastMove { return p }
@@ -891,9 +905,9 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
             }
 
             // 3. Self-atari penalty (unless snapback!)
+            var isSnapback = false
             if newLibs == 1 && capturedCount == 0 {
                 // Check if this is a clever Snapback (倒扑) sacrifice!
-                var isSnapback = false
                 if newSize == 1, let singleLib = newOwnGroup?.liberties.first {
                     let libPt = outcome.nextState.point(for: singleLib)
                     if case .success(let oppCap) = outcome.nextState.applying(action: .place(libPt), color: opponent) {
@@ -960,48 +974,56 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
                 score += GoTacticalReader.localShapeBonus(state: state, point: pt, color: color)
             }
 
+            let isHopelessOpponentInvasion = !isCaptureRace
+                && hopelessOpponentPocketMask[idx]
+                && capturedCount == 0
+                && putInAtariStones == 0
+                && !isSnapback
+
             // 8. Authentic Opening & Corner Joseki Book
-            if isOpening {
-                let bookBonus = GoTacticalReader.openingBookBonus(state: state, point: pt, color: color)
-                if bookBonus > 0 {
-                    score += bookBonus
-                    if primaryReason == .territory { primaryReason = .corner }
-                } else if starSet.contains(pt) && isLocalAreaEmpty(state: state, center: pt, radius: size <= 7 ? 1 : 2) {
-                    score += 20.0
-                    if primaryReason == .territory { primaryReason = .corner }
+            if !isHopelessOpponentInvasion {
+                if isOpening {
+                    let bookBonus = GoTacticalReader.openingBookBonus(state: state, point: pt, color: color)
+                    if bookBonus > 0 {
+                        score += bookBonus
+                        if primaryReason == .territory { primaryReason = .corner }
+                    } else if starSet.contains(pt) && isLocalAreaEmpty(state: state, center: pt, radius: size <= 7 ? 1 : 2) {
+                        score += 20.0
+                        if primaryReason == .territory { primaryReason = .corner }
+                    }
+
+                    let distRow = min(pt.row, size - 1 - pt.row)
+                    let distCol = min(pt.col, size - 1 - pt.col)
+                    let minEdge = min(distRow, distCol)
+                    let idealLine = size <= 5 ? 1 : (size <= 9 ? 2 : 3)
+                    if minEdge == idealLine || minEdge == max(1, idealLine - 1) {
+                        score += 7.5
+                    } else if minEdge == 0 {
+                        score -= 16.0
+                    } else if minEdge == 1 && size >= 9 {
+                        score -= 6.0
+                    }
+                } else {
+                    let distRow = min(pt.row, size - 1 - pt.row)
+                    let distCol = min(pt.col, size - 1 - pt.col)
+                    let minEdge = min(distRow, distCol)
+                    if minEdge == 0 && adjacentFriendlyGroups.isEmpty && adjacentOpponentGroups.isEmpty {
+                        score -= 12.0
+                    } else if minEdge >= 1 && minEdge <= 4 {
+                        score += 3.0
+                    }
                 }
 
-                let distRow = min(pt.row, size - 1 - pt.row)
-                let distCol = min(pt.col, size - 1 - pt.col)
-                let minEdge = min(distRow, distCol)
-                let idealLine = size <= 5 ? 1 : (size <= 9 ? 2 : 3)
-                if minEdge == idealLine || minEdge == max(1, idealLine - 1) {
-                    score += 7.5
-                } else if minEdge == 0 {
-                    score -= 16.0
-                } else if minEdge == 1 && size >= 9 {
-                    score -= 6.0
-                }
-            } else {
-                let distRow = min(pt.row, size - 1 - pt.row)
-                let distCol = min(pt.col, size - 1 - pt.col)
-                let minEdge = min(distRow, distCol)
-                if minEdge == 0 && adjacentFriendlyGroups.isEmpty && adjacentOpponentGroups.isEmpty {
-                    score -= 12.0
-                } else if minEdge >= 1 && minEdge <= 4 {
-                    score += 3.0
-                }
-            }
-
-            // 9. Local fighting responsiveness
-            if let lastPt {
-                let manhattan = abs(pt.row - lastPt.row) + abs(pt.col - lastPt.col)
-                if manhattan == 1 {
-                    score += isCaptureRace ? 12.0 : 8.5
-                } else if manhattan == 2 {
-                    score += isCaptureRace ? 8.0 : 6.0
-                } else if manhattan == 3 {
-                    score += 3.0
+                // 9. Local fighting responsiveness
+                if let lastPt {
+                    let manhattan = abs(pt.row - lastPt.row) + abs(pt.col - lastPt.col)
+                    if manhattan == 1 {
+                        score += isCaptureRace ? 12.0 : 8.5
+                    } else if manhattan == 2 {
+                        score += isCaptureRace ? 8.0 : 6.0
+                    } else if manhattan == 3 {
+                        score += 3.0
+                    }
                 }
             }
 
@@ -1010,6 +1032,11 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
                 && isLikelyOwnTerritory(state: state, row: pt.row, col: pt.col, color: color)
                 && adjacentOpponentGroups.isEmpty {
                 score -= 14.0
+            }
+
+            // 11. Avoid pointless throws into sealed, unlivable opponent pockets (e.g. 1-2 line dead strips)
+            if isHopelessOpponentInvasion {
+                score -= (newLibs <= 2 ? 42.0 : 34.0)
             }
 
             candidates.append(Candidate(index: idx, point: pt, heuristicScore: score, reason: primaryReason))
@@ -1116,6 +1143,94 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
             }
         }
         return true
+    }
+
+    /// Identifies empty intersections inside connected pockets that are completely enclosed by
+    /// healthy opponent groups (all bordering opponent groups have >= 3 liberties) and are too
+    /// narrow (width <= 2 lines, e.g. 2x6) or too small (<= 8 points) to realistically make two eyes —
+    /// even if a few trapped, non-living friendly stones still sit inside the pocket.
+    static func computeHopelessOpponentPocketMask(
+        state: GoBoardState,
+        for color: StoneColor,
+        groups: [GoGroup],
+        groupIndexAt: [Int]
+    ) -> [Bool] {
+        let size = state.size
+        let total = size * size
+        var mask = Array(repeating: false, count: total)
+        var visited = Array(repeating: false, count: total)
+        let opponent = color.opposite
+        let aliveStones = state.twoEyeAliveAnalysis().aliveStoneIndices
+
+        var queue: [Int] = []
+        queue.reserveCapacity(32)
+        var emptyCells: [Int] = []
+        emptyCells.reserveCapacity(32)
+
+        for start in 0..<total where state.grid[start] == nil && !visited[start] {
+            queue.removeAll(keepingCapacity: true)
+            emptyCells.removeAll(keepingCapacity: true)
+            visited[start] = true
+            queue.append(start)
+
+            var touchesAliveOwn = false
+            var touchesOpponent = false
+            var allOppGroupsHealthy = true
+            var totalPocketCells = 0
+            var minR = size, maxR = -1, minC = size, maxC = -1
+
+            var head = 0
+            while head < queue.count {
+                let curr = queue[head]
+                head += 1
+                totalPocketCells += 1
+                if state.grid[curr] == nil {
+                    emptyCells.append(curr)
+                }
+
+                let r = curr / size
+                let c = curr % size
+                if r < minR { minR = r }
+                if r > maxR { maxR = r }
+                if c < minC { minC = c }
+                if c > maxC { maxC = c }
+
+                for n in state.neighbors(of: curr) {
+                    if let stone = state.grid[n] {
+                        if stone == color {
+                            if aliveStones.contains(n) {
+                                touchesAliveOwn = true
+                            } else if !visited[n] {
+                                visited[n] = true
+                                queue.append(n)
+                            }
+                        } else if stone == opponent {
+                            touchesOpponent = true
+                            let gIdx = groupIndexAt[n]
+                            if gIdx >= 0 && groups[gIdx].liberties.count < 3 {
+                                allOppGroupsHealthy = false
+                            }
+                        }
+                    } else if !visited[n] {
+                        visited[n] = true
+                        queue.append(n)
+                    }
+                }
+            }
+
+            guard !touchesAliveOwn, touchesOpponent, allOppGroupsHealthy else { continue }
+
+            let spanR = maxR - minR + 1
+            let spanC = maxC - minC + 1
+            let minSpan = min(spanR, spanC)
+            if minSpan <= 2 || totalPocketCells <= 8 {
+                for cell in emptyCells {
+                    mask[cell] = true
+                }
+            }
+        }
+
+        return mask
     }
 
     private func isLikelyOwnTerritory(state: GoBoardState, row: Int, col: Int, color: StoneColor) -> Bool {

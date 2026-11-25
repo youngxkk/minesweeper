@@ -12,7 +12,7 @@ enum AppRoute: Hashable {
     case playGame
     case puzzleHub(initialMistakesOnly: Bool)
     case islandDetail(islandId: String)
-    case puzzlePlay(puzzleId: String, isDailyChallenge: Bool = false, isStarterBootcamp: Bool = false)
+    case puzzlePlay(puzzleId: String, isDailyChallenge: Bool = false, isStarterBootcamp: Bool = false, forceRandomTransform: Bool = false, dailyDojoQueueIds: [String] = [])
     case puzzleGauntlet(nodeId: String, masteryTier: StageMasteryTier = .normal)
     case puzzleRush
     case seaSkipGate(seaId: String)
@@ -21,8 +21,10 @@ enum AppRoute: Hashable {
     case archive
     case reviewGame(recordId: UUID)
     case trainingDojo
+    case dailyDojo
+    case dailyKnowledge
     case josekiTrainer(courseId: String, campaignNodeId: String? = nil)
-    case miniDrill(kind: MiniDrillKind, campaignNodeId: String? = nil, startOffset: Int = 0, targetCount: Int? = nil)
+    case miniDrill(kind: MiniDrillKind, campaignNodeId: String? = nil, startOffset: Int = 0, targetCount: Int? = nil, isDailyDojoWarmup: Bool = false)
     case rankExamHall
     case rankExamTest(tier: Int)
     case passport
@@ -59,7 +61,110 @@ final class AppState: ObservableObject {
     }
 
     var isDailyChallengeClearedToday: Bool {
-        profile.dailyChallengeCompletedStamp == StorageService.todayStamp()
+        let today = StorageService.todayStamp()
+        return (profile.dailyDojoDateStamp == today && profile.dailyDojoStampClaimedToday)
+            || profile.dailyChallengeCompletedStamp == today
+    }
+
+    var dailyDojoStationsDoneCount: Int {
+        let plan = todayDailyDojoPlan()
+        return DailyDojoSystem.completedStationsCount(profile: profile, plan: plan)
+    }
+
+    var isDailyDojoReadyToStamp: Bool {
+        let today = StorageService.todayStamp()
+        let plan = todayDailyDojoPlan()
+        let done = DailyDojoSystem.completedStationsCount(profile: profile, plan: plan)
+        return done >= 3 && !(profile.dailyDojoDateStamp == today && profile.dailyDojoStampClaimedToday)
+    }
+
+    func todayDailyDojoPlan(for date: Date = Date()) -> DailyDojoPlan {
+        DailyDojoSystem.plan(
+            for: date,
+            certifiedRankTier: profile.certifiedRankTier,
+            mistakeBookIds: puzzleProgress.mistakeBookIds,
+            puzzleLookup: { [weak self] id in self?.findAnyPuzzle(withId: id) }
+        )
+    }
+
+    private func ensureTodayDailyDojoStamp(_ p: inout UserProfile) {
+        let today = StorageService.todayStamp()
+        if p.dailyDojoDateStamp != today {
+            p.dailyDojoDateStamp = today
+            p.dailyDojoWarmupDone = false
+            p.dailyDojoCoreSolvedIds = []
+            p.dailyDojoCoreFirstTryIds = []
+            p.dailyDojoKnowledgeDone = false
+            p.dailyDojoStampClaimedToday = p.dailyDojoStampDates.contains(today)
+        }
+    }
+
+    func recordDailyDojoWarmupCompleted(score: Int, total: Int) {
+        updateProfile { p in
+            ensureTodayDailyDojoStamp(&p)
+            let isFirst = !p.dailyDojoWarmupDone
+            p.dailyDojoWarmupDone = true
+            if isFirst {
+                p.starCoins += 15
+                p.xp += 20
+                advanceDailyStreak(&p)
+            }
+        }
+    }
+
+    func recordDailyDojoCorePuzzleSolved(puzzleId: String, firstTry: Bool) {
+        updateProfile { p in
+            ensureTodayDailyDojoStamp(&p)
+            p.dailyDojoCoreSolvedIds.insert(puzzleId)
+            if firstTry {
+                p.dailyDojoCoreFirstTryIds.insert(puzzleId)
+            }
+        }
+    }
+
+    func recordDailyDojoKnowledgeCompleted(academyEntryId: String, themeCodexId: String) {
+        updateProfile { p in
+            ensureTodayDailyDojoStamp(&p)
+            let isFirst = !p.dailyDojoKnowledgeDone
+            p.dailyDojoKnowledgeDone = true
+            p.studiedAcademyIds.insert(academyEntryId)
+            if isFirst {
+                p.starCoins += 15
+                p.xp += 20
+                advanceDailyStreak(&p)
+            }
+        }
+        _ = unlockCodexTerm(themeCodexId, showToast: true)
+    }
+
+    @discardableResult
+    func claimDailyDojoStamp() -> (coinsEarned: Int, newMilestones: [StampMilestone]) {
+        let today = StorageService.todayStamp()
+        if profile.dailyDojoDateStamp == today && profile.dailyDojoStampClaimedToday {
+            return (0, [])
+        }
+        var totalCoins = 40
+        var newlyReached: [StampMilestone] = []
+        updateProfile { p in
+            ensureTodayDailyDojoStamp(&p)
+            p.dailyDojoStampClaimedToday = true
+            p.dailyDojoStampDates.insert(today)
+            p.dailyChallengeCompletedStamp = today
+            let totalStamps = p.dailyDojoStampDates.count
+            for milestone in DailyDojoSystem.stampMilestones where totalStamps >= milestone.requiredStamps {
+                if !p.claimedStampMilestones.contains(milestone.requiredStamps) {
+                    p.claimedStampMilestones.insert(milestone.requiredStamps)
+                    totalCoins += milestone.coinReward
+                    newlyReached.append(milestone)
+                }
+            }
+            p.starCoins += totalCoins
+            p.xp += 50
+            advanceDailyStreak(&p)
+        }
+        SoundAndHapticsManager.shared.playVictoryFanfare()
+        SoundAndHapticsManager.shared.playVoice(.victory, delay: 0.20)
+        return (totalCoins, newlyReached)
     }
 
     init(storage: StorageService = .shared) {
@@ -235,9 +340,9 @@ final class AppState: ObservableObject {
             } else {
                 SoundAndHapticsManager.shared.setMusicMood(.match)
             }
-        case .puzzlePlay, .puzzleGauntlet, .puzzleRush, .seaSkipGate, .srsGhostBuster, .reviewGame, .josekiTrainer, .miniDrill, .rankExamTest:
+        case .puzzlePlay, .puzzleGauntlet, .puzzleRush, .seaSkipGate, .srsGhostBuster, .reviewGame, .josekiTrainer, .miniDrill, .rankExamTest, .dailyKnowledge:
             SoundAndHapticsManager.shared.setMusicMood(.match)
-        case .puzzleHub, .islandDetail, .codex, .archive, .trainingDojo, .rankExamHall, .passport, .photoJudge:
+        case .puzzleHub, .islandDetail, .codex, .archive, .trainingDojo, .dailyDojo, .rankExamHall, .passport, .photoJudge:
             SoundAndHapticsManager.shared.setMusicMood(.island)
         }
     }
@@ -558,9 +663,6 @@ final class AppState: ObservableObject {
             p.xp += (existing == 0 ? 25 : 8) + (isDailyChallenge ? 20 : 0)
             p.starCoins += coinReward
             advanceDailyStreak(&p)
-            if isDailyChallenge {
-                p.dailyChallengeCompletedStamp = StorageService.todayStamp()
-            }
         }
 
         if let termId = GoTermCodex.codexTermId(forPuzzleId: puzzleId) {
@@ -762,8 +864,14 @@ final class AppState: ObservableObject {
         if let custom = puzzleProgress.customMistakePuzzles.first(where: { $0.id == id }) {
             return custom
         }
+        if let codex = GoTermCodex.codexPracticePuzzles.first(where: { $0.id == id }) {
+            return codex
+        }
         if let dojo = DojoPuzzleBank.findPuzzle(withId: id) {
             return dojo
+        }
+        if let pack = PuzzlePackLoader.findPuzzle(withId: id) {
+            return pack
         }
         return StarYiIslands.findAnyPuzzle(withId: id)
     }
@@ -892,6 +1000,19 @@ final class AppState: ObservableObject {
 
     func loadPhotoJudgeImage(for record: PhotoJudgeRecord) -> UIImage? {
         storage.loadPhotoJudgeImage(filename: record.imageFilename)
+    }
+
+    /// Marks an Academy entry as "已赏析 ★" and awards Star Coins + XP the first time!
+    @discardableResult
+    func markAcademyStudied(_ entryId: String) -> Bool {
+        guard !profile.studiedAcademyIds.contains(entryId) else { return false }
+        updateProfile { p in
+            p.studiedAcademyIds.insert(entryId)
+            p.starCoins += 10
+            p.xp += 15
+        }
+        SoundAndHapticsManager.shared.playSuccess()
+        return true
     }
 
     func findGameRecord(id: UUID) -> SavedGameRecord? {

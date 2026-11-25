@@ -25,7 +25,7 @@ mkdir -p "$old/$project/xcshareddata/xcschemes"
 cp "$project/xcshareddata/xcschemes/StarYiGoUpgrade.xcscheme" "$old/$project/xcshareddata/xcschemes/"
 
 # Always create a fresh simulator. An upgrade test must never touch player data.
-model="${UPGRADE_SIM_MODEL:-com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro}"
+model="${UPGRADE_SIM_MODEL:-com.apple.CoreSimulator.SimDeviceType.iPad-A16}"
 runtime="${UPGRADE_SIM_RUNTIME:-com.apple.CoreSimulator.SimRuntime.iOS-26-5}"
 device="$(xcrun simctl create 'StarYiGo Upgrade Test' "$model" "$runtime")"
 trap 'xcrun simctl delete "$device"' EXIT

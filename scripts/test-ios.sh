@@ -23,7 +23,7 @@ case "$mode" in
   *) echo "Usage: $0 [pr|ai|device]" >&2; exit 2 ;;
 esac
 
-# Pick a compatible iPhone from the newest available iOS runtime.
+# Pick a compatible iPad from the newest available iOS runtime.
 destination="${TEST_DESTINATION:-}"
 if [[ -z "$destination" ]]; then
   sdk_version=$(xcrun --sdk iphonesimulator --show-sdk-version)
@@ -32,18 +32,27 @@ import json, sys
 runtimes = json.load(sys.stdin)["devices"]
 sdk_version = tuple(map(int, sys.argv[1].split(".")))
 ios = "com.apple.CoreSimulator.SimRuntime.iOS-"
+def parse_ios_version(runtime):
+    if not runtime.startswith(ios):
+        return None
+    parts = runtime.removeprefix(ios).split("-")
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    return tuple(map(int, parts))
+
 versions = sorted(
-    (tuple(map(int, runtime.removeprefix(ios).split("-"))), devices)
-    for runtime, devices in runtimes.items() if runtime.startswith(ios)
+    (ver, devices)
+    for runtime, devices in runtimes.items()
+    if (ver := parse_ios_version(runtime)) is not None
 )
 for version, devices in reversed(versions):
     if not (17, 6) <= version <= sdk_version:
         continue
     for device in devices:
-        if device["name"].startswith("iPhone"):
+        if device["name"].startswith("iPad"):
             print(device["udid"])
             sys.exit(0)
-sys.exit("No compatible iPhone simulator found for the selected Xcode")
+sys.exit("No compatible iPad simulator found for the selected Xcode")
 ' "$sdk_version")
   destination="platform=iOS Simulator,id=$device"
 fi

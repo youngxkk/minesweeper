@@ -59,13 +59,15 @@ struct RootNavigationView: View {
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
-                        case .puzzlePlay(let puzzleId, let isDailyChallenge, let isStarterBootcamp):
+                        case .puzzlePlay(let puzzleId, let isDailyChallenge, let isStarterBootcamp, let forceRandomTransform, let dailyDojoQueueIds):
                             if let puzzle = appState.findAnyPuzzle(withId: puzzleId) {
                                 PuzzlePlayView(
                                     puzzle: puzzle,
                                     appState: appState,
                                     isDailyChallenge: isDailyChallenge,
-                                    isStarterBootcamp: isStarterBootcamp
+                                    isStarterBootcamp: isStarterBootcamp,
+                                    forceRandomTransform: forceRandomTransform,
+                                    dailyDojoQueueIds: dailyDojoQueueIds
                                 )
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
@@ -121,18 +123,23 @@ struct RootNavigationView: View {
                             }
                         case .trainingDojo:
                             TrainingDojoView()
+                        case .dailyDojo:
+                            DailyDojoView()
+                        case .dailyKnowledge:
+                            DailyKnowledgeQuizView()
                         case .josekiTrainer(let courseId, let campaignNodeId):
                             if let course = JosekiLibrary.course(withId: courseId) {
                                 JosekiTrainerView(course: course, campaignNodeId: campaignNodeId)
                             } else {
                                 TrainingDojoView()
                             }
-                        case .miniDrill(let kind, let campaignNodeId, let startOffset, let targetCount):
+                        case .miniDrill(let kind, let campaignNodeId, let startOffset, let targetCount, let isDailyDojoWarmup):
                             GoMiniDrillPlayView(
                                 kind: kind,
                                 campaignNodeId: campaignNodeId,
                                 startOffset: startOffset,
-                                targetQuestionCount: targetCount
+                                targetQuestionCount: targetCount,
+                                isDailyDojoWarmup: isDailyDojoWarmup
                             )
                         case .rankExamHall:
                             RankExamHallView()

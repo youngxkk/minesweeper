@@ -14,6 +14,8 @@ struct PuzzleHubView: View {
     let initialMistakesOnly: Bool
 
     @State private var scrolledSeaId: String? = "sea-1"
+    @State private var programmaticScrollNonce: Int = 0
+    @State private var programmaticScrollAnimated: Bool = true
     @State private var hasInitializedScroll: Bool = false
     @State private var showMistakesDrawer: Bool = false
     @State private var showPlacementSheet: Bool = false
@@ -48,210 +50,230 @@ struct PuzzleHubView: View {
     }
 
     var body: some View {
-        ZStack {
-            // MARK: - Continuous 4-Sea Panoramic Scrollable World
-            GeometryReader { fullGeo in
-                let pageW = fullGeo.size.width
-                let pageH = fullGeo.size.height
-                let totalW = worldWidth(pageW: pageW, pageH: pageH)
+        ScrollViewReader { scrollProxy in
+            ZStack {
+                // MARK: - Continuous 4-Sea Panoramic Scrollable World
+                GeometryReader { fullGeo in
+                    let pageW = fullGeo.size.width
+                    let pageH = fullGeo.size.height
+                    let totalW = worldWidth(pageW: pageW, pageH: pageH)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    // Each sea retains a full-width scroll target; seas are separated by an open-ocean strait.
-                    HStack(spacing: seaGapW(pageW: pageW, pageH: pageH)) {
-                        ForEach(seas) { sea in
-                            Color.clear
-                                .frame(width: pageW, height: pageH)
-                                .id(sea.id)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        // Each sea retains a full-width scroll target; seas are separated by an open-ocean strait.
+                        HStack(spacing: seaGapW(pageW: pageW, pageH: pageH)) {
+                            ForEach(seas) { sea in
+                                Color.clear
+                                    .frame(width: pageW, height: pageH)
+                                    .id(sea.id)
+                            }
                         }
-                    }
-                    .scrollTargetLayout()
-                    .background(alignment: .leading) {
-                        seaMapArtwork(pageW: pageW, pageH: pageH, totalW: totalW)
-                    }
-                    .overlay(alignment: .leading) {
-                        ZStack(alignment: .leading) {
-                            // Sailing and cross-sea flight routes
-                            Canvas { context, _ in
-                                let progress = appState.puzzleProgress
-                                let allIslands = StarYiCampaign.allIslands
+                        .scrollTargetLayout()
+                        .background(alignment: .leading) {
+                            seaMapArtwork(pageW: pageW, pageH: pageH, totalW: totalW)
+                        }
+                        .overlay(alignment: .leading) {
+                            ZStack(alignment: .leading) {
+                                // Sailing and cross-sea flight routes
+                                Canvas { context, _ in
+                                    let progress = appState.puzzleProgress
+                                    let allIslands = StarYiCampaign.allIslands
 
-                                for (source, destination) in zip(allIslands, allIslands.dropFirst()) {
-                                    let isCrossSea = (source.seaId != destination.seaId)
-                                    let isOpen = StarYiCampaign.unlockState(for: destination, progress: progress).isUnlocked
-                                    let route = worldRoute(from: source, to: destination, pageW: pageW, pageH: pageH)
+                                    for (source, destination) in zip(allIslands, allIslands.dropFirst()) {
+                                        let isCrossSea = (source.seaId != destination.seaId)
+                                        let isOpen = StarYiCampaign.unlockState(for: destination, progress: progress).isUnlocked
+                                        let route = worldRoute(from: source, to: destination, pageW: pageW, pageH: pageH)
 
-                                    if isCrossSea {
-                                        let dash: [CGFloat] = isOpen ? [10, 8] : [6, 12]
-                                        context.stroke(
-                                            route,
-                                            with: .color(isOpen ? AppTheme.skyRim.opacity(0.45) : AppTheme.inkPrimary.opacity(0.40)),
-                                            style: StrokeStyle(lineWidth: isOpen ? 12 : 7, lineCap: .round, dash: dash)
-                                        )
-                                        context.stroke(
-                                            route,
-                                            with: .linearGradient(
-                                                Gradient(colors: isOpen ? [AppTheme.sunTop, Color.white, AppTheme.skyTop] : [Color.white.opacity(0.85), Color.white.opacity(0.65)]),
-                                                startPoint: worldPoint(for: source, pageW: pageW, pageH: pageH),
-                                                endPoint: worldPoint(for: destination, pageW: pageW, pageH: pageH)
-                                            ),
-                                            style: StrokeStyle(lineWidth: isOpen ? 6.5 : 3.5, lineCap: .round, dash: dash)
-                                        )
-                                    } else {
-                                        let dash: [CGFloat] = isOpen ? [] : [5, 12]
-                                        context.stroke(
-                                            route,
-                                            with: .color(isOpen ? AppTheme.sunRim.opacity(0.70) : AppTheme.inkPrimary.opacity(0.52)),
-                                            style: StrokeStyle(lineWidth: isOpen ? 7 : 5.5, lineCap: .round, dash: dash)
-                                        )
-                                        context.stroke(
-                                            route,
-                                            with: .color(isOpen ? Color(red: 1, green: 0.93, blue: 0.67) : .white.opacity(0.92)),
-                                            style: StrokeStyle(lineWidth: isOpen ? 4.5 : 3, lineCap: .round, dash: dash)
-                                        )
+                                        if isCrossSea {
+                                            let dash: [CGFloat] = isOpen ? [10, 8] : [6, 12]
+                                            context.stroke(
+                                                route,
+                                                with: .color(isOpen ? AppTheme.skyRim.opacity(0.45) : AppTheme.inkPrimary.opacity(0.40)),
+                                                style: StrokeStyle(lineWidth: isOpen ? 12 : 7, lineCap: .round, dash: dash)
+                                            )
+                                            context.stroke(
+                                                route,
+                                                with: .linearGradient(
+                                                    Gradient(colors: isOpen ? [AppTheme.sunTop, Color.white, AppTheme.skyTop] : [Color.white.opacity(0.85), Color.white.opacity(0.65)]),
+                                                    startPoint: worldPoint(for: source, pageW: pageW, pageH: pageH),
+                                                    endPoint: worldPoint(for: destination, pageW: pageW, pageH: pageH)
+                                                ),
+                                                style: StrokeStyle(lineWidth: isOpen ? 6.5 : 3.5, lineCap: .round, dash: dash)
+                                            )
+                                        } else {
+                                            let dash: [CGFloat] = isOpen ? [] : [5, 12]
+                                            context.stroke(
+                                                route,
+                                                with: .color(isOpen ? AppTheme.sunRim.opacity(0.70) : AppTheme.inkPrimary.opacity(0.52)),
+                                                style: StrokeStyle(lineWidth: isOpen ? 7 : 5.5, lineCap: .round, dash: dash)
+                                            )
+                                            context.stroke(
+                                                route,
+                                                with: .color(isOpen ? Color(red: 1, green: 0.93, blue: 0.67) : .white.opacity(0.92)),
+                                                style: StrokeStyle(lineWidth: isOpen ? 4.5 : 3, lineCap: .round, dash: dash)
+                                            )
+                                        }
                                     }
+                                }
+                                .frame(width: totalW, height: pageH)
+                                .allowsHitTesting(false)
+
+                                // Cross-sea flight entrances
+                                ForEach(0..<(seas.count - 1), id: \.self) { idx in
+                                    let nextSea = seas[idx + 1]
+                                    crossSeaFlightPin(to: nextSea, scrollProxy: scrollProxy)
+                                        .offset(y: flightBob ? -5 : 5)
+                                        .visualEffect { content, proxy in
+                                            let frame = proxy.frame(in: .scrollView(axis: .horizontal))
+                                            let clearance = min(frame.minX, pageW - frame.maxX)
+                                            return content.opacity(Double(min(1, max(0, clearance / 24))))
+                                        }
+                                        .position(x: straitCenterX(beforeSea: idx + 1, pageW: pageW, pageH: pageH), y: pageH * 0.44)
+                                }
+
+                                // Full-island elliptical hit zones covering the entire illustrated island artwork
+                                ForEach(StarYiCampaign.allIslands) { island in
+                                    let hitFrame = islandHitArea(for: island, pageW: pageW, pageH: pageH)
+                                    Button {
+                                        handleIslandTap(island)
+                                    } label: {
+                                        Color.clear
+                                            .frame(width: hitFrame.width, height: hitFrame.height)
+                                            .contentShape(Ellipse())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .position(x: hitFrame.midX, y: hitFrame.midY)
+                                    .accessibilityHidden(true)
+                                }
+
+                                // Interactive island pins
+                                ForEach(StarYiCampaign.allIslands) { island in
+                                    islandMapPin(island)
+                                        .phaseAnimator([0, 1, 2], trigger: newlyUnlockedIslandIDs.contains(island.id)) { pin, phase in
+                                            pin.scaleEffect(!reduceMotion && phase == 1 ? 1.13 : 1)
+                                        } animation: { _ in
+                                            .spring(response: 0.29, dampingFraction: 0.72)
+                                        }
+                                        .scaleEffect(pageH < 470 ? 0.78 : 1)
+                                        .position(worldPoint(for: island, pageW: pageW, pageH: pageH))
                                 }
                             }
                             .frame(width: totalW, height: pageH)
-                            .allowsHitTesting(false)
-
-                            // Cross-sea flight entrances
-                            ForEach(0..<(seas.count - 1), id: \.self) { idx in
-                                let nextSea = seas[idx + 1]
-                                crossSeaFlightPin(to: nextSea)
-                                    .offset(y: flightBob ? -5 : 5)
-                                    .visualEffect { content, proxy in
-                                        let frame = proxy.frame(in: .scrollView(axis: .horizontal))
-                                        let clearance = min(frame.minX, pageW - frame.maxX)
-                                        return content.opacity(Double(min(1, max(0, clearance / 24))))
-                                    }
-                                    .position(x: straitCenterX(beforeSea: idx + 1, pageW: pageW, pageH: pageH), y: pageH * 0.44)
-                            }
-
-                            // Full-island elliptical hit zones covering the entire illustrated island artwork
-                            ForEach(StarYiCampaign.allIslands) { island in
-                                let hitFrame = islandHitArea(for: island, pageW: pageW, pageH: pageH)
-                                Button {
-                                    handleIslandTap(island)
-                                } label: {
-                                    Color.clear
-                                        .frame(width: hitFrame.width, height: hitFrame.height)
-                                        .contentShape(Ellipse())
-                                }
-                                .buttonStyle(.plain)
-                                .position(x: hitFrame.midX, y: hitFrame.midY)
-                                .accessibilityHidden(true)
-                            }
-
-                            // Interactive island pins
-                            ForEach(StarYiCampaign.allIslands) { island in
-                                islandMapPin(island)
-                                    .phaseAnimator([0, 1, 2], trigger: newlyUnlockedIslandIDs.contains(island.id)) { pin, phase in
-                                        pin.scaleEffect(!reduceMotion && phase == 1 ? 1.13 : 1)
-                                    } animation: { _ in
-                                        .spring(response: 0.29, dampingFraction: 0.72)
-                                    }
-                                    .scaleEffect(pageH < 470 ? 0.78 : 1)
-                                    .position(worldPoint(for: island, pageW: pageW, pageH: pageH))
-                            }
                         }
-                        .frame(width: totalW, height: pageH)
+                    }
+                    .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                    .modifier(
+                        CampaignSeaScrollPositionModifier(
+                            scrolledSeaId: $scrolledSeaId,
+                            scrollNonce: programmaticScrollNonce,
+                            targetX: seaOriginX(activeSeaIndex, pageW: pageW, pageH: pageH),
+                            animated: programmaticScrollAnimated && !reduceMotion
+                        )
+                    )
+                    .frame(width: pageW, height: pageH)
+                }
+                .ignoresSafeArea()
+
+                // MARK: - Floating Left / Right "Fly to Previous / Next Sea" Edge Portals
+                HStack {
+                    if activeSeaIndex > 0 {
+                        edgeFlyButton(targetSea: seas[activeSeaIndex - 1], direction: .previous, scrollProxy: scrollProxy)
+                            .padding(.leading, 12)
+                    }
+                    Spacer()
+                    if activeSeaIndex + 1 < seas.count {
+                        edgeFlyButton(targetSea: seas[activeSeaIndex + 1], direction: .next, scrollProxy: scrollProxy)
+                            .padding(.trailing, 12)
                     }
                 }
-                .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
-                .scrollPosition(id: $scrolledSeaId, anchor: .leading)
-                .frame(width: pageW, height: pageH)
-            }
-            .ignoresSafeArea()
+                .allowsHitTesting(true)
 
-            // MARK: - Floating Left / Right "Fly to Previous / Next Sea" Edge Portals
-            HStack {
-                if activeSeaIndex > 0 {
-                    edgeFlyButton(targetSea: seas[activeSeaIndex - 1], direction: .previous)
-                        .padding(.leading, 12)
-                }
-                Spacer()
-                if activeSeaIndex + 1 < seas.count {
-                    edgeFlyButton(targetSea: seas[activeSeaIndex + 1], direction: .next)
-                        .padding(.trailing, 12)
-                }
-            }
-            .allowsHitTesting(true)
-
-            // MARK: - Top HUD & Bottom Adventure Dock
-            VStack(spacing: verticalSizeClass == .compact ? 4 : 8) {
-                topBar
-                    .padding(.horizontal, 20)
-                    .padding(.top, verticalSizeClass == .compact ? 8 : 12)
-
-                seaCompassStrip
-                    .padding(.horizontal, 20)
-
-                Spacer()
-
-                if showMistakesDrawer {
-                    mistakesDock
+                // MARK: - Top HUD & Bottom Adventure Dock
+                VStack(spacing: verticalSizeClass == .compact ? 4 : 8) {
+                    topBar
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else if let toast = lockedToastMessage {
-                    lockedToastPill(toast)
-                        .padding(.bottom, 24)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else if !isSeaUnlocked {
-                    lockedSeaSkipGateDock
+                        .padding(.top, verticalSizeClass == .compact ? 8 : 12)
+
+                    seaCompassStrip(scrollProxy: scrollProxy)
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
-                } else {
-                    bottomAdventureDock
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
-                }
-            }
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showPlacementSheet) {
-            placementSelectionSheet
-        }
-        .onAppear {
-            if initialMistakesOnly {
-                showMistakesDrawer = true
-            }
-            let freshUnlocks = appState.consumeIslandUnlocks()
-            newlyUnlockedIslandIDs.formUnion(freshUnlocks)
-            if !hasInitializedScroll {
-                hasInitializedScroll = true
-                if let highestUnlocked = seas.last(where: { StarYiCampaign.isSeaUnlocked($0, progress: appState.puzzleProgress) }) {
-                    scrolledSeaId = highestUnlocked.id
-                }
-            } else if let newlyUnlockedSeaId = freshUnlocks
-                .compactMap({ StarYiCampaign.island(withId: $0)?.seaId })
-                .first(where: { $0 != scrolledSeaId }) {
-                scrolledSeaId = newlyUnlockedSeaId
-            }
-            if !reduceMotion {
-                if !activePulse {
-                    withAnimation(.easeInOut(duration: 1.45).repeatForever(autoreverses: true)) {
-                        activePulse = true
-                    }
-                }
-                if !flightBob {
-                    withAnimation(.easeInOut(duration: 1.85).repeatForever(autoreverses: true)) {
-                        flightBob = true
+
+                    Spacer()
+
+                    if showMistakesDrawer {
+                        mistakesDock
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 16)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if let toast = lockedToastMessage {
+                        lockedToastPill(toast)
+                            .padding(.bottom, 24)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else if !isSeaUnlocked {
+                        lockedSeaSkipGateDock
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 16)
+                    } else {
+                        bottomAdventureDock
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 16)
                     }
                 }
             }
-        }
-        .onDisappear {
-            toastDismissTask?.cancel()
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showPlacementSheet) {
+                placementSelectionSheet(scrollProxy: scrollProxy)
+            }
+            .onAppear {
+                if initialMistakesOnly {
+                    showMistakesDrawer = true
+                }
+                let freshUnlocks = appState.consumeIslandUnlocks()
+                newlyUnlockedIslandIDs.formUnion(freshUnlocks)
+                if !hasInitializedScroll {
+                    hasInitializedScroll = true
+                    if let highestUnlocked = seas.last(where: { StarYiCampaign.isSeaUnlocked($0, progress: appState.puzzleProgress) }) {
+                        scrolledSeaId = highestUnlocked.id
+                        programmaticScrollAnimated = false
+                        programmaticScrollNonce += 1
+                        scrollProxy.scrollTo(highestUnlocked.id, anchor: .leading)
+                    }
+                } else if let newlyUnlockedSeaId = freshUnlocks
+                    .compactMap({ StarYiCampaign.island(withId: $0)?.seaId })
+                    .first(where: { $0 != scrolledSeaId }) {
+                    scrolledSeaId = newlyUnlockedSeaId
+                    programmaticScrollAnimated = !reduceMotion
+                    programmaticScrollNonce += 1
+                    scrollProxy.scrollTo(newlyUnlockedSeaId, anchor: .leading)
+                }
+                if !reduceMotion {
+                    if !activePulse {
+                        withAnimation(.easeInOut(duration: 1.45).repeatForever(autoreverses: true)) {
+                            activePulse = true
+                        }
+                    }
+                    if !flightBob {
+                        withAnimation(.easeInOut(duration: 1.85).repeatForever(autoreverses: true)) {
+                            flightBob = true
+                        }
+                    }
+                }
+            }
+            .onDisappear {
+                toastDismissTask?.cancel()
+            }
         }
     }
 
     // MARK: - Smooth Camera Flight Helper
 
-    private func flyToSea(_ sea: CampaignSea) {
+    private func flyToSea(_ sea: CampaignSea, scrollProxy: ScrollViewProxy) {
         SoundAndHapticsManager.shared.playUITap()
-        withAnimation(.spring(response: 0.54, dampingFraction: 0.84)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.54, dampingFraction: 0.84)) {
             scrolledSeaId = sea.id
+            programmaticScrollAnimated = !reduceMotion
+            programmaticScrollNonce += 1
+            if #unavailable(iOS 18.0) {
+                scrollProxy.scrollTo(sea.id, anchor: .leading)
+            }
             showMistakesDrawer = false
             lockedToastMessage = nil
         }
@@ -416,10 +438,10 @@ struct PuzzleHubView: View {
         )
     }
 
-    private func crossSeaFlightPin(to nextSea: CampaignSea) -> some View {
+    private func crossSeaFlightPin(to nextSea: CampaignSea, scrollProxy: ScrollViewProxy) -> some View {
         let unlocked = StarYiCampaign.isSeaUnlocked(nextSea, progress: appState.puzzleProgress)
         return Button {
-            flyToSea(nextSea)
+            flyToSea(nextSea, scrollProxy: scrollProxy)
         } label: {
             VStack(spacing: 3) {
                 ZStack {
@@ -453,13 +475,13 @@ struct PuzzleHubView: View {
 
     private enum EdgeDirection { case previous, next }
 
-    private func edgeFlyButton(targetSea: CampaignSea, direction: EdgeDirection) -> some View {
+    private func edgeFlyButton(targetSea: CampaignSea, direction: EdgeDirection, scrollProxy: ScrollViewProxy) -> some View {
         let unlocked = StarYiCampaign.isSeaUnlocked(targetSea, progress: appState.puzzleProgress)
         let isNext = (direction == .next)
         let pal: GlossyPalette = isNext ? (unlocked ? seaPalette(targetSea.index) : .sun) : .snow
 
         return Button {
-            flyToSea(targetSea)
+            flyToSea(targetSea, scrollProxy: scrollProxy)
         } label: {
             VStack(spacing: 4) {
                 HStack(spacing: 4) {
@@ -587,14 +609,14 @@ struct PuzzleHubView: View {
     }
 
     /// Compact live-syncing mini-compass showing where you are in the 4-Sea ocean chain.
-    private var seaCompassStrip: some View {
+    private func seaCompassStrip(scrollProxy: ScrollViewProxy) -> some View {
         HStack(spacing: 6) {
             ForEach(Array(seas.enumerated()), id: \.element.id) { idx, sea in
                 let isSelected = (sea.index == activeSeaIndex)
                 let unlocked = StarYiCampaign.isSeaUnlocked(sea, progress: appState.puzzleProgress)
 
                 Button {
-                    flyToSea(sea)
+                    flyToSea(sea, scrollProxy: scrollProxy)
                 } label: {
                     HStack(spacing: 5) {
                         Text(unlocked ? sea.emoji : "🔒").font(.system(size: 12.5))
@@ -1079,7 +1101,7 @@ struct PuzzleHubView: View {
 
     // MARK: - Placement Level Picker Sheet
 
-    private var placementSelectionSheet: some View {
+    private func placementSelectionSheet(scrollProxy: ScrollViewProxy) -> some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
@@ -1102,7 +1124,7 @@ struct PuzzleHubView: View {
                             SoundAndHapticsManager.shared.playSuccess()
                             if let sea = StarYiCampaign.sea(withId: opt.targetSeaId) {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                                    flyToSea(sea)
+                                    flyToSea(sea, scrollProxy: scrollProxy)
                                 }
                             }
                         } label: {
@@ -1262,5 +1284,62 @@ struct PuzzleHubView: View {
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
         }
         .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
+    }
+}
+
+/// Bridges SwiftUI's ScrollView programmatic navigation cleanly across iOS 18+ (`ScrollPosition`)
+/// and iOS 17 (`scrollPosition(id:)`), ensuring edge buttons and compass tabs always scroll the map.
+private struct CampaignSeaScrollPositionModifier: ViewModifier {
+    @Binding var scrolledSeaId: String?
+    let scrollNonce: Int
+    let targetX: CGFloat
+    let animated: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.modifier(
+                SeaScrollPositionBridge(
+                    scrolledSeaId: $scrolledSeaId,
+                    scrollNonce: scrollNonce,
+                    targetX: targetX,
+                    animated: animated
+                )
+            )
+        } else {
+            content.scrollPosition(id: $scrolledSeaId, anchor: .leading)
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct SeaScrollPositionBridge: ViewModifier {
+    @Binding var scrolledSeaId: String?
+    let scrollNonce: Int
+    let targetX: CGFloat
+    let animated: Bool
+
+    @State private var position = ScrollPosition(idType: String.self)
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position, anchor: .leading)
+            .onAppear {
+                position.scrollTo(x: targetX)
+            }
+            .onChange(of: position.viewID(type: String.self)) { _, newID in
+                if let newID, newID != scrolledSeaId {
+                    scrolledSeaId = newID
+                }
+            }
+            .onChange(of: scrollNonce) { _, _ in
+                if animated {
+                    withAnimation(.spring(response: 0.54, dampingFraction: 0.84)) {
+                        position.scrollTo(x: targetX)
+                    }
+                } else {
+                    position.scrollTo(x: targetX)
+                }
+            }
     }
 }

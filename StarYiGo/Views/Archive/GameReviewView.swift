@@ -31,8 +31,20 @@ struct GameReviewView: View {
     @State private var savedBlunderMoveNumbers: Set<Int> = []
     @State private var analysisTask: Task<Void, Never>?
 
+    // Academy Interactive Theater State (Highlights, Master Move Quiz, Good vs Mistake, Stamp)
+    @State private var showingCounterExample: Bool = false
+    @State private var isQuizMode: Bool = false
+    @State private var quizFeedback: String? = nil
+    @State private var quizSolved: Bool = false
+    @State private var justStampedBanner: Bool = false
+
     private var l10n: L10n { appState.l10n }
     private var isZh: Bool { l10n.language.isChinese }
+    private var academyEntry: AcademyEntry? { GoAcademyLibrary.entry(forRecordId: record.id) }
+    private var isAcademyStudied: Bool {
+        guard let entry = academyEntry else { return false }
+        return appState.profile.studiedAcademyIds.contains(entry.id)
+    }
     private let topBarHeight: CGFloat = 60
 
     private var activeState: GoBoardState {
@@ -141,8 +153,14 @@ struct GameReviewView: View {
             stopAutoPlay()
             analysisTask?.cancel()
         }
-        .onChange(of: stepIndex) { _, _ in
+        .onChange(of: stepIndex) { _, newValue in
             pvPreviewLabels = [:]
+            if let entry = academyEntry,
+               !showingCounterExample,
+               mainLineStates.count > 1,
+               newValue == mainLineStates.count - 1 {
+                triggerAcademyStamp(entry)
+            }
         }
     }
 
@@ -160,12 +178,16 @@ struct GameReviewView: View {
             aiSuggestions: activeAISuggestions,
             labeledPoints: pvPreviewLabels,
             previewColor: activeState.currentTurn,
-            isInteractive: isVariationMode,
+            isInteractive: isVariationMode || isQuizMode,
             capturedFlashPoints: variationCaptured,
             captureEventID: variationCaptureID,
             libertyBadgeFormat: l10n.t("game.libertiesBadge"),
             koBadgeLabel: l10n.t("board.koBadge"),
             onSelectPoint: { pt in
+                if isQuizMode {
+                    handleQuizTap(at: pt)
+                    return
+                }
                 guard isVariationMode, let current = variationState else { return }
                 if case .success(let outcome) = current.applying(action: .place(pt), color: current.currentTurn) {
                     variationState = outcome.nextState
@@ -232,6 +254,11 @@ struct GameReviewView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .warmCard(cornerRadius: 22, padding: 13)
+
+            // Academy Interactive Strip: Stamp + Good vs Mistake + Highlights + Guess Master Move
+            if let entry = academyEntry {
+                academyInteractiveSection(entry: entry)
+            }
 
             // P1: Interactive Winrate Curve Chart (Tap to jump to any move!)
             if let report = reviewReport {
@@ -636,12 +663,256 @@ struct GameReviewView: View {
         autoPlayTask = nil
     }
 
+    // MARK: - Academy Interactive Theater Helpers
+
+    @ViewBuilder
+    private func academyInteractiveSection(entry: AcademyEntry) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // 1. Stamp + Good vs Mistake Toggle Row
+            HStack(spacing: 8) {
+                if isAcademyStudied {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 12.5, weight: .black))
+                        Text(justStampedBanner
+                             ? l10n.localized(zh: "已赏析 ★ +10🪙", en: "Studied ★ +10🪙", ja: "鑑賞済 ★ +10🪙", ko: "감상 완료 ★ +10🪙", zhHant: "已賞析 ★ +10🪙")
+                             : l10n.localized(zh: "已赏析 ★", en: "Studied ★", ja: "鑑賞済 ★", ko: "감상 완료 ★", zhHant: "已賞析 ★"))
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                    }
+                    .foregroundColor(AppTheme.sunBottom)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(AppTheme.softGoldBg))
+                } else {
+                    Button {
+                        triggerAcademyStamp(entry)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "star.circle.fill")
+                                .font(.system(size: 12.5, weight: .black))
+                            Text(l10n.localized(zh: "已看懂！盖章 +10🪙", en: "Stamp Studied +10🪙", ja: "理解した！+10🪙", ko: "이해 완료! +10🪙", zhHant: "已看懂！蓋章 +10🪙"))
+                                .font(.system(size: 12, weight: .black, design: .rounded))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                }
+
+                Spacer()
+
+                if let quiz = entry.quizStep, !showingCounterExample {
+                    Button {
+                        stopAutoPlay()
+                        isVariationMode = false
+                        variationState = nil
+                        if isQuizMode {
+                            isQuizMode = false
+                            quizFeedback = nil
+                        } else {
+                            stepIndex = min(max(0, quiz.beforeMoveIndex), max(0, mainLineStates.count - 1))
+                            isQuizMode = true
+                            quizSolved = false
+                            quizFeedback = nil
+                            SoundAndHapticsManager.shared.playUITap()
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: isQuizMode ? "xmark.circle.fill" : "sparkles")
+                                .font(.system(size: 12, weight: .black))
+                            Text(isQuizMode
+                                 ? l10n.localized(zh: "退出猜手", en: "Exit Quiz", ja: "終了", ko: "퀴즈 종료", zhHant: "退出猜手")
+                                 : l10n.localized(zh: "猜大师下一手", en: "Guess Move", ja: "次の一手", ko: "다음 수 퀴즈", zhHant: "猜大師下一手"))
+                                .font(.system(size: 12, weight: .black, design: .rounded))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: isQuizMode ? .coral : .grape, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                }
+            }
+
+            // 2. Good vs Mistake One-Tap Comparison (for 棋理十诀 / 奇局)
+            if entry.hasCounterExample {
+                HStack(spacing: 8) {
+                    Button {
+                        if showingCounterExample {
+                            stopAutoPlay()
+                            isQuizMode = false
+                            isVariationMode = false
+                            showingCounterExample = false
+                            loadMainLineFromSGF()
+                            SoundAndHapticsManager.shared.playUITap()
+                        }
+                    } label: {
+                        Text(l10n.localized(zh: "✅ 正着演示", en: "✅ Good Move", ja: "✅ 正解", ko: "✅ 정수", zhHant: "✅ 正著演示"))
+                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .foregroundColor(!showingCounterExample ? .white : AppTheme.mintBottom)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(!showingCounterExample ? AppTheme.mintBottom : AppTheme.mintTop.opacity(0.14)))
+                    }
+                    .tactileButton(scale: 0.96, sound: false)
+
+                    Button {
+                        if !showingCounterExample {
+                            stopAutoPlay()
+                            isQuizMode = false
+                            isVariationMode = false
+                            showingCounterExample = true
+                            loadMainLineFromSGF()
+                            SoundAndHapticsManager.shared.playUITap()
+                        }
+                    } label: {
+                        Text(l10n.localized(zh: "❌ 贪心/错着对比", en: "❌ Mistake Demo", ja: "❌ 失敗例", ko: "❌ 실수 비교", zhHant: "❌ 貪心/錯著對比"))
+                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .foregroundColor(showingCounterExample ? .white : AppTheme.coralBottom)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(showingCounterExample ? AppTheme.coralBottom : AppTheme.coralTop.opacity(0.14)))
+                    }
+                    .tactileButton(scale: 0.96, sound: false)
+                }
+            }
+
+            // 3. Master Move Quiz Prompt Card
+            if isQuizMode, let quiz = entry.quizStep {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "hand.point.up.left.fill")
+                            .font(.system(size: 13, weight: .black))
+                            .foregroundColor(AppTheme.grapeBottom)
+                        Text(l10n.localized(zh: "猜大师下一手 · 直接点击棋盘！", en: "Guess the Master's Move — Tap the Board!", ja: "次の一手・盤面をタップ！", ko: "다음 수 맞히기 · 바둑판을 탭하세요!", zhHant: "猜大師下一手 · 直接點擊棋盤！"))
+                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .foregroundColor(AppTheme.grapeBottom)
+                    }
+                    Text(quiz.prompt(l10n))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let feedback = quizFeedback {
+                        Text(feedback)
+                            .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                            .foregroundColor(quizSolved ? AppTheme.mintBottom : AppTheme.coralBottom)
+                    }
+
+                    if !quizSolved {
+                        Button {
+                            revealQuizAnswer(quiz: quiz)
+                        } label: {
+                            Text(l10n.localized(zh: "揭晓大师一手 →", en: "Reveal Master's Move →", ja: "正解を見る →", ko: "정답 보기 →", zhHant: "揭曉大師一手 →"))
+                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .foregroundColor(AppTheme.skyBottom)
+                        }
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(AppTheme.grapeTop.opacity(0.10))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(AppTheme.grapeTop.opacity(0.35), lineWidth: 1.5))
+                )
+            }
+
+            // 4. Clickable Highlight Jump Pills
+            if !entry.highlights.isEmpty && !showingCounterExample {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 7) {
+                        ForEach(entry.highlights) { h in
+                            let clamped = min(max(0, h.moveIndex), max(0, mainLineStates.count - 1))
+                            let isHere = stepIndex == clamped && !isQuizMode
+                            Button {
+                                stopAutoPlay()
+                                isQuizMode = false
+                                isVariationMode = false
+                                stepIndex = clamped
+                                SoundAndHapticsManager.shared.playGridTick()
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "bookmark.fill")
+                                        .font(.system(size: 10, weight: .black))
+                                    Text("\(h.label(l10n)) (#\(clamped))")
+                                        .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                }
+                                .foregroundColor(isHere ? .white : AppTheme.inkPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Capsule().fill(isHere ? AppTheme.skyBottom : AppTheme.canvasBackground))
+                            }
+                            .tactileButton(scale: 0.95, sound: false)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .warmCard(cornerRadius: 22, padding: 12)
+    }
+
+    private func triggerAcademyStamp(_ entry: AcademyEntry) {
+        if appState.markAcademyStudied(entry.id) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                justStampedBanner = true
+            }
+        }
+    }
+
+    private func handleQuizTap(at point: BoardPoint) {
+        guard let entry = academyEntry,
+              let quiz = entry.quizStep,
+              quiz.beforeMoveIndex >= 0,
+              quiz.beforeMoveIndex < mainLineMoves.count else { return }
+
+        let targetMove = mainLineMoves[quiz.beforeMoveIndex]
+        if case .place(let expectedPt) = targetMove.action, expectedPt == point {
+            quizSolved = true
+            isQuizMode = false
+            stepIndex = min(quiz.beforeMoveIndex + 1, mainLineStates.count - 1)
+            quizFeedback = l10n.localized(
+                zh: "🎉 太棒了！你和大师想到一块去了！",
+                en: "🎉 Spot on! You found the exact master move!",
+                ja: "🎉 大正解！名人の一手と完全一致です！",
+                ko: "🎉 정답! 고수의 한 수와 정확히 일치해요!",
+                zhHant: "🎉 太棒了！你和大師想到一塊去了！"
+            )
+            SoundAndHapticsManager.shared.playSuccess()
+            triggerAcademyStamp(entry)
+        } else {
+            quizFeedback = l10n.localized(
+                zh: "思路不错，再仔细看看棋盘要点，或点下方「揭晓大师一手」！",
+                en: "Nice try! Look closely at the vital point, or tap Reveal below.",
+                ja: "惜しい！急所をもう一度探すか、下の正解を見てみましょう。",
+                ko: "아쉬워요! 급소를 다시 찾아보거나 아래 정답 보기를 눌러보세요.",
+                zhHant: "思路不錯，再仔細看看棋盤要點，或點下方「揭曉大師一手」！"
+            )
+            SoundAndHapticsManager.shared.playWrong()
+        }
+    }
+
+    private func revealQuizAnswer(quiz: AcademyQuizStep) {
+        isQuizMode = false
+        quizFeedback = nil
+        stepIndex = min(quiz.beforeMoveIndex + 1, mainLineStates.count - 1)
+        SoundAndHapticsManager.shared.playStonePlace()
+    }
+
     private func loadMainLineFromSGF() {
         var states: [GoBoardState] = []
         var moves: [GoMove] = []
         var comments: [String?] = []
 
-        if let root = SGFParser.parse(record.sgf) {
+        let activeSGF: String
+        if showingCounterExample, let counter = academyEntry?.counterExampleSgf(l10n) {
+            activeSGF = counter
+        } else {
+            activeSGF = record.sgf
+        }
+
+        if let root = SGFParser.parse(activeSGF) {
             let initial = root.initialBoard(size: record.boardSize, komi: record.komi, handicap: record.handicap)
             states.append(initial)
             comments.append(root.comment)
