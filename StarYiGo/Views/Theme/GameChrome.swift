@@ -321,11 +321,12 @@ struct GameCircleButton: View {
     }
 }
 
-/// Playful glossy Nintendo floating capsule title banner.
+/// Playful glossy Nintendo floating capsule title banner with a unified height across all screens,
+/// regardless of whether a subtitle is present.
 struct GameTitleCrest: View {
     let title: String
     var subtitle: String? = nil
-    var minHeight: CGFloat? = nil
+    var minHeight: CGFloat = AppTheme.titleCrestHeight
 
     var body: some View {
         HStack(spacing: 10) {
@@ -340,7 +341,7 @@ struct GameTitleCrest: View {
                     .font(.system(size: 17, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(1)
-                if let subtitle {
+                if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.skyBottom)
@@ -355,7 +356,7 @@ struct GameTitleCrest: View {
                 )
         }
         .padding(.horizontal, 22)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .frame(minHeight: minHeight)
         .background(
             Capsule()

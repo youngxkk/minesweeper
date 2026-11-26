@@ -11,6 +11,7 @@ extension EnvironmentValues {
 
 enum AppTheme {
     static let buttonFaceHeight: CGFloat = 51
+    static let titleCrestHeight: CGFloat = 56
     static let boardActionFaceHeight: CGFloat = 60
 
     // Crisp, bright, modern Nintendo Switch Sports / Mario Party surface palette

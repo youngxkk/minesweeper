@@ -651,7 +651,7 @@ struct GamePlayView: View {
                         showActionsMenu.toggle()
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
+                    Image(systemName: "circle.grid.3x3.fill")
                         .font(.system(size: 18, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
@@ -787,7 +787,7 @@ struct GamePlayView: View {
 
     private var soundToggleButton: some View {
         let isOn = appState.settings.soundEnabled
-        let palette: GlossyPalette = isOn ? .sky : .snow
+        let palette: GlossyPalette = .snow
 
         return Button {
             let nextValue = !appState.settings.soundEnabled
@@ -803,7 +803,7 @@ struct GamePlayView: View {
         } label: {
             Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
                 .font(.system(size: 17, weight: .black))
-                .foregroundColor(isOn ? .white : AppTheme.inkSecondary.opacity(0.75))
+                .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
                 .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
                 .background(
                     ZStack {
@@ -829,7 +829,7 @@ struct GamePlayView: View {
 
     private var voiceToggleButton: some View {
         let isOn = appState.settings.voiceEnabled
-        let palette: GlossyPalette = isOn ? .sky : .snow
+        let palette: GlossyPalette = .snow
 
         return Button {
             SoundAndHapticsManager.shared.playUITap(weight: .light)
@@ -843,7 +843,7 @@ struct GamePlayView: View {
             ZStack {
                 Image(systemName: "person.wave.2.fill")
                     .font(.system(size: 17, weight: .black))
-                    .foregroundColor(isOn ? .white : AppTheme.inkSecondary.opacity(0.75))
+                    .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
 
                 if !isOn {
                     Capsule()
@@ -1506,8 +1506,7 @@ struct GamePlayView: View {
     }
 
     private var deadStoneConfirmationDock: some View {
-        let isZh = l10n.language.isChinese
-        return VStack(spacing: 9) {
+        VStack(spacing: 9) {
             HStack(spacing: 8) {
                 Image(systemName: "hand.tap.fill")
                     .foregroundColor(AppTheme.coralBottom)
@@ -1525,7 +1524,11 @@ struct GamePlayView: View {
                     Button {
                         viewModel.switchScoringRule(rule)
                     } label: {
-                        Text(rule == .chinese ? (isZh ? "中国数子法" : "Chinese Area") : (isZh ? "日韩数目法" : "Japanese Terr."))
+                        Text(
+                            rule == .chinese
+                            ? l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국 규칙", zhHant: "中國數子法")
+                            : l10n.localized(zh: "日韩数目法", en: "Japanese Terr.", ja: "日本・韓国ルール", ko: "한·일 규칙", zhHant: "日韓數目法")
+                        )
                             .font(.system(size: 11, weight: .black, design: .rounded))
                             .foregroundColor(selected ? .white : AppTheme.inkSecondary)
                             .padding(.horizontal, 10)
@@ -1550,7 +1553,7 @@ struct GamePlayView: View {
                     HStack(spacing: 3) {
                         Image(systemName: "sparkles")
                             .font(.system(size: 10, weight: .black))
-                        Text(viewModel.activeCountingPocketLabel ?? (isZh ? "逐块点地" : "Animate"))
+                        Text(viewModel.activeCountingPocketLabel ?? l10n.localized(zh: "逐块点地", en: "Animate", ja: "順番に計算", ko: "구역별 계가", zhHant: "逐塊點地"))
                             .font(.system(size: 10.5, weight: .black, design: .rounded))
                     }
                     .foregroundColor(AppTheme.sunBottom)
@@ -1578,18 +1581,20 @@ struct GamePlayView: View {
                             .foregroundColor(AppTheme.inkSecondary)
                     }
 
-                    Text(
-                        preview.scoringRule == .chinese
-                        ? preview.chineseRuleSummary(isChinese: isZh)
-                        : preview.japaneseRuleSummary(isChinese: isZh)
-                    )
+                    Text(localizedScoreSummary(preview))
                     .font(.system(size: 10.5, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
 
                     if preview.sekiGroupCount > 0 {
-                        Text(isZh ? "🤝 检测到 \(preview.sekiGroupCount) 处双活（自动保护存活）" : "🤝 \(preview.sekiGroupCount) Seki group(s) protected as alive")
+                        Text(l10n.localized(
+                            zh: "🤝 检测到 \(preview.sekiGroupCount) 处双活（自动保护存活）",
+                            en: "🤝 \(preview.sekiGroupCount) Seki group(s) protected as alive",
+                            ja: "🤝 セキを \(preview.sekiGroupCount) 箇所検出（活きとして自動保護）",
+                            ko: "🤝 빅 \(preview.sekiGroupCount)곳 감지 (자동 생존 보호)",
+                            zhHant: "🤝 偵測到 \(preview.sekiGroupCount) 處雙活（自動保護存活）"
+                        ))
                             .font(.system(size: 10.5, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.mintBottom)
                     }
@@ -1603,7 +1608,13 @@ struct GamePlayView: View {
                 Button {
                     viewModel.playOutDispute()
                 } label: {
-                    Text(isZh ? "续下验死活" : "Play Dispute")
+                    Text(l10n.localized(
+                        zh: "续下验死活",
+                        en: "Play Dispute",
+                        ja: "打ち継いで死活確認",
+                        ko: "계속 두어 사활 확인",
+                        zhHant: "續下驗死活"
+                    ))
                         .font(.system(size: 13, weight: .heavy, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
@@ -1625,6 +1636,36 @@ struct GamePlayView: View {
         }
         .padding(14)
         .warmCard(cornerRadius: 24, padding: 0)
+    }
+
+    private func localizedScoreSummary(_ preview: GameResult) -> String {
+        let marginStr = String(format: "%.1f", preview.margin)
+        if preview.scoringRule == .chinese {
+            let baseHalf = Double(preview.boardSize * preview.boardSize) / 2.0
+            let blackThreshold = baseHalf + preview.komi / 2.0
+            let ziStr = GameResult.formatChineseZi(preview.chineseZiMargin)
+            let blackZi = String(format: "%.1f", preview.blackScore)
+            let needZi = String(format: "%.2f", blackThreshold)
+            let ziMarginStr = String(format: "%.2f", preview.chineseZiMargin)
+            return l10n.localized(
+                zh: "数子法 · 黑 \(blackZi) 子（过 \(needZi) 胜）· \(preview.winner == .black ? "黑胜" : "白胜") \(ziStr)",
+                en: "Chinese Area · \(preview.winner == .black ? "Black" : "White") +\(marginStr) pts (\(ziMarginStr) Zi)",
+                ja: "中国ルール · \(preview.winner == .black ? "黒" : "白") +\(marginStr)目（\(ziMarginStr)子）",
+                ko: "중국 규칙 · \(preview.winner == .black ? "흑" : "백") +\(marginStr)집（\(ziMarginStr)자）",
+                zhHant: "數子法 · 黑 \(blackZi) 子（過 \(needZi) 勝）· \(preview.winner == .black ? "黑勝" : "白勝") \(ziStr)"
+            )
+        } else {
+            let bScore = String(format: "%.1f", preview.blackScore)
+            let wScore = String(format: "%.1f", preview.whiteScore)
+            let komiStr = String(format: "%.1f", preview.komi)
+            return l10n.localized(
+                zh: "数目法 · 黑 \(preview.blackTerritory)空+\(preview.blackCaptures)提=\(bScore) · 白 \(preview.whiteTerritory)空+\(preview.whiteCaptures)提+\(komiStr)贴=\(wScore) · \(preview.winner == .black ? "黑胜" : "白胜") \(marginStr) 目",
+                en: "Japanese · B \(preview.blackTerritory)+\(preview.blackCaptures)=\(bScore) · W \(preview.whiteTerritory)+\(preview.whiteCaptures)+\(komiStr)=\(wScore) · \(preview.winner == .black ? "Black" : "White") +\(marginStr) pts",
+                ja: "日本・韓国ルール · 黒 \(preview.blackTerritory)+\(preview.blackCaptures)=\(bScore) · 白 \(preview.whiteTerritory)+\(preview.whiteCaptures)+\(komiStr)=\(wScore) · \(preview.winner == .black ? "黒" : "白") +\(marginStr)目",
+                ko: "한·일 규칙 · 흑 \(preview.blackTerritory)+\(preview.blackCaptures)=\(bScore) · 백 \(preview.whiteTerritory)+\(preview.whiteCaptures)+\(komiStr)=\(wScore) · \(preview.winner == .black ? "흑" : "백") +\(marginStr)집",
+                zhHant: "數目法 · 黑 \(preview.blackTerritory)空+\(preview.blackCaptures)提=\(bScore) · 白 \(preview.whiteTerritory)空+\(preview.whiteCaptures)提+\(komiStr)貼=\(wScore) · \(preview.winner == .black ? "黑勝" : "白勝") \(marginStr) 目"
+            )
+        }
     }
 
     private func companionCard(difficulty: AIDifficulty) -> some View {

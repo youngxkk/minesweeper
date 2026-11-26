@@ -6,8 +6,78 @@
 import CoreML
 import Foundation
 
-/// Real Offline KataGo Neural Engine (g170-b6c96, 6-block 96-channel ResNet, FP16 CoreML MLProgram):
-/// - Encodes bit-exact KataGo V7 features: 22 binary spatial planes `[1, 22, 19, 19]` + 19 global scalars `[1, 19]`.
+/// Selectable offline KataGo CoreML neural network models bundled in the app.
+enum KataGoModelPreset: String, CaseIterable, Codable, Identifiable, Sendable {
+    case b6c96 = "b6c96"
+    case b10c128 = "b10c128"
+    case b18c384nbt = "b18c384nbt"
+
+    var id: String { rawValue }
+
+    /// Default balanced model for all users.
+    static let defaultPreset: KataGoModelPreset = .b10c128
+
+    /// Compiled `.mlmodelc` resource name inside `Resources/Models/`.
+    var resourceName: String {
+        switch self {
+        case .b6c96: return "StarPointKataGo"
+        case .b10c128: return "StarPointKataGo_b10c128"
+        case .b18c384nbt: return "StarPointKataGo_b18c384nbt"
+        }
+    }
+
+    var technicalName: String {
+        switch self {
+        case .b6c96: return "g170-b6c96"
+        case .b10c128: return "kata1-b10c128"
+        case .b18c384nbt: return "kata1-b18c384nbt"
+        }
+    }
+
+    func shortTitle(_ l10n: L10n) -> String {
+        switch self {
+        case .b6c96:
+            return l10n.localized(zh: "轻量 b6", en: "Light b6", ja: "軽量 b6", ko: "경량 b6", zhHant: "輕量 b6")
+        case .b10c128:
+            return l10n.localized(zh: "均衡 b10", en: "Balanced b10", ja: "標準 b10", ko: "균형 b10", zhHant: "均衡 b10")
+        case .b18c384nbt:
+            return l10n.localized(zh: "职业 b18", en: "Pro b18", ja: "プロ b18", ko: "프로 b18", zhHant: "職業 b18")
+        }
+    }
+
+    func summaryText(_ l10n: L10n) -> String {
+        switch self {
+        case .b6c96:
+            return l10n.localized(
+                zh: "KataGo g170-b6c96（极速省电 · 业余 5D 棋力，发热量最低）",
+                en: "KataGo g170-b6c96 (Ultra-fast & cool · Amateur 5D strength)",
+                ja: "KataGo g170-b6c96（超高速・省電力・アマ5段相当）",
+                ko: "KataGo g170-b6c96 (초고속·저전력 · 아마 5단 기력)",
+                zhHant: "KataGo g170-b6c96（極速省電 · 業餘 5D 棋力，發熱量最低）"
+            )
+        case .b10c128:
+            return l10n.localized(
+                zh: "KataGo kata1-b10c128（默认推荐 · 速度与高段死活/官子精度均衡）",
+                en: "KataGo kata1-b10c128 (Default · Great balance of speed and strong reading)",
+                ja: "KataGo kata1-b10c128（標準おすすめ・速度と読み精度の好バランス）",
+                ko: "KataGo kata1-b10c128 (기본 추천 · 속도와 수읽기 정확도의 최적 균형)",
+                zhHant: "KataGo kata1-b10c128（預設推薦 · 速度與高段死活/官子精度均衡）"
+            )
+        case .b18c384nbt:
+            return l10n.localized(
+                zh: "KataGo kata1-b18c384nbt（职业级大模型 · 复杂对杀与复盘最精准，思考稍慢）",
+                en: "KataGo kata1-b18c384nbt (Pro-grade · Deepest reading & review accuracy, slightly slower)",
+                ja: "KataGo kata1-b18c384nbt（プロ級大型モデル・複雑な攻め合いと検討が最高精度）",
+                ko: "KataGo kata1-b18c384nbt (프로급 대형 모델 · 복잡한 수상전·복기 최고 정확도)",
+                zhHant: "KataGo kata1-b18c384nbt（職業級大模型 · 複雜對殺與複盤最精準，思考稍慢）"
+            )
+        }
+    }
+}
+
+/// Real Offline KataGo Neural Engine (multi-model CoreML ANE + PUCT MCTS):
+/// - Supports switching between bundled `g170-b6c96`, `kata1-b10c128` (default), and `kata1-b18c384nbt`.
+/// - Encodes bit-exact KataGo V7/V8 features: 22 binary spatial planes `[1, 22, 19, 19]` + 19 global scalars `[1, 19]`.
 /// - Runs AlphaZero/KataGo PUCT MCTS tree search guided by the neural network's `policy` (362), `value` (3), and `ownership` heads.
 /// - Calibrates 10 distinct authentic Go ranks from 25K (Sprout) through 5D+ (Kirin) so every rank plays at its true strength.
 /// - Cleanly delegates 5x5 starter boards, Capture Race, and themed beginner coaching to `LocalMCTSGoEngine`.
@@ -15,27 +85,44 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
     static let shared = CoreMLGoAIEngine()
 
     private let fallbackEngine = LocalMCTSGoEngine()
-    private let model: MLModel?
+    private let bundle: Bundle
     private let supportedBoardSize: Int
+    private let lock = NSLock()
+    private var _activePreset: KataGoModelPreset = .defaultPreset
+    private var loadedModels: [KataGoModelPreset: MLModel] = [:]
+    private var missingPresets: Set<KataGoModelPreset> = []
+
+    var activeModelPreset: KataGoModelPreset {
+        lock.lock()
+        defer { lock.unlock() }
+        return _activePreset
+    }
+
+    func setActiveModelPreset(_ preset: KataGoModelPreset) {
+        lock.lock()
+        _activePreset = preset
+        lock.unlock()
+    }
 
     var isNeuralModelLoaded: Bool { true }
-    var hasExternalCoreMLWeights: Bool { model != nil }
+    var hasExternalCoreMLWeights: Bool { resolveActiveModel() != nil }
 
     var engineName: String {
-        if model != nil {
-            return "StarYi KataGo g170-b6c96 (CoreML ANE + PUCT MCTS)"
+        if let active = resolveActiveModel() {
+            return "StarYi KataGo \(active.preset.technicalName) (CoreML ANE + PUCT MCTS)"
         }
         return "StarYi Offline Neural Policy-Value + MCTS"
     }
 
     func activeEngineBadge(_ l10n: L10n) -> String {
-        if model != nil {
+        if let active = resolveActiveModel() {
+            let tag = active.preset.rawValue
             return l10n.localized(
-                zh: "🧠 KataGo b6c96 神经引擎在线",
-                en: "🧠 KataGo b6c96 Neural Engine",
-                ja: "🧠 KataGo b6c96 ニューラルAI稼働中",
-                ko: "🧠 KataGo b6c96 신경망 엔진 가동",
-                zhHant: "🧠 KataGo b6c96 神經引擎在線"
+                zh: "🧠 KataGo \(tag) 神经引擎在线",
+                en: "🧠 KataGo \(tag) Neural Engine",
+                ja: "🧠 KataGo \(tag) ニューラルAI稼働中",
+                ko: "🧠 KataGo \(tag) 신경망 엔진 가동",
+                zhHant: "🧠 KataGo \(tag) 神經引擎在線"
             )
         }
         return l10n.localized(
@@ -47,25 +134,64 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         )
     }
 
-    init(bundle: Bundle = .main, supportedBoardSize: Int = 19) {
+    init(bundle: Bundle = .main, supportedBoardSize: Int = 19, initialPreset: KataGoModelPreset = .defaultPreset) {
+        self.bundle = bundle
         self.supportedBoardSize = supportedBoardSize
-        let candidateNames = ["StarPointKataGo", "KataGoPolicyValue", "GoPolicyValueNet"]
-        var loaded: MLModel? = nil
+        self._activePreset = initialPreset
+    }
+
+    /// Loads and caches the specified preset if bundled, returning `nil` if unavailable.
+    func loadModel(for preset: KataGoModelPreset) -> MLModel? {
+        lock.lock()
+        if let cached = loadedModels[preset] {
+            lock.unlock()
+            return cached
+        }
+        if missingPresets.contains(preset) {
+            lock.unlock()
+            return nil
+        }
+        lock.unlock()
+
         let config = MLModelConfiguration()
         config.computeUnits = .all
-
         let subdirectories: [String?] = [nil, "Models", "Resources/Models"]
+        let candidateNames: [String] = (preset == .b6c96)
+            ? [preset.resourceName, "KataGoPolicyValue", "GoPolicyValueNet"]
+            : [preset.resourceName]
+
+        var found: MLModel? = nil
         for name in candidateNames {
             for subdir in subdirectories {
                 if let url = bundle.url(forResource: name, withExtension: "mlmodelc", subdirectory: subdir),
                    let mlModel = try? MLModel(contentsOf: url, configuration: config) {
-                    loaded = mlModel
+                    found = mlModel
                     break
                 }
             }
-            if loaded != nil { break }
+            if found != nil { break }
         }
-        self.model = loaded
+
+        lock.lock()
+        if let found {
+            loadedModels[preset] = found
+        } else {
+            missingPresets.insert(preset)
+        }
+        lock.unlock()
+        return found
+    }
+
+    private func resolveActiveModel() -> (preset: KataGoModelPreset, model: MLModel)? {
+        let preferred = activeModelPreset
+        let order: [KataGoModelPreset] = [preferred, .b10c128, .b6c96, .b18c384nbt]
+        var seen: Set<KataGoModelPreset> = []
+        for preset in order where seen.insert(preset).inserted {
+            if let model = loadModel(for: preset) {
+                return (preset, model)
+            }
+        }
+        return nil
     }
 
     // MARK: - GoAIEngine Protocol
@@ -102,16 +228,16 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         ruleSet: GameRuleSet,
         coachingStyle: AICoachingStyle = .standard
     ) async -> AIMoveDecision {
-        // Use real KataGo b6c96 + PUCT MCTS for standard 7x7..19x19 matches from Deer (12K) up to Kirin (5D)!
+        // Use real KataGo + PUCT MCTS for standard 7x7..19x19 matches from Deer (12K) up to Kirin (5D)!
         // Keep beginner levels (Sprout 25K, Rabbit 20K, Fox 15K), 5x5, Capture Race, and themed drills on LocalMCTSGoEngine.
-        if let model,
+        if let active = resolveActiveModel(),
            !ruleSet.isCaptureRace,
            coachingStyle == .standard,
            state.size >= 7,
            state.size <= supportedBoardSize,
            let profile = rankProfile(for: level) {
             return await Task.detached(priority: .userInitiated) {
-                self.selectKataGoDecisionSync(model: model, state: state, color: color, profile: profile)
+                self.selectKataGoDecisionSync(model: active.model, state: state, color: color, profile: profile)
             }.value
         }
 
@@ -130,9 +256,9 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         color: StoneColor,
         count: Int
     ) async -> [MoveSuggestion] {
-        if let model, state.size >= 7, state.size <= supportedBoardSize {
+        if let active = resolveActiveModel(), state.size >= 7, state.size <= supportedBoardSize {
             let result = await Task.detached(priority: .userInitiated) {
-                self.analyzeWithKataGoSync(model: model, state: state, color: color, playouts: 24, maxVariations: max(2, count))
+                self.analyzeWithKataGoSync(model: active.model, state: state, color: color, playouts: 24, maxVariations: max(2, count))
             }.value
             if !result.topVariations.isEmpty {
                 return result.topVariations.prefix(count).map { v in
@@ -148,9 +274,9 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         color: StoneColor,
         maxVariations: Int
     ) async -> PositionAnalysis {
-        if let model, state.size >= 7, state.size <= supportedBoardSize {
+        if let active = resolveActiveModel(), state.size >= 7, state.size <= supportedBoardSize {
             return await Task.detached(priority: .userInitiated) {
-                self.analyzeWithKataGoSync(model: model, state: state, color: color, playouts: 28, maxVariations: maxVariations)
+                self.analyzeWithKataGoSync(model: active.model, state: state, color: color, playouts: 28, maxVariations: maxVariations)
             }.value
         }
         return await fallbackEngine.analyzePosition(for: state, color: color, maxVariations: maxVariations)
@@ -774,14 +900,14 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         let exactResult = GoScoring.score(state: state, rule: rule, deadStoneIndices: deadStoneIndices)
         let heuristicDead = GoScoring.autoEstimateDeadStones(state: state)
 
-        if let model, state.size >= 7, state.size <= supportedBoardSize {
+        if let active = resolveActiveModel(), state.size >= 7, state.size <= supportedBoardSize {
             return await Task.detached(priority: .userInitiated) {
                 var evalState = state
                 for idx in deadStoneIndices where idx >= 0 && idx < evalState.grid.count {
                     evalState.grid[idx] = nil
                 }
 
-                if let neural = self.evaluateOwnershipSync(model: model, state: evalState) {
+                if let neural = self.evaluateOwnershipSync(model: active.model, state: evalState) {
                     var combinedDead = heuristicDead
                     let s = state.size
                     for idx in 0..<(s * s) {

@@ -1,6 +1,8 @@
 //
 //  GameCenterService.swift
 //  StarYi Go — Kid-Safe Global Leaderboards, Achievements, Dashboard & Turn-Based Friend Match via Apple GameKit
+//  NOTE: v1.0 App Store 上线暂未启用 Game Center（相关调用已在 AppState / GoPassportView / PuzzleRushView 中注释保留），
+//  后续版本开启时请同时在 StarYiGo.entitlements 启用 com.apple.developer.game-center 并在 App Store Connect 配置对应 ID。
 //
 
 import Foundation

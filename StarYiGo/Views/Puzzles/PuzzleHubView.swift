@@ -27,7 +27,6 @@ struct PuzzleHubView: View {
     @State private var toastDismissTask: Task<Void, Never>?
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
     private var seas: [CampaignSea] { StarYiCampaign.allSeas }
 
     private var activeSeaIndex: Int {
@@ -460,8 +459,20 @@ struct PuzzleHubView: View {
                         .font(.system(size: 22))
                 }
                 Text(unlocked
-                     ? (isZh ? "飞往\(shortRegionName(nextSea.index))" : "Fly Area \(nextSea.index + 1)")
-                     : (isZh ? "跳级\(shortRegionName(nextSea.index))" : "Skip Area \(nextSea.index + 1)"))
+                     ? l10n.localized(
+                         zh: "飞往\(shortRegionName(nextSea.index))",
+                         en: "Fly Area \(nextSea.index + 1)",
+                         ja: "\(shortRegionName(nextSea.index))へ飛ぶ",
+                         ko: "\(shortRegionName(nextSea.index)) 이동",
+                         zhHant: "飛往\(shortRegionName(nextSea.index))"
+                     )
+                     : l10n.localized(
+                         zh: "跳级\(shortRegionName(nextSea.index))",
+                         en: "Skip Area \(nextSea.index + 1)",
+                         ja: "\(shortRegionName(nextSea.index))へ飛び級",
+                         ko: "\(shortRegionName(nextSea.index)) 월반",
+                         zhHant: "跳級\(shortRegionName(nextSea.index))"
+                     ))
                     .font(.system(size: 10.5, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
                     .padding(.horizontal, 9)
@@ -499,8 +510,20 @@ struct PuzzleHubView: View {
                 .foregroundColor(isNext ? .white : AppTheme.inkPrimary)
 
                 Text(isNext
-                     ? (isZh ? "飞往\(shortRegionName(targetSea.index))" : "Area \(targetSea.index + 1)")
-                     : (isZh ? shortRegionName(targetSea.index) : "Area \(targetSea.index + 1)"))
+                     ? l10n.localized(
+                         zh: "飞往\(shortRegionName(targetSea.index))",
+                         en: "Area \(targetSea.index + 1)",
+                         ja: "\(shortRegionName(targetSea.index))へ",
+                         ko: "\(shortRegionName(targetSea.index))로",
+                         zhHant: "飛往\(shortRegionName(targetSea.index))"
+                     )
+                     : l10n.localized(
+                         zh: shortRegionName(targetSea.index),
+                         en: "Area \(targetSea.index + 1)",
+                         ja: shortRegionName(targetSea.index),
+                         ko: shortRegionName(targetSea.index),
+                         zhHant: shortRegionName(targetSea.index)
+                     ))
                     .font(.system(size: 10.5, weight: .black, design: .rounded))
                     .foregroundColor(isNext ? .white : AppTheme.inkPrimary)
 
@@ -561,18 +584,6 @@ struct PuzzleHubView: View {
     private var topBarActions: some View {
         HStack(spacing: 10) {
             Button {
-                showPlacementSheet = true
-                SoundAndHapticsManager.shared.playUITap()
-            } label: {
-                topBarLabel(isZh ? "选棋力" : "Level", systemImage: "safari.fill")
-                    .font(.system(size: 13.5, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
-
-            Button {
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
                     showMistakesDrawer.toggle()
                 }
@@ -620,7 +631,15 @@ struct PuzzleHubView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Text(unlocked ? sea.emoji : "🔒").font(.system(size: 12.5))
-                        Text(isSelected ? "\(isZh ? shortRegionName(idx) : "Sea \(idx + 1)") · \(sea.rankRange)" : sea.rankRange)
+                        Text(isSelected
+                             ? l10n.localized(
+                                 zh: "\(shortRegionName(idx)) · \(sea.rankRange)",
+                                 en: "Sea \(idx + 1) · \(sea.rankRange)",
+                                 ja: "\(shortRegionName(idx)) · \(sea.rankRange)",
+                                 ko: "\(shortRegionName(idx)) · \(sea.rankRange)",
+                                 zhHant: "\(shortRegionName(idx)) · \(sea.rankRange)"
+                             )
+                             : sea.rankRange)
                             .font(.system(size: 11.5, weight: .black, design: .rounded))
                             .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
                     }
@@ -653,11 +672,11 @@ struct PuzzleHubView: View {
 
     private func shortRegionName(_ index: Int) -> String {
         switch index {
-        case 0: return "海岛"
-        case 1: return "森林"
-        case 2: return "沙漠"
-        case 3: return "雪山"
-        default: return "火山"
+        case 0: return l10n.localized(zh: "海岛", en: "Islands", ja: "海島", ko: "해섬", zhHant: "海島")
+        case 1: return l10n.localized(zh: "森林", en: "Forest", ja: "森", ko: "숲", zhHant: "森林")
+        case 2: return l10n.localized(zh: "沙漠", en: "Desert", ja: "砂漠", ko: "사막", zhHant: "沙漠")
+        case 3: return l10n.localized(zh: "雪山", en: "Snow", ja: "雪山", ko: "설산", zhHant: "雪山")
+        default: return l10n.localized(zh: "火山", en: "Volcano", ja: "火山", ko: "화산", zhHant: "火山")
         }
     }
 
@@ -760,12 +779,23 @@ struct PuzzleHubView: View {
             let seaUnlocked = StarYiCampaign.isSeaUnlocked(islandSea, progress: appState.puzzleProgress)
             let msg: String
             if !seaUnlocked {
-                msg = isZh
-                    ? "点下方「🔑 跳级试炼门」答对 \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count) 题即可直接解锁\(islandSea.nameZh)！"
-                    : "Tap the Skip Gate below (pass \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count)) to unlock \(islandSea.nameEn) immediately!"
+                let seaName = islandSea.localizedName(l10n)
+                msg = l10n.localized(
+                    zh: "点下方「🔑 跳级试炼门」答对 \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count) 题即可直接解锁\(seaName)！",
+                    en: "Tap the Skip Gate below (pass \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count)) to unlock \(seaName) immediately!",
+                    ja: "下の「🔑 飛び級試験」で \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count) 問正解すると「\(seaName)」をすぐ解放できます！",
+                    ko: "아래 「🔑 월반 시험」에서 \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count)문제를 맞히면 \(seaName)을(를) 바로 해금할 수 있어요!",
+                    zhHant: "點下方「🔑 跳級試煉門」答對 \(islandSea.skipGatePassCount)/\(islandSea.skipGatePuzzleIds.count) 題即可直接解鎖\(seaName)！"
+                )
             } else {
                 let prevName = islandSea.islands[max(0, island.orderInSea - 1)].localizedName(l10n)
-                msg = isZh ? "通关「\(prevName)」即可解锁本岛！" : "Clear \(prevName) to unlock this island!"
+                msg = l10n.localized(
+                    zh: "通关「\(prevName)」即可解锁本岛！",
+                    en: "Clear \(prevName) to unlock this island!",
+                    ja: "「\(prevName)」をクリアするとこの島が解放されます！",
+                    ko: "「\(prevName)」을(를) 클리어하면 이 섬이 해금됩니다!",
+                    zhHant: "通關「\(prevName)」即可解鎖本島！"
+                )
             }
             triggerLockedFeedback(islandId: island.id, message: msg)
         }
@@ -854,7 +884,13 @@ struct PuzzleHubView: View {
                                 .foregroundColor(.white.opacity(0.92))
                         }
 
-                        Text("\(island.rankRange) · \(cleared)/\(total)\(isZh ? "关" : "Q")")
+                        Text(l10n.localized(
+                            zh: "\(island.rankRange) · \(cleared)/\(total)关",
+                            en: "\(island.rankRange) · \(cleared)/\(total)Q",
+                            ja: "\(island.rankRange) · \(cleared)/\(total)関",
+                            ko: "\(island.rankRange) · \(cleared)/\(total)관",
+                            zhHant: "\(island.rankRange) · \(cleared)/\(total)關"
+                        ))
                             .font(.system(size: 10, weight: .heavy, design: .rounded))
                             .foregroundColor(.white.opacity(0.95))
                     }
@@ -899,7 +935,7 @@ struct PuzzleHubView: View {
                     }
 
                     VStack(spacing: 1) {
-                        Text(island.name(isChinese: isZh))
+                        Text(island.localizedName(l10n))
                             .font(.system(size: 12.5, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.inkPrimary)
                         Text(bossDefeated ? "🏆 \(island.rankRange)" : "★ \(cleared)/\(total)")
@@ -941,7 +977,7 @@ struct PuzzleHubView: View {
                     }
 
                     VStack(spacing: 1) {
-                        Text(island.name(isChinese: isZh))
+                        Text(island.localizedName(l10n))
                             .font(.system(size: 11.5, weight: .heavy, design: .rounded))
                             .foregroundColor(Color(red: 0.42, green: 0.47, blue: 0.54))
                         Text(island.rankRange)
@@ -1003,10 +1039,22 @@ struct PuzzleHubView: View {
                 HStack(spacing: 12) {
                     Text("🔑").font(.system(size: 26))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(compact ? compactTitle : (isZh ? "开启「\(activeSea.nameZh)」跳级试炼门" : "Challenge Skip Gate for \(activeSea.nameEn)"))
+                        Text(compact ? compactTitle : l10n.localized(
+                            zh: "开启「\(activeSea.localizedName(l10n))」跳级试炼门",
+                            en: "Challenge Skip Gate for \(activeSea.localizedName(l10n))",
+                            ja: "「\(activeSea.localizedName(l10n))」飛び級試験に挑戦",
+                            ko: "「\(activeSea.localizedName(l10n))」 월반 시험 도전",
+                            zhHant: "開啟「\(activeSea.localizedName(l10n))」跳級試煉門"
+                        ))
                             .font(.system(size: 16, weight: .black, design: .rounded))
                             .foregroundColor(.white)
-                        Text(compact ? compactSubtitle : (isZh ? "水平够强不想从头刷？无辅助答对 4/5 题直接空降本海域！" : "Strong player? Pass 4/5 exam puzzles to jump straight here!"))
+                        Text(compact ? compactSubtitle : l10n.localized(
+                            zh: "水平够强不想从头刷？无辅助答对 4/5 题直接空降本海域！",
+                            en: "Strong player? Pass 4/5 exam puzzles to jump straight here!",
+                            ja: "実力に自信あり？ヒントなしで5問中4問正解してこの海域へ飛び級！",
+                            ko: "실력에 자신 있나요? 힌트 없이 5문제 중 4문제를 맞혀 이 해역으로 바로 점프!",
+                            zhHant: "水平夠強不想從頭刷？無輔助答對 4/5 題直接空降本海域！"
+                        ))
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundColor(.white.opacity(0.94))
                     }
@@ -1048,7 +1096,7 @@ struct PuzzleHubView: View {
                             Text("\(l10n.t("islands.starterDock.title")) (\(solved)/\(total))")
                                 .font(.system(size: 13, weight: .black, design: .rounded))
                                 .foregroundColor(AppTheme.inkPrimary)
-                            Text(isZh ? "零基础5路启蒙" : "5×5 Starter")
+                            Text(l10n.localized(zh: "零基础5路启蒙", en: "5×5 Starter", ja: "5路盤・入門", ko: "5줄 바둑 입문", zhHant: "零基礎5路啟蒙"))
                                 .font(.system(size: 10.5, weight: .bold, design: .rounded))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -1063,7 +1111,13 @@ struct PuzzleHubView: View {
                 appState.navigationPath.append(.trainingDojo)
             } label: {
                 Label(
-                    isZh ? "\(DojoPuzzleBank.fullCatalog.count)+道场/定式/考级" : "\(DojoPuzzleBank.fullCatalog.count)+ Dojo & Exams",
+                    l10n.localized(
+                        zh: "\(DojoPuzzleBank.fullCatalog.count)+道场/定式/考级",
+                        en: "\(DojoPuzzleBank.fullCatalog.count)+ Dojo & Exams",
+                        ja: "\(DojoPuzzleBank.fullCatalog.count)+ 道場・定石・級位認定",
+                        ko: "\(DojoPuzzleBank.fullCatalog.count)+ 도장·정석·급수시험",
+                        zhHant: "\(DojoPuzzleBank.fullCatalog.count)+道場/定式/考級"
+                    ),
                     systemImage: "rosette"
                 )
                 .font(.system(size: 13, weight: .black, design: .rounded))
@@ -1085,10 +1139,30 @@ struct PuzzleHubView: View {
                     .font(.system(size: 16, weight: .black))
                     .foregroundColor(.white)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(isZh ? "无尽冲关 · 30K→5D" : "Puzzle Rush · 30K→5D")
+                    Text(l10n.localized(
+                        zh: "无尽冲关 · 30K→5D",
+                        en: "Puzzle Rush · 30K→5D",
+                        ja: "連続挑戦 · 30K→5D",
+                        ko: "연속 도전 · 30K→5D",
+                        zhHant: "無盡衝關 · 30K→5D"
+                    ))
                         .font(.system(size: 13.5, weight: .black, design: .rounded))
                         .foregroundColor(.white)
-                    Text(best > 0 ? (isZh ? "纪录：\(best)题 (\(appState.puzzleProgress.bestPuzzleRushRank))" : "Best: \(best) (\(appState.puzzleProgress.bestPuzzleRushRank))") : (isZh ? "3颗心测真实上限！" : "3 ❤️ Test Your Limit!"))
+                    Text(best > 0
+                         ? l10n.localized(
+                             zh: "纪录：\(best)题 (\(appState.puzzleProgress.bestPuzzleRushRank))",
+                             en: "Best: \(best) (\(appState.puzzleProgress.bestPuzzleRushRank))",
+                             ja: "記録：\(best)問 (\(appState.puzzleProgress.bestPuzzleRushRank))",
+                             ko: "기록: \(best)문제 (\(appState.puzzleProgress.bestPuzzleRushRank))",
+                             zhHant: "紀錄：\(best)題 (\(appState.puzzleProgress.bestPuzzleRushRank))"
+                         )
+                         : l10n.localized(
+                             zh: "3颗心测真实上限！",
+                             en: "3 ❤️ Test Your Limit!",
+                             ja: "ハート3つで限界に挑戦！",
+                             ko: "하트 3개로 한계 도전!",
+                             zhHant: "3顆心測真實上限！"
+                         ))
                         .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .foregroundColor(.white.opacity(0.94))
                 }
@@ -1106,12 +1180,22 @@ struct PuzzleHubView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     Text("🧭").font(.system(size: 48))
-                    Text(isZh ? "选择你当前的围棋水平" : "Choose Your Starting Go Level")
+                    Text(l10n.localized(
+                        zh: "选择你当前的围棋水平",
+                        en: "Choose Your Starting Go Level",
+                        ja: "現在の囲碁レベルを選択",
+                        ko: "현재 바둑 실력을 선택하세요",
+                        zhHant: "選擇你當前的圍棋水平"
+                    ))
                         .font(.system(size: 22, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text(isZh
-                         ? "选定后立刻飞往对应海域起航！前面的基础海域也会保留开放，随时可以回去刷星拿皇冠。"
-                         : "Fly straight to the Sea that matches your real strength! Earlier Seas stay open for bonus stars anytime.")
+                    Text(l10n.localized(
+                        zh: "选定后立刻飞往对应海域起航！前面的基础海域也会保留开放，随时可以回去刷星拿皇冠。",
+                        en: "Fly straight to the Sea that matches your real strength! Earlier Seas stay open for bonus stars anytime.",
+                        ja: "選択するとすぐに対応する海域へ移動します！前の基礎海域も開放されたままなので、いつでも星や王冠を集めに戻れます。",
+                        ko: "선택하면 실력에 맞는 해역으로 바로 이동합니다! 이전 기초 해역도 계속 열려 있어 언제든 별과 왕관을 모을 수 있어요.",
+                        zhHant: "選定後立刻飛往對應海域起航！前面的基礎海域也會保留開放，隨時可以回去刷星拿皇冠。"
+                    ))
                         .font(.system(size: 13.5, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
@@ -1132,7 +1216,7 @@ struct PuzzleHubView: View {
                                 Text(opt.emoji).font(.system(size: 32))
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 8) {
-                                        Text(isZh ? opt.titleZh : opt.titleEn)
+                                        Text(localizedPlacementTitle(opt))
                                             .font(.system(size: 16, weight: .black, design: .rounded))
                                             .foregroundColor(AppTheme.inkPrimary)
                                         Text(opt.rankLabel)
@@ -1142,7 +1226,7 @@ struct PuzzleHubView: View {
                                             .padding(.vertical, 3)
                                             .background(Capsule().fill(AppTheme.skyBottom))
                                     }
-                                    Text(isZh ? opt.descZh : opt.descEn)
+                                    Text(localizedPlacementDesc(opt))
                                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                                         .foregroundColor(AppTheme.inkSecondary)
                                 }
@@ -1166,6 +1250,40 @@ struct PuzzleHubView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func localizedPlacementTitle(_ opt: PlacementOption) -> String {
+        switch opt.id {
+        case "pl-30k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "囲碁ビギナー入門", ko: "바둑 입문 초보", zhHant: "萌新啟蒙")
+        case "pl-18k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "石取りステップアップ（約15K）", ko: "따내기 중급 (약 15K)", zhHant: "吃子進階（約15K）")
+        case "pl-10k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "中級・級位者（14K–8K）", ko: "급수 실력자 (14K–8K)", zhHant: "級位高手（14K–8K）")
+        case "pl-5k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "上級・初段目前（7K–1K）", ko: "고급·단위 준비 (7K–1K)", zhHant: "高段預備（7K–1K）")
+        case "pl-1d":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "有段者チャレンジ（1D–5D+）", ko: "아마추어 유단자 (1D–5D+)", zhHant: "業餘段位煉獄")
+        default:
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn)
+        }
+    }
+
+    private func localizedPlacementDesc(_ opt: PlacementOption) -> String {
+        switch opt.id {
+        case "pl-30k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "盤面・呼吸点・石取りを学び、第1海域・碧の海島から楽しくスタート", ko: "바둑판, 활로, 따내기부터 제1해역 푸른 해섬에서 가볍게 시작", zhHant: "剛認識棋盤、氣與提子，從第一區域·碧藍海島輕鬆起步")
+        case "pl-18k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "両アタリやシチョウが分かる方は、第2海域・翡翠の森へ直行！", ko: "양단수와 축을 알고 있다면 제2해역 비취 숲으로 바로 이동!", zhHant: "已會雙打吃與征子，直接飛往第二區域·翡翠森林")
+        case "pl-10k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "詰碁や攻め合いに慣れている方は、第3海域・黄金砂漠へ！", ko: "사활과 수상전에 익숙하다면 제3해역 황금 사막으로!", zhHant: "熟悉死活與對殺，直奔第三區域·金色沙漠")
+        case "pl-5k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "有段を目指す実力者は、第4海域・白銀雪山へ挑戦！", ko: "아마추어 단위에 도전한다면 제4해역 백은 설산으로!", zhHant: "衝刺業餘段位，直闖第四區域·凜冬雪山")
+        case "pl-1d":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "19路盤の定石と深い読みに精通する有段者は、第5海域・紅蓮火山へ！", ko: "19줄 정석과 정밀한 수읽기에 능통하다면 제5해역 용암 화산 최종 시련으로!", zhHant: "精通19路定式與精算，直闖第五區域·熔岩火山終極試煉")
+        default:
+            return l10n.localized(zh: opt.descZh, en: opt.descEn)
         }
     }
 

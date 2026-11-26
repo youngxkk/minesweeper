@@ -380,8 +380,8 @@ struct StarYiGoEngineTests {
             #expect(foundCorrect, "Missing CORRECT leaf in Codex puzzle \(puzzle.id)")
         }
 
-        // 4. Verify all 4 Go Academy halls, 16 entries, highlights, master quizzes & counter-examples replay legally
-        #expect(GoAcademyLibrary.allEntries.count == 16)
+        // 4. Verify all 4 Go Academy halls, 23 entries (incl. 11 complete 19x19 historic masterpieces), highlights, master quizzes & counter-examples replay legally
+        #expect(GoAcademyLibrary.allEntries.count == 23)
         for hall in AcademyHall.allCases {
             #expect(!GoAcademyLibrary.entries(in: hall, level: .all).isEmpty, "Academy hall \(hall.rawValue) should not be empty")
         }
@@ -406,6 +406,10 @@ struct StarYiGoEngineTests {
                     node = n.children.first
                 }
                 #expect(moveCount >= 2, "Academy entry \(entry.id) should have at least 2 moves")
+                if entry.hall == .masterpieces && entry.boardSize == 19 && sgf == entry.sgfZh {
+                    #expect(moveCount >= 150, "19x19 masterpiece \(entry.id) must be a complete full-length game, got \(moveCount) moves")
+                    #expect(entry.moveCount == moveCount, "Cached moveCount mismatch for \(entry.id)")
+                }
                 if sgf == entry.sgfZh {
                     for h in entry.highlights {
                         #expect(h.moveIndex >= 1 && h.moveIndex <= moveCount, "Out-of-bounds highlight in \(entry.id)")
@@ -1355,6 +1359,167 @@ struct StarYiGoEngineTests {
         vmDecline.handleBoardTap(at: BoardPoint(row: 2, col: 2))
         try await Task.sleep(nanoseconds: 450_000_000)
         #expect(!vmDecline.showAIResignOfferDialog, "AI must not nag with resign offer after player chose Keep Playing")
+    }
+
+    @Test @MainActor func persistentGauntletHeartsRegenAndMistakeReviewRecovery() throws {
+        let suite = "StarYiGoTests.GauntletHearts.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let t0 = Date()
+        let storage = StorageService(defaults: defaults)
+        let app = AppState(storage: storage)
+
+        #expect(app.currentGauntletHearts == 3)
+        #expect(app.secondsUntilNextGauntletHeart(now: t0) == nil)
+
+        // Losing 3 hearts persists across app relaunch (cannot be bypassed by backing out to Island)
+        #expect(app.consumeGauntletHeart(forPuzzleId: "cap-01", now: t0) == 2)
+        #expect(app.consumeGauntletHeart(forPuzzleId: "cap-02", now: t0.addingTimeInterval(10)) == 1)
+        #expect(app.consumeGauntletHeart(forPuzzleId: "cap-01", now: t0.addingTimeInterval(20)) == 0)
+
+        let reopened = AppState(storage: StorageService(defaults: defaults))
+        #expect(reopened.puzzleProgress.effectiveGauntletHearts(now: t0.addingTimeInterval(30)) == 0)
+        #expect(reopened.puzzleProgress.pendingReviewPuzzleIds == ["cap-01", "cap-02"])
+
+        // 4m59s after first loss: still 0 hearts, 1s remaining
+        let almostOneRegen = t0.addingTimeInterval(PuzzleProgressStore.heartRegenIntervalSeconds - 1)
+        #expect(reopened.puzzleProgress.effectiveGauntletHearts(now: almostOneRegen) == 0)
+        #expect(reopened.secondsUntilNextGauntletHeart(now: almostOneRegen) == 1)
+
+        // 5m00s after first loss: 1 heart recovered automatically
+        let oneRegen = t0.addingTimeInterval(PuzzleProgressStore.heartRegenIntervalSeconds)
+        #expect(reopened.puzzleProgress.effectiveGauntletHearts(now: oneRegen) == 1)
+
+        // 15m00s after first loss: capped at max 3 hearts
+        let fullRegen = t0.addingTimeInterval(PuzzleProgressStore.heartRegenIntervalSeconds * 4)
+        #expect(reopened.puzzleProgress.effectiveGauntletHearts(now: fullRegen) == 3)
+        #expect(reopened.secondsUntilNextGauntletHeart(now: fullRegen) == nil)
+
+        // Mistake review immediately restores full hearts and clears reviewed puzzle IDs
+        reopened.restoreGauntletHeartsFromMistakeReview(reviewedPuzzleIds: ["cap-01", "cap-02"], now: t0.addingTimeInterval(35))
+        #expect(reopened.currentGauntletHearts == 3)
+        #expect(reopened.puzzleProgress.pendingReviewPuzzleIds.isEmpty)
+        #expect(reopened.puzzleProgress.gauntletHeartLastRegenDate == nil)
+
+        // Legacy JSON without gauntletHearts decodes cleanly to full 3 hearts
+        let legacyData = Data(#"{"starsByPuzzleId":{"cap-01":3}}"#.utf8)
+        let decoded = try JSONDecoder().decode(PuzzleProgressStore.self, from: legacyData)
+        #expect(decoded.gauntletHearts == 3)
+        #expect(decoded.pendingReviewPuzzleIds.isEmpty)
+    }
+
+    @Test func allLocalizedVoicePacksAreBundled() throws {
+        let bundle = Bundle.main
+        let expectedLanguages = ["zh", "en", "ja", "ko"]
+
+        for lang in expectedLanguages {
+            var count = 0
+            for cue in VoiceCue.allCases {
+                for variant in 1...cue.variantCount {
+                    let name = "voice_\(lang)_\(cue.filePrefix)_\(variant)"
+                    let url =
+                        bundle.url(forResource: name, withExtension: "m4a", subdirectory: "Resources/Voice/\(lang)") ??
+                        bundle.url(forResource: name, withExtension: "m4a", subdirectory: "Voice/\(lang)") ??
+                        bundle.url(forResource: name, withExtension: "m4a", subdirectory: lang) ??
+                        bundle.url(forResource: name, withExtension: "m4a")
+                    #expect(url != nil, "Missing bundled voice asset: \(name).m4a")
+                    count += 1
+                }
+            }
+            #expect(count == 40)
+        }
+
+        // Verify language -> voiceLanguageCode mapping for all AppLanguage cases
+        #expect((AppLanguage.zhHans.isChinese ? "zh" : AppLanguage.zhHans.resolvedCode) == "zh")
+        #expect((AppLanguage.zhHant.isChinese ? "zh" : AppLanguage.zhHant.resolvedCode) == "zh")
+        #expect((AppLanguage.en.isChinese ? "zh" : AppLanguage.en.resolvedCode) == "en")
+        #expect((AppLanguage.ja.isChinese ? "zh" : AppLanguage.ja.resolvedCode) == "ja")
+        #expect((AppLanguage.ko.isChinese ? "zh" : AppLanguage.ko.resolvedCode) == "ko")
+    }
+
+    @Test func allThreeKataGoCoreMLModelsAreBundledAndDefaultIsB10C128() async throws {
+        // Default preset in AppSettings must be kata1-b10c128
+        let defaults = AppSettings()
+        #expect(defaults.aiModelPreset == .b10c128)
+        let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        #expect(legacyDecoded.aiModelPreset == .b10c128)
+
+        // All 3 models must be bundled and runnable via CoreMLGoAIEngine
+        let engine = CoreMLGoAIEngine(bundle: .main, supportedBoardSize: 19, initialPreset: .b10c128)
+        let board = GoBoardState(size: 9)
+        for preset in KataGoModelPreset.allCases {
+            engine.setActiveModelPreset(preset)
+            let loaded = engine.loadModel(for: preset)
+            #expect(loaded != nil, "Missing bundled CoreML model for \(preset.rawValue) (\(preset.resourceName).mlmodelc)")
+            #expect(engine.engineName.contains(preset.technicalName))
+
+            let decision = await engine.selectMoveDecision(
+                for: board,
+                color: .black,
+                level: .deer,
+                ruleSet: .standard,
+                coachingStyle: .standard
+            )
+            if case .place(let pt) = decision.action {
+                #expect(board.isLegal(point: pt, for: .black))
+            } else {
+                Issue.record("Expected board move from \(preset.rawValue) on empty 9x9 board")
+            }
+        }
+    }
+
+    @MainActor
+    @Test func familyProfileEditDeleteAndNicknameClamp() throws {
+        // Weighted nickname clamp: max 10 CJK chars (20 units) or 20 ASCII chars
+        #expect(UserProfile.clampedNickname("一二三四五六七八九十十一十二") == "一二三四五六七八九十")
+        #expect(UserProfile.clampedNickname("ABCDEFGHIJKLMNOPQRSTUVWXYZ") == "ABCDEFGHIJKLMNOPQRST")
+        #expect(UserProfile.clampedNickname("小明12345678901234567890") == "小明1234567890123456")
+
+        let suiteName = "StarYiGoTests.FamilyProfile.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let storage = StorageService(defaults: defaults)
+        let appState = AppState(storage: storage)
+        #expect(appState.familyProfiles.count == 1)
+        let firstProfile = appState.familyProfiles[0]
+
+        // Add second & third profiles
+        appState.addFamilyProfile(nickname: "小熊猫", avatarEmoji: "🐼")
+        appState.addFamilyProfile(nickname: "小兔子", avatarEmoji: "🐰")
+        #expect(appState.familyProfiles.count == 3)
+        let rabbit = appState.profile
+        #expect(rabbit.nickname == "小兔子")
+
+        // Edit a non-active profile
+        let panda = try #require(appState.familyProfiles.first { $0.nickname == "小熊猫" })
+        appState.editFamilyProfile(panda, nickname: "大熊猫", avatarEmoji: "🐯")
+        #expect(appState.familyProfiles.contains { $0.id == panda.id && $0.nickname == "大熊猫" && $0.avatarEmoji == "🐯" })
+
+        // Delete the currently active profile (rabbit) -> switches active profile and persists removal
+        appState.deleteFamilyProfile(rabbit)
+        #expect(appState.familyProfiles.count == 2)
+        #expect(!appState.familyProfiles.contains { $0.id == rabbit.id })
+        #expect(appState.profile.id != rabbit.id)
+
+        // Delete a non-active profile -> persists removal
+        let remainingOther = try #require(appState.familyProfiles.first { $0.id != appState.profile.id })
+        appState.deleteFamilyProfile(remainingOther)
+        #expect(appState.familyProfiles.count == 1)
+        #expect(!appState.familyProfiles.contains { $0.id == remainingOther.id })
+
+        // Cannot delete the last remaining profile
+        let lastProfile = appState.familyProfiles[0]
+        appState.deleteFamilyProfile(lastProfile)
+        #expect(appState.familyProfiles.count == 1)
+        #expect(appState.familyProfiles[0].id == firstProfile.id || appState.familyProfiles[0].id == lastProfile.id)
+
+        // Reloading AppState from storage confirms deleted profiles do not come back
+        let reloaded = AppState(storage: StorageService(defaults: defaults))
+        #expect(reloaded.familyProfiles.count == 1)
+        #expect(reloaded.familyProfiles[0].id == lastProfile.id)
+        #expect(!reloaded.familyProfiles.contains { $0.id == rabbit.id })
     }
 }
 

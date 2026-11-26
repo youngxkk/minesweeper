@@ -187,17 +187,26 @@ struct HomeView: View {
     }
 
     private var initialPlacementOnboardingSheet: some View {
-        let isZh = l10n.language.isChinese
-        return NavigationStack {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
                     Text("🧭").font(.system(size: 48))
-                    Text(isZh ? "欢迎来到星弈围棋！选择你的棋力" : "Welcome to StarYi Go! Choose Your Level")
+                    Text(l10n.localized(
+                        zh: "欢迎来到星弈围棋！选择你的棋力",
+                        en: "Welcome to StarYi Go! Choose Your Level",
+                        ja: "StarYi Goへようこそ！棋力を選ぼう",
+                        ko: "StarYi Go에 오신 걸 환영해요! 기력을 선택하세요",
+                        zhHant: "歡迎來到星弈圍棋！選擇你的棋力"
+                    ))
                         .font(.system(size: 22, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text(isZh
-                         ? "选定后将自动为你匹配最合适的默认棋盘路数、AI 陪练和闯关海域，随时可在首页或地图切换。"
-                         : "We'll tailor your starting board size, AI sparring partner, and campaign Sea. You can change anytime.")
+                    Text(l10n.localized(
+                        zh: "选定后将自动为你匹配最合适的默认棋盘路数、AI 陪练和闯关海域，随时可在首页或地图切换。",
+                        en: "We'll tailor your starting board size, AI sparring partner, and campaign Sea. You can change anytime.",
+                        ja: "選んだ棋力に合わせて最適な碁盤サイズ・AI相手・冒険海域を自動設定します。いつでも変更できます。",
+                        ko: "선택한 기력에 맞춰 최적의 바둑판 크기, AI 대국 상대, 모험 해역을 자동 설정해요. 언제든 바꿀 수 있어요.",
+                        zhHant: "選定後將自動為你匹配最合適的預設棋盤路數、AI 陪練和闖關海域，隨時可在首頁或地圖切換。"
+                    ))
                         .font(.system(size: 13.5, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
@@ -216,7 +225,7 @@ struct HomeView: View {
                                 Text(opt.emoji).font(.system(size: 32))
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 8) {
-                                        Text(isZh ? opt.titleZh : opt.titleEn)
+                                        Text(localizedPlacementTitle(opt))
                                             .font(.system(size: 16, weight: .black, design: .rounded))
                                             .foregroundColor(AppTheme.inkPrimary)
                                         Text(opt.rankLabel)
@@ -226,7 +235,7 @@ struct HomeView: View {
                                             .padding(.vertical, 3)
                                             .background(Capsule().fill(AppTheme.skyBottom))
                                     }
-                                    Text(isZh ? opt.descZh : opt.descEn)
+                                    Text(localizedPlacementDesc(opt))
                                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                                         .foregroundColor(AppTheme.inkSecondary)
                                 }
@@ -245,12 +254,52 @@ struct HomeView: View {
             .background(AppTheme.brightArenaBackground)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(isZh ? "稍后再说" : "Later") {
+                    Button(l10n.localized(
+                        zh: "稍后再说",
+                        en: "Later",
+                        ja: "あとで",
+                        ko: "나중에",
+                        zhHant: "稍後再說"
+                    )) {
                         appState.markPlacementDismissed()
                         showInitialPlacementSheet = false
                     }
                 }
             }
+        }
+    }
+
+    private func localizedPlacementTitle(_ opt: PlacementOption) -> String {
+        switch opt.id {
+        case "pl-30k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "囲碁ビギナー", ko: "바둑 입문", zhHant: "萌新啟蒙")
+        case "pl-18k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "石取りステップアップ（約15級）", ko: "따내기 중급 (약 15급)", zhHant: "吃子進階（約15K）")
+        case "pl-10k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "級位実力派（14級–8級）", ko: "급수 실력자 (14K–8K)", zhHant: "級位高手（14K–8K）")
+        case "pl-5k":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "有段チャレンジャー（7級–1級）", ko: "유단자 준비 (7K–1K)", zhHant: "高段預備（7K–1K）")
+        case "pl-1d":
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn, ja: "アマ有段道場（初段–五段+）", ko: "아마 유단자 (1D–5D+)", zhHant: "業餘段位煉獄")
+        default:
+            return l10n.localized(zh: opt.titleZh, en: opt.titleEn)
+        }
+    }
+
+    private func localizedPlacementDesc(_ opt: PlacementOption) -> String {
+        switch opt.id {
+        case "pl-30k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "呼吸点と石取りを覚えたて。第1海域・碧の海島から楽しくスタート", ko: "활로와 따내기를 막 배웠다면 1해역·푸른 해섬에서 가볍게 시작해요", zhHant: "剛認識棋盤、氣與提子，從第一區域·碧藍海島輕鬆起步")
+        case "pl-18k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "両アタリやシチョウがわかるなら第2海域・翡翠の森へ直行！", ko: "양단수와 축을 안다면 바로 2해역·비취 숲으로 출항!", zhHant: "已會雙打吃與征子，直接飛往第二區域·翡翠森林")
+        case "pl-10k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "死活と攻め合いに慣れたら第3海域・黄金砂漠へ！", ko: "사활과 수상전에 익숙하다면 3해역·황금 사막으로!", zhHant: "熟悉死活與對殺，直奔第三區域·金色沙漠")
+        case "pl-5k":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "有段者を目指して第4海域・白銀雪山へ挑もう！", ko: "아마 유단자에 도전한다면 4해역·백은 설산으로!", zhHant: "衝刺業餘段位，直闖第四區域·凜冬雪山")
+        case "pl-1d":
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "19路の定石と深い読みを極める第5海域・紅蓮火山へ！", ko: "19줄 정석과 수읽기를 겨루는 5해역·용암 화산 최종 시련!", zhHant: "精通19路定式與精算，直闖第五區域·熔岩火山終極試煉")
+        default:
+            return l10n.localized(zh: opt.descZh, en: opt.descEn)
         }
     }
 

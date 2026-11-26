@@ -3,6 +3,7 @@
 //  StarYi Go — 100% Offline Photo Go Board Recognition & Win/Loss Judge
 //
 
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -10,6 +11,7 @@ import UIKit
 struct PhotoBoardJudgeView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     enum Stage {
         case capture
@@ -54,6 +56,8 @@ struct PhotoBoardJudgeView: View {
     @State private var showCameraSheet: Bool = false
     @State private var showPhotoPicker: Bool = false
     @State private var showCameraUnavailableAlert: Bool = false
+    @State private var showCameraDeniedAlert: Bool = false
+    @State private var showCameraSettingsParentalGate: Bool = false
     @State private var showClearHistoryAlert: Bool = false
     @State private var showDeleteRecordAlert: Bool = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
@@ -87,10 +91,13 @@ struct PhotoBoardJudgeView: View {
                     switch stage {
                     case .capture:
                         captureStageView
+                            .padding(.bottom, 14)
                     case .calibrate:
                         calibrateStageView
+                            .padding(.bottom, 14)
                     case .judge:
                         judgeStageView
+                            .padding(.bottom, 14)
                     case .history:
                         PhotoJudgeHistoryView(
                             onSelectRecord: { record in
@@ -104,13 +111,32 @@ struct PhotoBoardJudgeView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 20)
-                .padding(.bottom, 14)
             }
 
             if isProcessing {
                 processingOverlay
             }
+
+            if showCameraSettingsParentalGate {
+                ParentalGateOverlay(
+                    l10n: l10n,
+                    onCancel: {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                            showCameraSettingsParentalGate = false
+                        }
+                    },
+                    onSuccess: {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                            showCameraSettingsParentalGate = false
+                        }
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                )
+            }
         }
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: showCameraSettingsParentalGate)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             guard !hasInitialized else { return }
@@ -168,6 +194,35 @@ struct PhotoBoardJudgeView: View {
             accentPalette: .sky,
             actions: [
                 .primary(l10n.localized(zh: "好的", en: "OK", ja: "OK", ko: "확인", zhHant: "好的"), palette: .sky)
+            ]
+        )
+        .gameDialog(
+            isPresented: $showCameraDeniedAlert,
+            title: l10n.localized(
+                zh: "未开启相机权限",
+                en: "Camera Access Needed",
+                ja: "カメラへのアクセスが必要です",
+                ko: "카메라 권한이 필요합니다",
+                zhHant: "未開啟相機權限"
+            ),
+            message: l10n.localized(
+                zh: "请在系统设置中允许星弈围棋访问相机，以便离线拍摄棋盘；你也可以直接从相册选择照片。",
+                en: "Please allow camera access in Settings to photograph your Go board offline, or choose a photo from your library.",
+                ja: "設定でカメラへのアクセスを許可すると碁盤を撮影できます。写真ライブラリから選ぶこともできます。",
+                ko: "설정에서 카메라 접근을 허용하면 바둑판을 촬영할 수 있으며, 앨범에서 사진을 선택할 수도 있습니다.",
+                zhHant: "請在系統設定中允許星弈圍棋存取相機，以便離線拍攝棋盤；你也可以直接從相簿選擇照片。"
+            ),
+            icon: "camera.badge.ellipsis",
+            accentPalette: .sky,
+            actions: [
+                .secondary(l10n.localized(zh: "从相册选择", en: "Photo Library", ja: "写真から選択", ko: "앨범에서 선택", zhHant: "從相簿選擇")) {
+                    showPhotoPicker = true
+                },
+                .primary(l10n.localized(zh: "前往设置", en: "Open Settings", ja: "設定を開く", ko: "설정 열기", zhHant: "前往設定"), palette: .sky) {
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                        showCameraSettingsParentalGate = true
+                    }
+                }
             ]
         )
         .gameDialog(
@@ -384,8 +439,7 @@ struct PhotoBoardJudgeView: View {
                     ja: "写真で勝敗判定",
                     ko: "사진 승패 판정",
                     zhHant: "拍照判勝負"
-                ),
-            minHeight: AppTheme.buttonFaceHeight
+                )
         )
     }
 
@@ -420,14 +474,35 @@ struct PhotoBoardJudgeView: View {
         }
     }
 
+    private func handleTakePhotoTap() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            showCameraUnavailableAlert = true
+            return
+        }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showCameraSheet = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                Task { @MainActor in
+                    if granted {
+                        showCameraSheet = true
+                    } else {
+                        showCameraDeniedAlert = true
+                    }
+                }
+            }
+        case .denied, .restricted:
+            showCameraDeniedAlert = true
+        @unknown default:
+            showCameraDeniedAlert = true
+        }
+    }
+
     private func takePhotoHeroCard(height: CGFloat, isCompact: Bool) -> some View {
         Button {
             SoundAndHapticsManager.shared.playUITap()
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                showCameraSheet = true
-            } else {
-                showCameraUnavailableAlert = true
-            }
+            handleTakePhotoTap()
         } label: {
             VStack(alignment: .leading, spacing: isCompact ? 8 : 12) {
                 ZStack {

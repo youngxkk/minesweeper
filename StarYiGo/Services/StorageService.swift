@@ -7,6 +7,32 @@ import Foundation
 import UIKit
 
 struct UserProfile: Identifiable, Codable, Equatable, Sendable {
+    /// Visual-width cap for family profile nicknames:
+    /// CJK / full-width / emoji characters count as 2 units (up to 10 CJK chars),
+    /// ASCII / Latin characters count as 1 unit (up to 20 English chars).
+    static let maxNicknameUnits: Int = 20
+
+    static func nicknameUnitWeight(for character: Character) -> Int {
+        if character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first, scalar.isASCII {
+            return 1
+        }
+        return 2
+    }
+
+    static func clampedNickname(_ raw: String) -> String {
+        var result = ""
+        var usedUnits = 0
+        for ch in raw {
+            let weight = nicknameUnitWeight(for: ch)
+            if usedUnits + weight > maxNicknameUnits {
+                break
+            }
+            result.append(ch)
+            usedUnits += weight
+        }
+        return result
+    }
+
     var id: UUID = UUID()
     var nickname: String = "StarPlayer"
     var avatarEmoji: String = "🦊"
@@ -176,6 +202,13 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
     var bestPuzzleRushScore: Int = 0
     /// Highest rank badge reached during Puzzle Rush (e.g. "12K", "3K", "2D")
     var bestPuzzleRushRank: String = "25K"
+    /// Persistent campaign gauntlet hearts (prevents infinite retry/guessing by exiting to island)
+    static let maxGauntletHearts: Int = 3
+    static let heartRegenIntervalSeconds: TimeInterval = 300 // 5 minutes per heart
+    var gauntletHearts: Int = 3
+    var gauntletHeartLastRegenDate: Date? = nil
+    /// Recently missed puzzle IDs queued for interactive mistake review to restore hearts
+    var pendingReviewPuzzleIds: [String] = []
 
     var totalCampaignStars: Int {
         campaignNodeStars.values.reduce(0, +)
@@ -195,6 +228,83 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         srsMistakeItems.filter(\.isDueNow).count
     }
 
+    /// Computes effective gauntlet hearts at `now` without mutating.
+    func effectiveGauntletHearts(now: Date = Date()) -> Int {
+        let clamped = max(0, min(Self.maxGauntletHearts, gauntletHearts))
+        guard clamped < Self.maxGauntletHearts, let lastDate = gauntletHeartLastRegenDate else {
+            return clamped
+        }
+        let elapsed = max(0, now.timeIntervalSince(lastDate))
+        let recovered = Int(elapsed / Self.heartRegenIntervalSeconds)
+        return min(Self.maxGauntletHearts, clamped + recovered)
+    }
+
+    /// Seconds remaining until the next heart recovers, or `nil` if already full.
+    func secondsUntilNextHeart(now: Date = Date()) -> Int? {
+        let effective = effectiveGauntletHearts(now: now)
+        guard effective < Self.maxGauntletHearts else { return nil }
+        let baseDate = gauntletHeartLastRegenDate ?? now
+        let elapsed = max(0, now.timeIntervalSince(baseDate))
+        let remainder = elapsed.truncatingRemainder(dividingBy: Self.heartRegenIntervalSeconds)
+        let remaining = Int(ceil(Self.heartRegenIntervalSeconds - remainder))
+        return max(1, remaining)
+    }
+
+    /// Applies any time-based heart regeneration up to `now`. Returns `true` if stored state changed.
+    @discardableResult
+    mutating func refreshGauntletHearts(now: Date = Date()) -> Bool {
+        let originalHearts = gauntletHearts
+        let originalDate = gauntletHeartLastRegenDate
+        let clamped = max(0, min(Self.maxGauntletHearts, gauntletHearts))
+        gauntletHearts = clamped
+
+        if clamped >= Self.maxGauntletHearts {
+            gauntletHeartLastRegenDate = nil
+        } else if let lastDate = gauntletHeartLastRegenDate {
+            let elapsed = max(0, now.timeIntervalSince(lastDate))
+            let recovered = Int(elapsed / Self.heartRegenIntervalSeconds)
+            if recovered > 0 {
+                gauntletHearts = min(Self.maxGauntletHearts, clamped + recovered)
+                if gauntletHearts >= Self.maxGauntletHearts {
+                    gauntletHeartLastRegenDate = nil
+                } else {
+                    gauntletHeartLastRegenDate = lastDate.addingTimeInterval(Double(recovered) * Self.heartRegenIntervalSeconds)
+                }
+            }
+        } else {
+            gauntletHeartLastRegenDate = now
+        }
+        return gauntletHearts != originalHearts || gauntletHeartLastRegenDate != originalDate
+    }
+
+    /// Immediately deducts 1 persistent gauntlet heart and records the missed puzzle for review recovery.
+    @discardableResult
+    mutating func consumeGauntletHeart(forPuzzleId puzzleId: String, now: Date = Date()) -> Int {
+        refreshGauntletHearts(now: now)
+        if gauntletHearts >= Self.maxGauntletHearts {
+            gauntletHeartLastRegenDate = now
+        }
+        gauntletHearts = max(0, gauntletHearts - 1)
+        if gauntletHearts < Self.maxGauntletHearts && gauntletHeartLastRegenDate == nil {
+            gauntletHeartLastRegenDate = now
+        }
+        pendingReviewPuzzleIds.removeAll { $0 == puzzleId }
+        pendingReviewPuzzleIds.insert(puzzleId, at: 0)
+        if pendingReviewPuzzleIds.count > 6 {
+            pendingReviewPuzzleIds = Array(pendingReviewPuzzleIds.prefix(6))
+        }
+        return gauntletHearts
+    }
+
+    /// Restores hearts to full after the learner completes interactive mistake review.
+    mutating func restoreGauntletHeartsAfterReview(reviewedPuzzleIds: [String], now: Date = Date()) {
+        refreshGauntletHearts(now: now)
+        gauntletHearts = Self.maxGauntletHearts
+        gauntletHeartLastRegenDate = nil
+        let reviewedSet = Set(reviewedPuzzleIds)
+        pendingReviewPuzzleIds.removeAll { reviewedSet.contains($0) }
+    }
+
     init(
         starsByPuzzleId: [String: Int] = [:],
         mistakeBookIds: [String] = [],
@@ -209,7 +319,10 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         unlockedSeaIds: Set<String> = [],
         didCompletePlacement: Bool = false,
         bestPuzzleRushScore: Int = 0,
-        bestPuzzleRushRank: String = "25K"
+        bestPuzzleRushRank: String = "25K",
+        gauntletHearts: Int = 3,
+        gauntletHeartLastRegenDate: Date? = nil,
+        pendingReviewPuzzleIds: [String] = []
     ) {
         self.starsByPuzzleId = starsByPuzzleId
         self.mistakeBookIds = mistakeBookIds
@@ -225,6 +338,9 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         self.didCompletePlacement = didCompletePlacement
         self.bestPuzzleRushScore = bestPuzzleRushScore
         self.bestPuzzleRushRank = bestPuzzleRushRank
+        self.gauntletHearts = max(0, min(Self.maxGauntletHearts, gauntletHearts))
+        self.gauntletHeartLastRegenDate = gauntletHeartLastRegenDate
+        self.pendingReviewPuzzleIds = pendingReviewPuzzleIds
     }
 
     init(from decoder: Decoder) throws {
@@ -244,6 +360,10 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         didCompletePlacement = try c.decodeIfPresent(Bool.self, forKey: .didCompletePlacement) ?? false
         bestPuzzleRushScore = try c.decodeIfPresent(Int.self, forKey: .bestPuzzleRushScore) ?? 0
         bestPuzzleRushRank = try c.decodeIfPresent(String.self, forKey: .bestPuzzleRushRank) ?? "25K"
+        let decodedHearts = try c.decodeIfPresent(Int.self, forKey: .gauntletHearts) ?? Self.maxGauntletHearts
+        gauntletHearts = max(0, min(Self.maxGauntletHearts, decodedHearts))
+        gauntletHeartLastRegenDate = try c.decodeIfPresent(Date.self, forKey: .gauntletHeartLastRegenDate)
+        pendingReviewPuzzleIds = try c.decodeIfPresent([String].self, forKey: .pendingReviewPuzzleIds) ?? []
     }
 }
 
@@ -444,6 +564,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var zenDojoMode: Bool = false
     var aiSimulatedThinkingEnabled: Bool = true
     var aiThinkingPace: AIThinkingPace = .brisk
+    var aiModelPreset: KataGoModelPreset = .defaultPreset
     var autoTransformPuzzles: Bool = false
     var soundEnabled: Bool = true
     var bgmEnabled: Bool = true
@@ -479,6 +600,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         aiSimulatedThinkingEnabled = try c.decodeIfPresent(Bool.self, forKey: .aiSimulatedThinkingEnabled) ?? true
         aiThinkingPace = try c.decodeIfPresent(AIThinkingPace.self, forKey: .aiThinkingPace)
             ?? (aiSimulatedThinkingEnabled ? .brisk : .instant)
+        aiModelPreset = try c.decodeIfPresent(KataGoModelPreset.self, forKey: .aiModelPreset) ?? .defaultPreset
         autoTransformPuzzles = try c.decodeIfPresent(Bool.self, forKey: .autoTransformPuzzles) ?? false
         soundEnabled = try c.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
         bgmEnabled = try c.decodeIfPresent(Bool.self, forKey: .bgmEnabled) ?? true

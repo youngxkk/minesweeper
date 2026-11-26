@@ -14,7 +14,6 @@ struct DailyDojoView: View {
     @State private var inspectedTerm: GoCodexEntry? = nil
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
     private var plan: DailyDojoPlan { appState.todayDailyDojoPlan() }
     private var todayStamp: String { plan.dateStamp }
 
@@ -334,7 +333,13 @@ struct DailyDojoView: View {
                     .font(.system(size: 16, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
 
-                    Text("\(plan.warmupKind.title(isChinese: isZh)) · \(plan.warmupCount)\(isZh ? " 题（约 1 分钟）" : " Qs (~1 min)")")
+                    Text(l10n.localized(
+                        zh: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount) 题（约 1 分钟）",
+                        en: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount) Qs (~1 min)",
+                        ja: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount)問（約1分）",
+                        ko: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount)문제 (약 1분)",
+                        zhHant: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount) 題（約 1 分鐘）"
+                    ))
                         .font(.system(size: 12.5, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -404,6 +409,32 @@ struct DailyDojoView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
                 }
+                Spacer(minLength: 8)
+                Button {
+                    appState.navigationPath.append(
+                        .puzzlePlay(
+                            puzzleId: firstUnsolvedSlot.puzzle.id,
+                            isDailyChallenge: true,
+                            isStarterBootcamp: false,
+                            forceRandomTransform: firstUnsolvedSlot.stage.forceRandomTransform,
+                            dailyDojoQueueIds: queueIds
+                        )
+                    )
+                } label: {
+                    Text(isCoreDone
+                         ? l10n.localized(zh: "再挑战", en: "Replay", ja: "もう一度", ko: "다시 하기", zhHant: "再挑戰")
+                         : (coreSolvedCount == 0
+                            ? l10n.localized(zh: "开始挑战", en: "Start", ja: "スタート", ko: "시작", zhHant: "開始挑戰")
+                            : l10n.localized(zh: "继续第 \(coreSolvedCount + 1) 关", en: "Stage \(coreSolvedCount + 1)", ja: "第\(coreSolvedCount + 1)問へ", ko: "\(coreSolvedCount + 1)단계", zhHant: "繼續第 \(coreSolvedCount + 1) 關")))
+                        .font(.system(size: 13.5, weight: .black, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                }
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityIdentifier("DailyDojoStartCoreButton")
             }
 
             HStack(spacing: 10) {
@@ -477,34 +508,6 @@ struct DailyDojoView: View {
                     .accessibilityIdentifier("DailyDojoCoreSlot\(slot.stage.rawValue)")
                 }
             }
-
-            if !isCoreDone {
-                Button {
-                    appState.navigationPath.append(
-                        .puzzlePlay(
-                            puzzleId: firstUnsolvedSlot.puzzle.id,
-                            isDailyChallenge: true,
-                            isStarterBootcamp: false,
-                            forceRandomTransform: firstUnsolvedSlot.stage.forceRandomTransform,
-                            dailyDojoQueueIds: queueIds
-                        )
-                    )
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "bolt.shield.fill")
-                            .font(.system(size: 15, weight: .black))
-                        Text(coreSolvedCount == 0
-                             ? l10n.localized(zh: "开始无提示三连战", en: "Start No-Hint Trial", ja: "3連戦をスタート", ko: "3연전 시작", zhHant: "開始無提示三連戰")
-                             : l10n.localized(zh: "继续第 \(coreSolvedCount + 1) 关", en: "Continue Stage \(coreSolvedCount + 1)", ja: "第\(coreSolvedCount + 1)問へ進む", ko: "\(coreSolvedCount + 1)단계 이어서", zhHant: "繼續第 \(coreSolvedCount + 1) 關"))
-                            .font(.system(size: 14.5, weight: .black, design: .rounded))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                .accessibilityIdentifier("DailyDojoStartCoreButton")
-            }
         }
         .warmCard(cornerRadius: 24, padding: 16)
     }
@@ -564,7 +567,14 @@ struct DailyDojoView: View {
         let month = comps.month ?? 1
         let todayDay = cal.component(.day, from: now)
         let totalStamps = appState.profile.dailyDojoStampDates.count
-        let weekdayHeaders = isZh ? ["日", "一", "二", "三", "四", "五", "六"] : ["S", "M", "T", "W", "T", "F", "S"]
+        let weekdayHeaders: [String] = {
+            switch l10n.language.resolvedCode {
+            case "zh-Hans", "zh-Hant": return ["日", "一", "二", "三", "四", "五", "六"]
+            case "ja": return ["日", "月", "火", "水", "木", "金", "土"]
+            case "ko": return ["일", "월", "화", "수", "목", "금", "토"]
+            default: return ["S", "M", "T", "W", "T", "F", "S"]
+            }
+        }()
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -581,7 +591,13 @@ struct DailyDojoView: View {
                 .font(.system(size: 16, weight: .black, design: .rounded))
                 .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
-                Text("\(totalStamps) \(isZh ? "枚" : "stamps")")
+                Text(l10n.localized(
+                    zh: "\(totalStamps) 枚",
+                    en: "\(totalStamps) stamps",
+                    ja: "\(totalStamps) 個",
+                    ko: "\(totalStamps)개",
+                    zhHant: "\(totalStamps) 枚"
+                ))
                     .font(.system(size: 12, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.sunBottom)
                     .padding(.horizontal, 10)
@@ -652,7 +668,13 @@ struct DailyDojoView: View {
                             Image(systemName: reached ? "checkmark.seal.fill" : "gift.fill")
                                 .font(.system(size: 17, weight: .black))
                                 .foregroundColor(reached ? AppTheme.mintBottom : AppTheme.sunBottom)
-                            Text("\(milestone.requiredStamps)\(isZh ? "天" : "d")")
+                            Text(l10n.localized(
+                                zh: "\(milestone.requiredStamps)天",
+                                en: "\(milestone.requiredStamps)d",
+                                ja: "\(milestone.requiredStamps)日",
+                                ko: "\(milestone.requiredStamps)일",
+                                zhHant: "\(milestone.requiredStamps)天"
+                            ))
                                 .font(.system(size: 11.5, weight: .black, design: .rounded))
                                 .foregroundColor(AppTheme.inkPrimary)
                             Text("+\(milestone.coinReward)")
@@ -798,7 +820,6 @@ struct DailyKnowledgeQuizView: View {
     @State private var wrongFlashID: UUID = UUID()
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
     private var plan: DailyDojoPlan { appState.todayDailyDojoPlan() }
     private var entry: AcademyEntry { plan.knowledgeEntry }
 

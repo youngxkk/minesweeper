@@ -25,7 +25,6 @@ struct JosekiTrainerView: View {
     @State private var aiTask: Task<Void, Never>?
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
 
     init(course: JosekiCourse, campaignNodeId: String? = nil) {
         self.course = course
@@ -75,8 +74,8 @@ struct JosekiTrainerView: View {
                         GameTitleCrest(title: course.title(l10n), subtitle: course.rankBadge)
                         Spacer()
                         HStack(spacing: 6) {
-                            modePill(.learn, title: isZh ? "演示学习" : "Learn")
-                            modePill(.quiz, title: isZh ? "闯关测验" : "Quiz")
+                            modePill(.learn, title: l10n.localized(zh: "演示学习", en: "Learn", ja: "学習モード", ko: "학습 모드", zhHant: "演示學習"))
+                            modePill(.quiz, title: l10n.localized(zh: "闯关测验", en: "Quiz", ja: "テスト", ko: "퀴즈", zhHant: "闖關測驗"))
                         }
                     }
 
@@ -144,8 +143,8 @@ struct JosekiTrainerView: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 Text(mode == .learn
-                     ? (isZh ? "探索分支（点棋盘 A/B 或下方按钮）" : "Explore Branches (Tap A/B on board or below)")
-                     : (isZh ? "定式闯关：轮到你走正确定式！" : "Joseki Quiz: Play the correct Joseki moves!"))
+                     ? l10n.localized(zh: "探索分支（点棋盘 A/B 或下方按钮）", en: "Explore Branches (Tap A/B on board or below)", ja: "変化を探索（盤上の A/B または下のボタンをタップ）", ko: "변화 탐색 (바둑판 위 A/B 또는 아래 버튼 선택)", zhHant: "探索分支（點棋盤 A/B 或下方按鈕）")
+                     : l10n.localized(zh: "定式闯关：轮到你走正确定式！", en: "Joseki Quiz: Play the correct Joseki moves!", ja: "定石テスト：正しい定石の手を打ちましょう！", ko: "정석 퀴즈: 올바른 정석 수순을 두어 보세요!", zhHant: "定石闖關：輪到你走正確定石！"))
                     .font(.system(size: 12, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.grapeBottom)
 
@@ -162,7 +161,7 @@ struct JosekiTrainerView: View {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 24))
                         .foregroundColor(AppTheme.mintBottom)
-                    Text(isZh ? "定式通关！+20 🪙 已记录掌握" : "Joseki Cleared! +20 🪙 Mastered")
+                    Text(l10n.localized(zh: "定式通关！+20 🪙 已记录掌握", en: "Joseki Cleared! +20 🪙 Mastered", ja: "定石クリア！+20 🪙 習得済み", ko: "정석 클리어! +20 🪙 마스터 기록", zhHant: "定石通關！+20 🪙 已記錄掌握"))
                         .font(.system(size: 14.5, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.mintBottom)
                 }
@@ -172,7 +171,7 @@ struct JosekiTrainerView: View {
 
             if mode == .learn, let node = currentNode, !node.children.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(isZh ? "可选后续分支" : "Available Continuations")
+                    Text(l10n.localized(zh: "可选后续分支", en: "Available Continuations", ja: "次の変化候補", ko: "선택 가능한 후속 변화", zhHant: "可選後續分支"))
                         .font(.system(size: 12, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
 
@@ -186,7 +185,9 @@ struct JosekiTrainerView: View {
                                     Text(isWrong ? "✕ \(pt.humanLabel(boardSize: course.boardSize))" : "\(idx + 1). \(pt.humanLabel(boardSize: course.boardSize))")
                                         .font(.system(size: 13.5, weight: .black, design: .rounded))
                                     Spacer()
-                                    Text(isWrong ? (isZh ? "常见错手" : "Mistake") : (isZh ? "定式正着" : "Joseki"))
+                                    Text(isWrong
+                                         ? l10n.localized(zh: "常见错手", en: "Mistake", ja: "よくある悪手", ko: "자주 두는 실수", zhHant: "常見錯手")
+                                         : l10n.localized(zh: "定式正着", en: "Joseki", ja: "定石の正着", ko: "정석 정착", zhHant: "定石正著"))
                                         .font(.system(size: 11, weight: .bold, design: .rounded))
                                 }
                                 .foregroundColor(isWrong ? AppTheme.coralBottom : AppTheme.inkPrimary)
@@ -204,7 +205,7 @@ struct JosekiTrainerView: View {
                 Button {
                     stepBack()
                 } label: {
-                    Label(isZh ? "退一步" : "Back", systemImage: "arrow.uturn.backward")
+                    Label(l10n.localized(zh: "退一步", en: "Back", ja: "1手戻る", ko: "한 수 뒤로", zhHant: "退一步"), systemImage: "arrow.uturn.backward")
                         .font(.system(size: 14, weight: .heavy, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
@@ -216,7 +217,7 @@ struct JosekiTrainerView: View {
                 Button {
                     resetCourse()
                 } label: {
-                    Label(isZh ? "重来" : "Reset", systemImage: "arrow.counterclockwise")
+                    Label(l10n.localized(zh: "重来", en: "Reset", ja: "やり直す", ko: "처음부터", zhHant: "重來"), systemImage: "arrow.counterclockwise")
                         .font(.system(size: 14, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -268,7 +269,13 @@ struct JosekiTrainerView: View {
         } else if mode == .quiz {
             SoundAndHapticsManager.shared.playWrong()
             SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
-            quizWrongMessage = isZh ? "这步偏离了定式要点！试试紧贴角部或切换「演示学习」查看分支。" : "Off-joseki move! Try closer to the corner or switch to Learn mode to see the branches."
+            quizWrongMessage = l10n.localized(
+                zh: "这步偏离了定式要点！试试紧贴角部或切换「演示学习」查看分支。",
+                en: "Off-joseki move! Try closer to the corner or switch to Learn mode to see the branches.",
+                ja: "定石の急所から外れています！隅に近い手を試すか「学習モード」で変化を確認しましょう。",
+                ko: "정석의 요점에서 벗어났어요! 귀 쪽에 가깝게 두거나 「학습 모드」로 전환해 변화를 확인해 보세요.",
+                zhHant: "這步偏離了定石要點！試試緊貼角部或切換「演示學習」查看分支。"
+            )
         }
     }
 

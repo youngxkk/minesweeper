@@ -55,6 +55,7 @@ final class AppState: ObservableObject {
     private var eyeCareTimer: Timer?
     private var codexToastTask: Task<Void, Never>?
     private var activeSessionMinutes: Int = 0
+    private var isAppActive: Bool = true
 
     var l10n: L10n {
         L10n(language: settings.language)
@@ -185,6 +186,9 @@ final class AppState: ObservableObject {
         self.photoJudgeHistory = loadedPhotoHistory
         self.pausedAIMatch = loadedPausedMatch
 
+        if self.puzzleProgress.refreshGauntletHearts() {
+            storage.savePuzzleProgress(self.puzzleProgress, for: loadedProfile.id)
+        }
         syncFeedbackSettings()
         restartEyeCareTimer()
         syncMusicMood()
@@ -221,7 +225,7 @@ final class AppState: ObservableObject {
     }
 
     func addFamilyProfile(nickname: String, avatarEmoji: String) {
-        let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = UserProfile.clampedNickname(nickname.trimmingCharacters(in: .whitespacesAndNewlines))
         let finalName = trimmed.isEmpty ? l10n.t("settings.profile.newKidDefault") : trimmed
         let newKid = UserProfile(nickname: finalName, avatarEmoji: avatarEmoji)
         var list = familyProfiles
@@ -229,6 +233,44 @@ final class AppState: ObservableObject {
         storage.saveFamilyProfiles(list)
         familyProfiles = list
         switchProfile(to: newKid)
+    }
+
+    func editFamilyProfile(_ target: UserProfile, nickname: String, avatarEmoji: String) {
+        let trimmed = UserProfile.clampedNickname(nickname.trimmingCharacters(in: .whitespacesAndNewlines))
+        let finalName = trimmed.isEmpty ? target.nickname : trimmed
+        var list = familyProfiles
+        if let idx = list.firstIndex(where: { $0.id == target.id }) {
+            list[idx].nickname = finalName
+            list[idx].avatarEmoji = avatarEmoji
+            storage.saveFamilyProfiles(list)
+            familyProfiles = list
+        }
+        if profile.id == target.id {
+            profile.nickname = finalName
+            profile.avatarEmoji = avatarEmoji
+            storage.saveProfile(profile)
+            familyProfiles = storage.loadFamilyProfiles()
+        }
+        SoundAndHapticsManager.shared.playUITap()
+    }
+
+    func deleteFamilyProfile(_ target: UserProfile) {
+        guard familyProfiles.count > 1 else { return }
+        let list = familyProfiles.filter { $0.id != target.id }
+        guard !list.isEmpty else { return }
+        storage.saveFamilyProfiles(list)
+        familyProfiles = list
+
+        if profile.id == target.id {
+            let nextProfile = list[0]
+            profile = nextProfile
+            storage.saveProfile(nextProfile)
+            pendingIslandUnlocks.removeAll()
+            puzzleProgress = storage.loadPuzzleProgress(for: nextProfile.id)
+            pausedAIMatch = storage.loadPausedAIMatch(for: nextProfile.id)
+            activeGameViewModel = nil
+        }
+        SoundAndHapticsManager.shared.playUITap(weight: .light)
     }
 
     func isThemeUnlocked(_ theme: BoardTheme) -> Bool {
@@ -326,6 +368,7 @@ final class AppState: ObservableObject {
         SoundAndHapticsManager.shared.zenDojoMode = settings.zenDojoMode
         SoundAndHapticsManager.shared.hapticsEnabled = settings.hapticsEnabled
         SoundAndHapticsManager.shared.updateBGMPlayback()
+        CoreMLGoAIEngine.shared.setActiveModelPreset(settings.aiModelPreset)
     }
 
     func syncMusicMood() {
@@ -347,15 +390,32 @@ final class AppState: ObservableObject {
         }
     }
 
+    func setAppActive(_ active: Bool) {
+        guard isAppActive != active else { return }
+        isAppActive = active
+        SoundAndHapticsManager.shared.setAppActive(active)
+        if active {
+            refreshGauntletHearts()
+            scheduleEyeCareTimerIfNeeded()
+        } else {
+            eyeCareTimer?.invalidate()
+            eyeCareTimer = nil
+        }
+    }
+
     private func restartEyeCareTimer() {
         eyeCareTimer?.invalidate()
         eyeCareTimer = nil
         activeSessionMinutes = 0
-        guard settings.eyeCareMinutes > 0 else { return }
+        scheduleEyeCareTimerIfNeeded()
+    }
+
+    private func scheduleEyeCareTimerIfNeeded() {
+        guard isAppActive, settings.eyeCareMinutes > 0, eyeCareTimer == nil else { return }
 
         eyeCareTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.isAppActive else { return }
                 self.activeSessionMinutes += 1
                 if self.settings.eyeCareMinutes > 0 && self.activeSessionMinutes >= self.settings.eyeCareMinutes {
                     self.activeSessionMinutes = 0
@@ -711,8 +771,8 @@ final class AppState: ObservableObject {
             advanceDailyStreak(&p)
         }
 
-        // Report campaign star milestone to Apple Game Center
-        GameCenterService.shared.reportCampaignStars(puzzleProgress.totalCampaignStars)
+        // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+        // GameCenterService.shared.reportCampaignStars(puzzleProgress.totalCampaignStars)
     }
 
     func unlockSeaViaSkipGate(seaId: String) {
@@ -781,11 +841,68 @@ final class AppState: ObservableObject {
             advanceDailyStreak(&p)
         }
 
-        GameCenterService.shared.reportPuzzleRushScore(score)
+        // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+        // GameCenterService.shared.reportPuzzleRushScore(score)
     }
 
     func adaptiveDailyPuzzle(for date: Date = Date()) -> GoPuzzle {
         PuzzlePackLoader.rankAdaptiveDailyPuzzle(for: date, certifiedRankTier: profile.certifiedRankTier)
+    }
+
+    // MARK: - Persistent Gauntlet Hearts & Mistake Review Recovery
+
+    var currentGauntletHearts: Int {
+        puzzleProgress.effectiveGauntletHearts()
+    }
+
+    func secondsUntilNextGauntletHeart(now: Date = Date()) -> Int? {
+        puzzleProgress.secondsUntilNextHeart(now: now)
+    }
+
+    func refreshGauntletHearts(now: Date = Date()) {
+        if puzzleProgress.refreshGauntletHearts(now: now) {
+            storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+        }
+    }
+
+    @discardableResult
+    func consumeGauntletHeart(forPuzzleId puzzleId: String, now: Date = Date()) -> Int {
+        let remaining = puzzleProgress.consumeGauntletHeart(forPuzzleId: puzzleId, now: now)
+        storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+        return remaining
+    }
+
+    func restoreGauntletHeartsFromMistakeReview(reviewedPuzzleIds: [String], now: Date = Date()) {
+        puzzleProgress.restoreGauntletHeartsAfterReview(reviewedPuzzleIds: reviewedPuzzleIds, now: now)
+        storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+    }
+
+    /// Returns up to `limit` recently missed puzzles for interactive mistake-review heart recovery.
+    func pendingMistakeReviewPuzzles(fallbackPuzzles: [GoPuzzle] = [], limit: Int = 3) -> [GoPuzzle] {
+        var result: [GoPuzzle] = []
+        var seen: Set<String> = []
+        for pid in puzzleProgress.pendingReviewPuzzleIds {
+            if let puzzle = findAnyPuzzle(withId: pid), seen.insert(puzzle.id).inserted {
+                result.append(puzzle)
+                if result.count >= limit { return result }
+            }
+        }
+        for pid in puzzleProgress.mistakeBookIds {
+            if let puzzle = findAnyPuzzle(withId: pid), seen.insert(puzzle.id).inserted {
+                result.append(puzzle)
+                if result.count >= limit { return result }
+            }
+        }
+        for puzzle in fallbackPuzzles {
+            if seen.insert(puzzle.id).inserted {
+                result.append(puzzle)
+                if result.count >= limit { return result }
+            }
+        }
+        if result.isEmpty, let first = BuiltInPuzzleLibrary.allPuzzles.first {
+            result.append(first)
+        }
+        return result
     }
 
     func recordPuzzleMistake(puzzleId: String, isStarterBootcamp: Bool = false) {
@@ -906,16 +1023,16 @@ final class AppState: ObservableObject {
             if let reward = StoneStyle.allCases.first(where: { $0.bossUnlockIslandId == bossId }) {
                 bossRewardStyle = reward
             }
-            // Report Sea-clear Game Center achievements for Sea Bosses
-            if bossId == "s1-lighthouse" {
-                GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea1Cleared, percentComplete: 100)
-            } else if bossId == "s2-summit" {
-                GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea2Cleared, percentComplete: 100)
-            } else if bossId == "s3-sanctum" {
-                GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea3Cleared, percentComplete: 100)
-            } else if bossId == "s4-zenith" {
-                GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea4Cleared, percentComplete: 100)
-            }
+            // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+            // if bossId == "s1-lighthouse" {
+            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea1Cleared, percentComplete: 100)
+            // } else if bossId == "s2-summit" {
+            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea2Cleared, percentComplete: 100)
+            // } else if bossId == "s3-sanctum" {
+            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea3Cleared, percentComplete: 100)
+            // } else if bossId == "s4-zenith" {
+            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea4Cleared, percentComplete: 100)
+            // }
         }
 
         let isEarlyResignation = !didHumanWin && record.moveCount < 10 && record.resultString.hasSuffix("+R")
@@ -932,9 +1049,10 @@ final class AppState: ObservableObject {
                     if let diff = opponentDifficulty, diff.certifiedRankTier > p.certifiedRankTier {
                         p.certifiedRankTier = diff.certifiedRankTier
                     }
-                    if p.certifiedRankTier >= 6 {
-                        GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.certifiedShodan, percentComplete: 100)
-                    }
+                    // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+                    // if p.certifiedRankTier >= 6 {
+                    //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.certifiedShodan, percentComplete: 100)
+                    // }
                 }
                 p.totalCaptures += capturesByHuman
                 advanceDailyStreak(&p)

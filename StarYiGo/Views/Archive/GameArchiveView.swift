@@ -231,12 +231,14 @@ struct GameArchiveView: View {
         return Button {
             appState.navigationPath.append(.reviewGame(recordId: entry.recordId))
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                // Row 1: Board Size + Rank Tag + Studied Stamp
+            VStack(alignment: .leading, spacing: 8) {
+                // Row 1: Uniform-height tag bar (26pt fixed)
                 HStack(spacing: 6) {
                     Text("\(entry.boardSize)×\(entry.boardSize)")
                         .font(.system(size: 11.5, weight: .black, design: .rounded))
                         .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)))
@@ -244,94 +246,79 @@ struct GameArchiveView: View {
                     Text(entry.rankTag)
                         .font(.system(size: 11, weight: .black, design: .rounded))
                         .foregroundColor(accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(accent.opacity(0.12)))
 
-                    Spacer()
+                    if entry.hall == .masterpieces {
+                        Text(l10n.localized(
+                            zh: "全谱 \(entry.moveCount) 手",
+                            en: "\(entry.moveCount) moves",
+                            ja: "全\(entry.moveCount)手",
+                            ko: "전보 \(entry.moveCount)수",
+                            zhHant: "全譜 \(entry.moveCount) 手"
+                        ))
+                        .font(.system(size: 10.5, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.mintBottom)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(AppTheme.mintTop.opacity(0.14)))
+                    }
+
+                    Spacer(minLength: 4)
 
                     if isStudied {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 12, weight: .black))
+                                .font(.system(size: 11.5, weight: .black))
                             Text(l10n.localized(zh: "已赏析 ★", en: "Studied ★", ja: "鑑賞済 ★", ko: "감상 ★", zhHant: "已賞析 ★"))
-                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                         }
                         .foregroundColor(AppTheme.sunBottom)
-                        .padding(.horizontal, 9)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(AppTheme.softGoldBg))
-                    } else {
-                        Text(entry.eraOrTag(l10n))
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundColor(AppTheme.inkSecondary)
-                            .lineLimit(1)
                     }
                 }
+                .frame(height: 26)
 
-                // Row 2: Title
+                // Row 2: Title (uniform 2-line space)
                 Text(entry.title(l10n))
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(.system(size: 17.5, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
 
-                // Row 3: Story Hook
+                // Row 3: Story Hook (uniform 3-line space)
                 Text(entry.hook(l10n))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
+                    .multilineTextAlignment(.leading)
                     .lineSpacing(2.5)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(3, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
 
-                // Row 4: Interactive Feature Badges + Play Chevron
-                HStack(spacing: 6) {
-                    if entry.hasQuiz {
-                        featureTag(
-                            icon: "sparkles",
-                            text: l10n.localized(zh: "猜大师下一手", en: "Master Quiz", ja: "次の一手", ko: "다음 수 퀴즈", zhHant: "猜大師下一手"),
-                            color: AppTheme.grapeBottom
-                        )
-                    }
-                    if entry.hasCounterExample {
-                        featureTag(
-                            icon: "arrow.left.arrow.right",
-                            text: l10n.localized(zh: "正反对比", en: "Good vs Mistake", ja: "正誤比較", ko: "정수 vs 실수", zhHant: "正反對比"),
-                            color: AppTheme.coralBottom
-                        )
-                    }
-                    if !entry.highlights.isEmpty && !entry.hasCounterExample {
-                        featureTag(
-                            icon: "bookmark.fill",
-                            text: l10n.localized(zh: "\(entry.highlights.count) 处高光", en: "\(entry.highlights.count) Highlights", ja: "\(entry.highlights.count) 見どころ", ko: "하이라이트 \(entry.highlights.count)", zhHant: "\(entry.highlights.count) 處高光"),
-                            color: AppTheme.mintBottom
-                        )
-                    }
+                Spacer(minLength: 2)
 
-                    Spacer()
-
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(LinearGradient(colors: [accent.opacity(0.85), accent], startPoint: .top, endPoint: .bottom))
-                }
+                // Row 4: Era / Tag pinned cleanly at the exact same bottom baseline
+                Text(entry.eraOrTag(l10n))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(18)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224)
         .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
         .accessibilityIdentifier("AcademyEntry_\(entry.id)")
-    }
-
-    private func featureTag(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .black))
-            Text(text)
-                .font(.system(size: 11, weight: .heavy, design: .rounded))
-        }
-        .foregroundColor(color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Capsule().fill(color.opacity(0.11)))
     }
 }

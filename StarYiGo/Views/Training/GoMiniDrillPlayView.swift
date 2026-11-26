@@ -25,6 +25,14 @@ struct GoMiniDrillPlayView: View {
     @State private var displayState: GoBoardState = GoBoardState(size: 9)
     @State private var animTask: Task<Void, Never>?
 
+    // Board tactile & wrong-move feedback state
+    @State private var wrongFlashPoint: BoardPoint? = nil
+    @State private var wrongFlashID: UUID = UUID()
+    @State private var capturedFlashPoints: [BoardPoint] = []
+    @State private var captureEventID: UUID = UUID()
+    @State private var lastWrongAttemptText: String? = nil
+    @State private var hadWrongAttemptOnCurrent: Bool = false
+
     // Counting quiz territory reveal
     @State private var showCountingReveal: Bool = false
 
@@ -33,7 +41,6 @@ struct GoMiniDrillPlayView: View {
     @State private var drillTimer: Timer?
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
 
     private var totalItems: Int {
         switch kind {
@@ -58,7 +65,9 @@ struct GoMiniDrillPlayView: View {
         case .openingPicker:
             let item = GoMiniDrillsLibrary.openingDrills[activeIndex]
             var map: [BoardPoint: String] = [:]
-            for c in item.choices { map[c.point] = c.id }
+            for c in item.choices where displayState.stone(at: c.point) == nil {
+                map[c.point] = c.id
+            }
             return map
         case .ladderReading:
             let item = GoMiniDrillsLibrary.ladderDrills[activeIndex]
@@ -92,8 +101,14 @@ struct GoMiniDrillPlayView: View {
                         }
                         Spacer()
                         GameTitleCrest(
-                            title: kind.title(isChinese: isZh),
-                            subtitle: isZh ? "第 \(min(questionsDone + 1, goalCount))/\(goalCount) 题 · 得分 \(score)" : "Q \(min(questionsDone + 1, goalCount))/\(goalCount) · Score \(score)"
+                            title: kind.title(isChinese: l10n.language.isChinese),
+                            subtitle: l10n.localized(
+                                zh: "第 \(min(questionsDone + 1, goalCount))/\(goalCount) 题 · 得分 \(score)",
+                                en: "Q \(min(questionsDone + 1, goalCount))/\(goalCount) · Score \(score)",
+                                ja: "第 \(min(questionsDone + 1, goalCount))/\(goalCount) 問 · スコア \(score)",
+                                ko: "\(min(questionsDone + 1, goalCount))/\(goalCount)번 · 점수 \(score)",
+                                zhHant: "第 \(min(questionsDone + 1, goalCount))/\(goalCount) 題 · 得分 \(score)"
+                            )
                         )
                         Spacer()
                         if kind == .speedLiberties {
@@ -141,6 +156,7 @@ struct GoMiniDrillPlayView: View {
         GoBoardView(
             boardState: displayState,
             theme: appState.settings.boardTheme,
+            stoneStyle: appState.settings.stoneStyle,
             showCoordinates: appState.settings.showCoordinates,
             showMoveNumbers: false,
             highlightAtari: kind != .speedLiberties && kind != .ladderReading,
@@ -149,7 +165,14 @@ struct GoMiniDrillPlayView: View {
             showTwoEyeGlow: false,
             territoryEstimate: (kind == .countingQuiz && showCountingReveal) ? GoScoring.estimateTerritory(state: displayState) : nil,
             labeledPoints: boardLabels,
-            isInteractive: kind == .speedLiberties || kind == .openingPicker || kind == .blunderSpotter,
+            previewColor: .black,
+            isInteractive: !answered && (kind == .speedLiberties || kind == .openingPicker || kind == .blunderSpotter),
+            capturedFlashPoints: capturedFlashPoints,
+            captureEventID: captureEventID,
+            illegalFlashPoint: wrongFlashPoint,
+            illegalEventID: wrongFlashID,
+            libertyBadgeFormat: l10n.t("game.libertiesBadge"),
+            koBadgeLabel: l10n.t("board.koBadge"),
             onSelectPoint: { pt in
                 handleBoardTap(pt)
             }
@@ -163,8 +186,8 @@ struct GoMiniDrillPlayView: View {
                 VStack(spacing: 12) {
                     Text("🏆").font(.system(size: 46))
                     Text(isDailyDojoWarmup
-                         ? (isZh ? "今日热身完成！" : "Daily Warmup Done!")
-                         : (isZh ? "专项闯关完成！" : "Mini-Drill Cleared!"))
+                         ? l10n.localized(zh: "今日热身完成！", en: "Daily Warmup Done!", ja: "今日のウォームアップ完了！", ko: "오늘의 워밍업 완료!", zhHant: "今日熱身完成！")
+                         : l10n.localized(zh: "专项闯关完成！", en: "Mini-Drill Cleared!", ja: "特訓クリア！", ko: "특훈 클리어!", zhHant: "專項闖關完成！"))
                         .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                     HStack(spacing: 6) {
@@ -174,14 +197,19 @@ struct GoMiniDrillPlayView: View {
                                 .foregroundColor(i <= stars ? AppTheme.sunBottom : AppTheme.subtleBorder)
                         }
                     }
-                    Text(isZh ? "答对 \(score)/\(goalCount) 题" : "Scored \(score)/\(goalCount)")
+                    Text(l10n.localized(zh: "答对 \(score)/\(goalCount) 题", en: "Scored \(score)/\(goalCount)", ja: "\(score)/\(goalCount) 問正解", ko: "\(score)/\(goalCount)문제 정답", zhHant: "答對 \(score)/\(goalCount) 題"))
                         .font(.system(size: 14, weight: .heavy, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
 
                     Button {
                         appState.popRoute()
                     } label: {
-                        Label(isZh ? "返回岛屿继续闯关" : "Return to Island", systemImage: "flag.checkered")
+                        Label(
+                            isDailyDojoWarmup
+                                ? l10n.localized(zh: "返回每日道场", en: "Return to Daily Dojo", ja: "毎日の道場に戻る", ko: "일일 도장으로 돌아가기", zhHant: "返回每日道場")
+                                : l10n.localized(zh: "返回岛屿继续闯关", en: "Return to Island", ja: "島に戻って挑戦を続ける", ko: "섬으로 돌아가 계속 도전", zhHant: "返回島嶼繼續闖關"),
+                            systemImage: "flag.checkered"
+                        )
                             .font(.system(size: 15, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -195,18 +223,27 @@ struct GoMiniDrillPlayView: View {
             switch kind {
             case .speedLiberties:
                 let q = GoMiniDrillsLibrary.speedLibertyQuestions[activeIndex]
-                promptCard(title: isZh ? "闪电火眼金睛" : "Speed Spotter", body: isZh ? q.promptZh : q.promptEn)
+                promptCard(
+                    title: l10n.localized(zh: "闪电火眼金睛", en: "Speed Spotter", ja: "スピード呼吸点チェック", ko: "스피드 활로 찾기", zhHant: "閃電火眼金睛"),
+                    body: l10n.localized(zh: q.promptZh, en: q.promptEn)
+                )
 
             case .ladderReading:
                 let item = GoMiniDrillsLibrary.ladderDrills[activeIndex]
                 promptCard(
-                    title: isZh ? item.titleZh : item.titleEn,
-                    body: isZh ? "黑棋下在 ① 发动征子！不要落子，先在脑中沿着 45° 斜线算清楚：征子能吃掉白棋吗？" : "Black starts the ladder at ①! Read in your head without placing stones: does Black capture White?"
+                    title: l10n.localized(zh: item.titleZh, en: item.titleEn),
+                    body: l10n.localized(
+                        zh: "黑棋下在 ① 发动征子！不要落子，先在脑中沿着 45° 斜线算清楚：征子能吃掉白棋吗？",
+                        en: "Black starts the ladder at ①! Read in your head without placing stones: does Black capture White?",
+                        ja: "黒①でシチョウを仕掛けます！石を置かずに頭の中で斜めに読み切りましょう：黒は白を取れますか？",
+                        ko: "흑이 ①에 두어 축을 시작합니다! 돌을 놓지 말고 머릿속으로 대각선을 수읽기해 보세요: 축으로 백을 잡을 수 있을까요?",
+                        zhHant: "黑棋下在 ① 發動征子！不要落子，先在腦中沿著 45° 斜線算清楚：征子能吃掉白棋嗎？"
+                    )
                 )
                 if !answered {
                     HStack(spacing: 10) {
                         Button { answerLadder(guessWorks: true) } label: {
-                            Label(isZh ? "征子成立 ✅" : "Works ✅", systemImage: "checkmark.circle.fill")
+                            Label(l10n.localized(zh: "征子成立 ✅", en: "Works ✅", ja: "シチョウ成立 ✅", ko: "축 성립 ✅", zhHant: "征子成立 ✅"), systemImage: "checkmark.circle.fill")
                                 .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -215,7 +252,7 @@ struct GoMiniDrillPlayView: View {
                         .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
 
                         Button { answerLadder(guessWorks: false) } label: {
-                            Label(isZh ? "征子失败 ❌" : "Fails ❌", systemImage: "xmark.circle.fill")
+                            Label(l10n.localized(zh: "征子失败 ❌", en: "Fails ❌", ja: "シチョウ不成立 ❌", ko: "축 실패 ❌", zhHant: "征子失敗 ❌"), systemImage: "xmark.circle.fill")
                                 .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -228,13 +265,19 @@ struct GoMiniDrillPlayView: View {
             case .countingQuiz:
                 let item = GoMiniDrillsLibrary.countingDrills[activeIndex]
                 promptCard(
-                    title: isZh ? item.titleZh : item.titleEn,
-                    body: isZh ? "中国数子法（白棋贴 \(String(format: "%.1f", item.komi)) 目）：不用辅助工具，快速心算判断哪一方领先？" : "Chinese Area Scoring (Komi \(String(format: "%.1f", item.komi))): Estimate who is ahead on the board!"
+                    title: l10n.localized(zh: item.titleZh, en: item.titleEn),
+                    body: l10n.localized(
+                        zh: "中国数子法（白棋贴 \(String(format: "%.1f", item.komi)) 目）：不用辅助工具，快速心算判断哪一方领先？",
+                        en: "Chinese Area Scoring (Komi \(String(format: "%.1f", item.komi))): Estimate who is ahead on the board!",
+                        ja: "中国ルール（コミ \(String(format: "%.1f", item.komi)) 目）：補助なしで素早く形勢判断しましょう。どちらが優勢？",
+                        ko: "중국식 계가(덤 \(String(format: "%.1f", item.komi))집): 보조 도구 없이 빠르게 형세판단해 보세요. 어느 쪽이 유리할까요?",
+                        zhHant: "中國數子法（白棋貼 \(String(format: "%.1f", item.komi)) 目）：不用輔助工具，快速心算判斷哪一方領先？"
+                    )
                 )
                 if !answered {
                     HStack(spacing: 10) {
                         Button { answerCounting(guessWinner: .black) } label: {
-                            Text(isZh ? "⚫️ 黑棋领先" : "⚫️ Black Ahead")
+                            Text(l10n.localized(zh: "⚫️ 黑棋领先", en: "⚫️ Black Ahead", ja: "⚫️ 黒優勢", ko: "⚫️ 흑 우세", zhHant: "⚫️ 黑棋領先"))
                                 .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -243,7 +286,7 @@ struct GoMiniDrillPlayView: View {
                         .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
 
                         Button { answerCounting(guessWinner: .white) } label: {
-                            Text(isZh ? "⚪️ 白棋领先" : "⚪️ White Ahead")
+                            Text(l10n.localized(zh: "⚪️ 白棋领先", en: "⚪️ White Ahead", ja: "⚪️ 白優勢", ko: "⚪️ 백 우세", zhHant: "⚪️ 白棋領先"))
                                 .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .frame(maxWidth: .infinity)
@@ -255,14 +298,14 @@ struct GoMiniDrillPlayView: View {
 
             case .openingPicker:
                 let item = GoMiniDrillsLibrary.openingDrills[activeIndex]
-                promptCard(title: isZh ? item.titleZh : item.titleEn, body: isZh ? item.promptZh : item.promptEn)
+                promptCard(title: l10n.localized(zh: item.titleZh, en: item.titleEn), body: l10n.localized(zh: item.promptZh, en: item.promptEn))
                 VStack(spacing: 9) {
                     ForEach(item.choices) { ch in
                         Button {
                             answerOpening(ch)
                         } label: {
                             HStack {
-                                Text(isZh ? ch.labelZh : ch.labelEn)
+                                Text(l10n.localized(zh: ch.labelZh, en: ch.labelEn))
                                     .font(.system(size: 14, weight: .black, design: .rounded))
                                     .foregroundColor(AppTheme.inkPrimary)
                                 Spacer()
@@ -282,14 +325,43 @@ struct GoMiniDrillPlayView: View {
             case .blunderSpotter:
                 let item = GoMiniDrillsLibrary.blunderDrills[activeIndex]
                 promptCard(
-                    title: "\(item.rankBadge) · \(isZh ? item.titleZh : item.titleEn)",
-                    body: isZh ? item.promptZh : item.promptEn
+                    title: "\(item.rankBadge) · \(l10n.localized(zh: item.titleZh, en: item.titleEn))",
+                    body: l10n.localized(zh: item.promptZh, en: item.promptEn)
+                )
+            }
+
+            if !answered, let wrongMsg = lastWrongAttemptText {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "xmark.octagon.fill")
+                        .font(.system(size: 20, weight: .black))
+                        .foregroundColor(.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(l10n.localized(zh: "落子不对，再试试！", en: "Not quite — try again!", ja: "惜しい！もう一度考えてみましょう！", ko: "아쉬워요, 다시 시도해 보세요!", zhHant: "落子不對，再試試！"))
+                            .font(.system(size: 14.5, weight: .black, design: .rounded))
+                            .foregroundColor(.red)
+                        Text(wrongMsg)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundColor(AppTheme.inkPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.red.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(Color.red.opacity(0.45), lineWidth: 2)
+                        )
                 )
             }
 
             if answered {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(isCorrectAnswer ? (isZh ? "🎉 判断完全正确！" : "🎉 Spot On!") : (isZh ? "💡 差点意思，看棋理解析：" : "💡 Good try — here's why:"))
+                    Text(isCorrectAnswer
+                         ? l10n.localized(zh: "🎉 判断完全正确！", en: "🎉 Spot On!", ja: "🎉 大正解！", ko: "🎉 완벽한 판단이에요!", zhHant: "🎉 判斷完全正確！")
+                         : l10n.localized(zh: "💡 差点意思，看棋理解析：", en: "💡 Good try — here's why:", ja: "💡 惜しい！解説をチェック：", ko: "💡 아깝네요! 해설을 확인해 보세요:", zhHant: "💡 差點意思，看棋理解析："))
                         .font(.system(size: 15, weight: .black, design: .rounded))
                         .foregroundColor(isCorrectAnswer ? AppTheme.mintBottom : AppTheme.coralBottom)
                     Text(feedbackText)
@@ -301,9 +373,11 @@ struct GoMiniDrillPlayView: View {
                         advanceToNext()
                     } label: {
                         Label(
-                            (campaignNodeId != nil && questionsDone + 1 >= goalCount)
-                                ? (isZh ? "结算本关星级 →" : "Finish Stage →")
-                                : (isZh ? "下一题 →" : "Next Question →"),
+                            ((campaignNodeId != nil || isDailyDojoWarmup) && questionsDone + 1 >= goalCount)
+                                ? (isDailyDojoWarmup
+                                    ? l10n.localized(zh: "完成今日热身 →", en: "Finish Warmup →", ja: "今日のウォームアップ完了 →", ko: "오늘의 워밍업 완료 →", zhHant: "完成今日熱身 →")
+                                    : l10n.localized(zh: "结算本关星级 →", en: "Finish Stage →", ja: "ステージ結果へ →", ko: "스테이지 정산 →", zhHant: "結算本關星級 →"))
+                                : l10n.localized(zh: "下一题 →", en: "Next Question →", ja: "次の問題 →", ko: "다음 문제 →", zhHant: "下一題 →"),
                             systemImage: "arrow.right.circle.fill"
                         )
                             .font(.system(size: 15, weight: .black, design: .rounded))
@@ -339,6 +413,10 @@ struct GoMiniDrillPlayView: View {
         isCorrectAnswer = false
         feedbackText = ""
         showCountingReveal = false
+        wrongFlashPoint = nil
+        capturedFlashPoints = []
+        lastWrongAttemptText = nil
+        hadWrongAttemptOnCurrent = false
 
         switch kind {
         case .speedLiberties:
@@ -354,24 +432,87 @@ struct GoMiniDrillPlayView: View {
         }
     }
 
+    private func placeCorrectStone(at pt: BoardPoint, color: StoneColor = .black) {
+        if case .success(let out) = displayState.applying(action: .place(pt), color: color) {
+            displayState = out.nextState
+            if !out.capturedPoints.isEmpty {
+                capturedFlashPoints = out.capturedPoints
+                captureEventID = UUID()
+                SoundAndHapticsManager.shared.playCapture(count: out.capturedPoints.count)
+            } else {
+                SoundAndHapticsManager.shared.playStonePlace()
+            }
+        }
+    }
+
+    private func triggerBoardWrong(at pt: BoardPoint, message: String) {
+        hadWrongAttemptOnCurrent = true
+        wrongFlashPoint = pt
+        wrongFlashID = UUID()
+        lastWrongAttemptText = message
+        SoundAndHapticsManager.shared.playWrong()
+        SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
+    }
+
     private func handleBoardTap(_ pt: BoardPoint) {
         guard !answered else { return }
         if kind == .speedLiberties {
             let q = GoMiniDrillsLibrary.speedLibertyQuestions[activeIndex]
-            let ok = q.targetPoints.contains(pt)
-            finishQuestion(ok: ok, explanation: isZh ? q.explanationZh : q.explanationEn)
+            if q.targetPoints.contains(pt) {
+                let placePoint = (displayState.stone(at: pt) == nil)
+                    ? pt
+                    : q.targetPoints.first(where: { displayState.stone(at: $0) == nil })
+                if let placePoint {
+                    placeCorrectStone(at: placePoint, color: .black)
+                }
+                lastWrongAttemptText = nil
+                finishQuestion(ok: true, explanation: l10n.localized(zh: q.explanationZh, en: q.explanationEn))
+            } else {
+                triggerBoardWrong(
+                    at: pt,
+                    message: l10n.localized(
+                        zh: "这里不是要点哦，再仔细看看棋盘上的气数和急所，重新落子试试！",
+                        en: "Not that intersection! Check the liberties and vital point, then try again!",
+                        ja: "ここは急所ではありません。呼吸点と急所をよく見て、もう一度打ってみましょう！",
+                        ko: "여기는 급소가 아니에요! 활로와 급소를 잘 살펴보고 다시 두어 보세요!",
+                        zhHant: "這裡不是要點喔，再仔細看看棋盤上的氣數和急所，重新落子試試！"
+                    )
+                )
+            }
         } else if kind == .openingPicker {
             let item = GoMiniDrillsLibrary.openingDrills[activeIndex]
             if let ch = item.choices.first(where: { $0.point == pt }) {
                 answerOpening(ch)
+            } else {
+                triggerBoardWrong(
+                    at: pt,
+                    message: l10n.localized(
+                        zh: "请点击标有 A / B / C 的候选大场位置哦！",
+                        en: "Tap one of the A / B / C candidate points on the board!",
+                        ja: "盤上の A / B / C の候補点をタップしてください！",
+                        ko: "바둑판 위 A / B / C 후보 자리를 눌러 주세요!",
+                        zhHant: "請點擊標有 A / B / C 的候選大場位置喔！"
+                    )
+                )
             }
         } else if kind == .blunderSpotter {
             let item = GoMiniDrillsLibrary.blunderDrills[activeIndex]
-            let ok = item.correctPoints.contains(pt)
-            if ok, case .success(let out) = displayState.applying(action: .place(pt), color: .black) {
-                displayState = out.nextState
+            if item.correctPoints.contains(pt) {
+                placeCorrectStone(at: pt, color: .black)
+                lastWrongAttemptText = nil
+                finishQuestion(ok: true, explanation: l10n.localized(zh: item.explanationZh, en: item.explanationEn))
+            } else {
+                triggerBoardWrong(
+                    at: pt,
+                    message: l10n.localized(
+                        zh: "这里还不是最佳改错点哦！观察恶手留下的弱点，换个交叉点试试！",
+                        en: "Not the winning correction yet! Spot the weakness and try another point!",
+                        ja: "まだ最善の修正手ではありません！悪手が残した弱点を見つけて別の交点を試しましょう！",
+                        ko: "아직 최선의 교정수가 아니에요! 악수가 남긴 약점을 찾아 다른 곳에 두어 보세요!",
+                        zhHant: "這裡還不是最佳改錯點喔！觀察惡手留下的弱點，換個交叉點試試！"
+                    )
+                )
             }
-            finishQuestion(ok: ok, explanation: isZh ? item.explanationZh : item.explanationEn)
         }
     }
 
@@ -379,7 +520,7 @@ struct GoMiniDrillPlayView: View {
         let item = GoMiniDrillsLibrary.ladderDrills[activeIndex]
         let eval = item.evaluate()
         let ok = (guessWorks == eval.works)
-        finishQuestion(ok: ok, explanation: isZh ? item.explanationZh : item.explanationEn)
+        finishQuestion(ok: ok, explanation: l10n.localized(zh: item.explanationZh, en: item.explanationEn))
 
         // Automatically animate the exact ladder chase step-by-step so kids SEE the proof!
         animTask?.cancel()
@@ -406,12 +547,19 @@ struct GoMiniDrillPlayView: View {
         let res = item.exactResult()
         showCountingReveal = true
         let ok = (guessWinner == res.winner)
-        let summary = res.chineseRuleSummary(isChinese: isZh)
-        finishQuestion(ok: ok, explanation: "\(summary)\n\(isZh ? item.tipZh : item.tipEn)")
+        let summary = res.chineseRuleSummary(isChinese: l10n.language.isChinese)
+        finishQuestion(ok: ok, explanation: "\(summary)\n\(l10n.localized(zh: item.tipZh, en: item.tipEn))")
     }
 
     private func answerOpening(_ choice: OpeningChoice) {
-        finishQuestion(ok: choice.isCorrect, explanation: isZh ? choice.feedbackZh : choice.feedbackEn)
+        guard !answered else { return }
+        if choice.isCorrect {
+            placeCorrectStone(at: choice.point, color: .black)
+            lastWrongAttemptText = nil
+            finishQuestion(ok: true, explanation: l10n.localized(zh: choice.feedbackZh, en: choice.feedbackEn))
+        } else {
+            triggerBoardWrong(at: choice.point, message: l10n.localized(zh: choice.feedbackZh, en: choice.feedbackEn))
+        }
     }
 
     private func finishQuestion(ok: Bool, explanation: String) {
@@ -419,7 +567,9 @@ struct GoMiniDrillPlayView: View {
         isCorrectAnswer = ok
         feedbackText = explanation
         if ok {
-            score += 1
+            if !hadWrongAttemptOnCurrent {
+                score += 1
+            }
             SoundAndHapticsManager.shared.playSuccess()
             SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.12)
             appState.updateProfile { p in

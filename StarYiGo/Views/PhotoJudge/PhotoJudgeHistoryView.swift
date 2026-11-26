@@ -32,31 +32,30 @@ struct PhotoJudgeHistoryView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            if appState.photoJudgeHistory.isEmpty {
-                emptyStateView
-            } else {
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        ForEach(groupedByDay) { section in
-                            VStack(alignment: .leading, spacing: 12) {
-                                dayHeader(section)
+        if appState.photoJudgeHistory.isEmpty {
+            emptyStateView
+                .padding(.bottom, 14)
+        } else {
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    ForEach(groupedByDay) { section in
+                        VStack(alignment: .leading, spacing: 12) {
+                            dayHeader(section)
 
-                                LazyVGrid(
-                                    columns: [GridItem(.adaptive(minimum: 420, maximum: 620), spacing: 18)],
-                                    spacing: 16
-                                ) {
-                                    ForEach(section.records) { record in
-                                        historyCard(record)
-                                    }
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 420, maximum: 620), spacing: 18)],
+                                spacing: 16
+                            ) {
+                                ForEach(section.records) { record in
+                                    historyCard(record)
                                 }
                             }
                         }
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .padding(.bottom, 16)
                 }
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+                .padding(.bottom, 28)
             }
         }
     }

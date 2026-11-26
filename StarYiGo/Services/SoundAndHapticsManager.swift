@@ -103,7 +103,7 @@ final class SoundAndHapticsManager {
             if !voiceEnabled { stopVoice() }
         }
     }
-    /// Active voice pack language code (e.g. `"zh"`; future packs: `"en"`, `"ja"`, `"ko"`).
+    /// Active voice pack language code (`"zh"`, `"en"`, `"ja"`, `"ko"`).
     var voiceLanguageCode: String = "zh"
     var zenDojoMode: Bool = false {
         didSet {
@@ -116,6 +116,7 @@ final class SoundAndHapticsManager {
     private let audio = GameAudioPlayback()
     private var currentMood: MusicMood = .none
     private var tensionActive: Bool = false
+    private var isAppActive: Bool = true
     private var lastVoiceTimestamp: [VoiceCue: TimeInterval] = [:]
 
     private let selectionFeedback = UISelectionFeedbackGenerator()
@@ -146,8 +147,17 @@ final class SoundAndHapticsManager {
         updateBGMPlayback()
     }
 
+    func setAppActive(_ active: Bool) {
+        guard isAppActive != active else { return }
+        isAppActive = active
+        if !active {
+            stopVoice()
+        }
+        updateBGMPlayback()
+    }
+
     func updateBGMPlayback() {
-        let mood = soundEnabled && bgmEnabled && !zenDojoMode ? currentMood : .none
+        let mood = isAppActive && soundEnabled && bgmEnabled && !zenDojoMode ? currentMood : .none
         let tension = (mood == .match) && tensionActive
         audio.updateMusic(to: mood, tensionLayer: tension)
     }
@@ -534,6 +544,15 @@ private final class GameAudioPlayback: @unchecked Sendable {
             if let cached = voicePlayers[fallbackName] { return cached }
             if let loaded = loadVoiceAsset(resourceName: fallbackName, languageCode: languageCode) {
                 voicePlayers[fallbackName] = loaded
+                return loaded
+            }
+        }
+        // Final fallback to English if a future/unknown language pack is missing
+        if languageCode != "en" {
+            let enFallbackName = "voice_en_\(cue.filePrefix)_1"
+            if let cached = voicePlayers[enFallbackName] { return cached }
+            if let loaded = loadVoiceAsset(resourceName: enFallbackName, languageCode: "en") {
+                voicePlayers[enFallbackName] = loaded
                 return loaded
             }
         }

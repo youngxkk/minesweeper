@@ -8,11 +8,15 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     @State private var showAddKidSheet = false
+    @State private var editingProfile: UserProfile? = nil
     @State private var newKidName = ""
     @State private var newKidAvatar = "🐼"
     @State private var unlockMessage: String? = nil
+    @State private var pendingExternalURL: URL? = nil
+    @State private var profilePendingDeletion: UserProfile? = nil
     @FocusState private var isNewKidNameFocused: Bool
 
     private let avatarChoices = ["🦊", "🐼", "🐰", "🐉", "🦢", "🐯", "🦁", "🦉", "🌟", "🎋"]
@@ -39,7 +43,7 @@ struct SettingsView: View {
                     Color.clear
                         .frame(width: 94, height: 44)
                 }
-                .padding(.horizontal, 28)
+                .padding(.horizontal, 30)
                 .padding(.top, 16)
                 .padding(.bottom, 16)
 
@@ -53,6 +57,7 @@ struct SettingsView: View {
                                 boardThemeCard
                                 scoringRuleCard
                                 assistsCard
+                                aiModelCard
                                 aiThinkingPaceCard
                                 audioAndEyeCareCard
                                 aboutFooterCard
@@ -65,21 +70,21 @@ struct SettingsView: View {
                                     profileCard
                                     languageCard
                                     boardThemeCard
+                                    audioAndEyeCareCard
                                 }
                                 .frame(maxWidth: .infinity)
 
                                 VStack(spacing: 18) {
                                     scoringRuleCard
                                     assistsCard
+                                    aiModelCard
                                     aiThinkingPaceCard
-                                    audioAndEyeCareCard
                                     aboutFooterCard
                                 }
                                 .frame(maxWidth: .infinity)
                             }
-                            .frame(maxWidth: 1080)
                             .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 28)
+                            .padding(.horizontal, 30)
                             .padding(.bottom, 32)
                         }
                     }
@@ -89,8 +94,59 @@ struct SettingsView: View {
             if showAddKidSheet {
                 addKidProfileOverlay
             }
+
+            if let targetURL = pendingExternalURL {
+                ParentalGateOverlay(
+                    l10n: l10n,
+                    onCancel: {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                            pendingExternalURL = nil
+                        }
+                    },
+                    onSuccess: {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                            pendingExternalURL = nil
+                        }
+                        openURL(targetURL)
+                    }
+                )
+            }
         }
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: showAddKidSheet)
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: pendingExternalURL != nil)
+        .gameDialog(
+            isPresented: Binding(
+                get: { profilePendingDeletion != nil },
+                set: { if !$0 { profilePendingDeletion = nil } }
+            ),
+            title: l10n.localized(
+                zh: "删除成员档案？",
+                en: "Delete Family Profile?",
+                ja: "メンバープロフィールを削除しますか？",
+                ko: "가족 프로필을 삭제할까요?",
+                zhHant: "刪除成員檔案？"
+            ),
+            message: l10n.localized(
+                zh: "确定要删除「\(profilePendingDeletion?.nickname ?? "")」的本地档案吗？此操作无法撤销。",
+                en: "Remove \"\(profilePendingDeletion?.nickname ?? "")\" from this device? This cannot be undone.",
+                ja: "「\(profilePendingDeletion?.nickname ?? "")」のプロフィールを端末から削除しますか？元に戻せません。",
+                ko: "\"\(profilePendingDeletion?.nickname ?? "")\" 프로필을 이 기기에서 삭제할까요? 되돌릴 수 없습니다.",
+                zhHant: "確定要刪除「\(profilePendingDeletion?.nickname ?? "")」的本地檔案嗎？此操作無法復原。"
+            ),
+            icon: "trash.fill",
+            accentPalette: .coral,
+            actions: [
+                .secondary(l10n.t("common.cancel")) {
+                    profilePendingDeletion = nil
+                },
+                .destructive(l10n.localized(zh: "删除", en: "Delete", ja: "削除", ko: "삭제", zhHant: "刪除")) { [target = profilePendingDeletion] in
+                    if let target {
+                        appState.deleteFamilyProfile(target)
+                    }
+                    profilePendingDeletion = nil
+                }
+            ]
+        )
     }
 
     private var addKidProfileOverlay: some View {
@@ -108,12 +164,32 @@ struct SettingsView: View {
                     .shadow(color: AppTheme.skyBottom.opacity(0.24), radius: 10, y: 4)
 
                 VStack(spacing: 6) {
-                    Text(l10n.t("settings.profile.addKidTitle"))
+                    Text(
+                        editingProfile != nil
+                            ? l10n.localized(
+                                zh: "编辑成员档案",
+                                en: "Edit Family Profile",
+                                ja: "メンバーを編集",
+                                ko: "가족 프로필 편집",
+                                zhHant: "編輯成員檔案"
+                            )
+                            : l10n.t("settings.profile.addKidTitle")
+                    )
                         .font(.system(size: 21, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .multilineTextAlignment(.center)
 
-                    Text(l10n.t("settings.profile.addKidHint"))
+                    Text(
+                        editingProfile != nil
+                            ? l10n.localized(
+                                zh: "修改昵称和专属头像，更改会立即同步到该档案。",
+                                en: "Update the nickname and mascot avatar for this profile.",
+                                ja: "ニックネームとアイコンを変更して保存できます。",
+                                ko: "닉네임과 아바타를 수정해 바로 저장할 수 있어요.",
+                                zhHant: "修改暱稱和專屬頭像，變更會立即同步到該檔案。"
+                            )
+                            : l10n.t("settings.profile.addKidHint")
+                    )
                         .font(.system(size: 13.5, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
@@ -128,6 +204,12 @@ struct SettingsView: View {
                     .multilineTextAlignment(.center)
                     .focused($isNewKidNameFocused)
                     .submitLabel(.done)
+                    .onChange(of: newKidName) { _, newValue in
+                        let clamped = UserProfile.clampedNickname(newValue)
+                        if clamped != newValue {
+                            newKidName = clamped
+                        }
+                    }
                     .onSubmit {
                         confirmAddKidProfile()
                     }
@@ -267,6 +349,7 @@ struct SettingsView: View {
     private func dismissAddKidModal() {
         isNewKidNameFocused = false
         newKidName = ""
+        editingProfile = nil
         withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
             showAddKidSheet = false
         }
@@ -274,8 +357,13 @@ struct SettingsView: View {
 
     private func confirmAddKidProfile() {
         isNewKidNameFocused = false
-        appState.addFamilyProfile(nickname: newKidName, avatarEmoji: newKidAvatar)
+        if let target = editingProfile {
+            appState.editFamilyProfile(target, nickname: newKidName, avatarEmoji: newKidAvatar)
+        } else {
+            appState.addFamilyProfile(nickname: newKidName, avatarEmoji: newKidAvatar)
+        }
         newKidName = ""
+        editingProfile = nil
         withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
             showAddKidSheet = false
         }
@@ -310,6 +398,8 @@ struct SettingsView: View {
                                 Text(kid.nickname)
                                     .font(.system(size: 12, weight: .black, design: .rounded))
                                     .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .frame(maxWidth: 96, alignment: .leading)
                             }
                             .foregroundColor(isActive ? .white : AppTheme.inkPrimary)
                             .padding(.horizontal, 12)
@@ -323,10 +413,41 @@ struct SettingsView: View {
                                 )
                             )
                         }
-                        .tactileButton(scale: 0.94, sound: false)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("FamilyProfileChip")
+                        .contentShape(.contextMenuPreview, Capsule())
+                        .contextMenu {
+                            Button {
+                                SoundAndHapticsManager.shared.playUITap(weight: .light)
+                                editingProfile = kid
+                                newKidName = kid.nickname
+                                newKidAvatar = kid.avatarEmoji
+                                withAnimation(.spring(response: 0.26, dampingFraction: 0.78)) {
+                                    showAddKidSheet = true
+                                }
+                            } label: {
+                                Label(
+                                    l10n.localized(zh: "编辑档案", en: "Edit Profile", ja: "プロフィールを編集", ko: "프로필 편집", zhHant: "編輯檔案"),
+                                    systemImage: "pencil"
+                                )
+                            }
+
+                            Button(role: .destructive) {
+                                SoundAndHapticsManager.shared.playUITap(weight: .light)
+                                profilePendingDeletion = kid
+                            } label: {
+                                Label(
+                                    l10n.localized(zh: "删除档案", en: "Delete Profile", ja: "プロフィールを削除", ko: "프로필 삭제", zhHant: "刪除檔案"),
+                                    systemImage: "trash"
+                                )
+                            }
+                            .disabled(appState.familyProfiles.count <= 1)
+                        }
                     }
 
                     Button {
+                        editingProfile = nil
+                        newKidName = ""
                         newKidAvatar = avatarChoices.randomElement() ?? "🐼"
                         showAddKidSheet = true
                     } label: {
@@ -351,7 +472,10 @@ struct SettingsView: View {
                     l10n.t("settings.profile.nickname"),
                     text: Binding(
                         get: { appState.profile.nickname },
-                        set: { newVal in appState.updateProfile { $0.nickname = newVal } }
+                        set: { newVal in
+                            let clamped = UserProfile.clampedNickname(newVal)
+                            appState.updateProfile { $0.nickname = clamped }
+                        }
                     )
                 )
                 .font(.system(size: 15, weight: .heavy, design: .rounded))
@@ -360,7 +484,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(Capsule().fill(AppTheme.canvasBackground))
-                .frame(maxWidth: 220)
+                .frame(maxWidth: 260)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -407,7 +531,11 @@ struct SettingsView: View {
     private func languageOption(_ lang: AppLanguage, label: String) -> some View {
         let selected = appState.settings.language == lang
         return Button {
+            let changed = appState.settings.language != lang
             appState.updateSettings { $0.language = lang }
+            if changed && appState.settings.voiceEnabled {
+                SoundAndHapticsManager.shared.playVoice(.welcome)
+            }
         } label: {
             Text(label)
                 .font(.system(size: 12.5, weight: .heavy, design: .rounded))
@@ -537,8 +665,7 @@ struct SettingsView: View {
     }
 
     private var scoringRuleCard: some View {
-        let isZh = l10n.language.isChinese
-        return VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionHeader(
                 l10n.localized(
                     zh: "终局计分规则",
@@ -557,7 +684,11 @@ struct SettingsView: View {
                     Button {
                         appState.updateSettings { $0.scoringRule = rule }
                     } label: {
-                        Text(rule == .chinese ? (isZh ? "中国数子法" : "Chinese Area") : (isZh ? "日韩数目法" : "Japanese Terr."))
+                        Text(
+                            rule == .chinese
+                            ? l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국식 계가", zhHant: "中國數子法")
+                            : l10n.localized(zh: "日韩数目法", en: "Japanese Terr.", ja: "日韓ルール", ko: "한일식 계가", zhHant: "日韓數目法")
+                        )
                             .font(.system(size: 12.5, weight: .black, design: .rounded))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
@@ -571,19 +702,26 @@ struct SettingsView: View {
     }
 
     private var assistsCard: some View {
-        let isZh = l10n.language.isChinese
-        return VStack(alignment: .leading, spacing: 11) {
+        VStack(alignment: .leading, spacing: 11) {
             sectionHeader(l10n.t("settings.section.assists"), icon: "sparkles", color: AppTheme.mintBottom)
 
             // P2: Assist Graduation Ladder ("脱拐辅助阶梯")
             VStack(alignment: .leading, spacing: 6) {
-                Text(isZh ? "视觉辅助退场阶梯（从启蒙过渡到真棋盘）" : "Assist Graduation (Starter -> Real Board)")
+                Text(
+                    l10n.localized(
+                        zh: "视觉辅助退场阶梯（从启蒙过渡到真棋盘）",
+                        en: "Assist Graduation (Starter -> Real Board)",
+                        ja: "視覚アシスト段階（入門から実戦盤へ）",
+                        ko: "시각 보조 단계 (입문 → 실전 바둑판)",
+                        zhHant: "視覺輔助退場階梯（從啟蒙過渡到真棋盤）"
+                    )
+                )
                     .font(.system(size: 12.5, weight: .heavy, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
                 HStack(spacing: 6) {
-                    assistPresetChip(.starter, label: isZh ? "启蒙全辅" : "Starter")
-                    assistPresetChip(.intermediate, label: isZh ? "进阶半辅" : "Mid")
-                    assistPresetChip(.examSim, label: isZh ? "考场脱拐" : "Exam Sim")
+                    assistPresetChip(.starter, label: l10n.localized(zh: "启蒙全辅", en: "Starter", ja: "入門フル", ko: "입문 전체", zhHant: "啟蒙全輔"))
+                    assistPresetChip(.intermediate, label: l10n.localized(zh: "进阶半辅", en: "Mid", ja: "中級", ko: "중급 보조", zhHant: "進階半輔"))
+                    assistPresetChip(.examSim, label: l10n.localized(zh: "考场脱拐", en: "Exam Sim", ja: "実戦モード", ko: "실전 모드", zhHant: "考場脫拐"))
                 }
             }
 
@@ -616,15 +754,68 @@ struct SettingsView: View {
                 get: { appState.settings.highlightAtari },
                 set: { v in appState.updateSettings { $0.highlightAtari = v; $0.assistPreset = .custom } }
             ))
-            gameToggleRow(isZh ? "做题自动随机旋转/黑白互换" : "Auto-Rotate & Flip Puzzles", isOn: Binding(
-                get: { appState.settings.autoTransformPuzzles },
-                set: { v in appState.updateSettings { $0.autoTransformPuzzles = v } }
-            ))
+            gameToggleRow(
+                l10n.localized(
+                    zh: "做题自动随机旋转/黑白互换",
+                    en: "Auto-Rotate & Flip Puzzles",
+                    ja: "問題を自動回転・白黒反転",
+                    ko: "문제 자동 회전·흑백 반전",
+                    zhHant: "做題自動隨機旋轉/黑白互換"
+                ),
+                isOn: Binding(
+                    get: { appState.settings.autoTransformPuzzles },
+                    set: { v in appState.updateSettings { $0.autoTransformPuzzles = v } }
+                )
+            )
             gameToggleRow(l10n.t("settings.assist.zenMode"), isOn: Binding(
                 get: { appState.settings.zenDojoMode },
                 set: { v in appState.updateSettings { $0.zenDojoMode = v; $0.assistPreset = .custom } }
             ))
         }
+        .warmCard(cornerRadius: 24, padding: 18)
+    }
+
+    private var aiModelCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                l10n.localized(
+                    zh: "本地 AI 围棋模型",
+                    en: "Offline Go AI Model",
+                    ja: "ローカル囲碁 AI モデル",
+                    ko: "오프라인 바둑 AI 모델",
+                    zhHant: "本地 AI 圍棋模型"
+                ),
+                icon: "brain.head.profile",
+                color: AppTheme.grapeBottom
+            )
+
+            HStack(spacing: 6) {
+                ForEach(KataGoModelPreset.allCases) { preset in
+                    let selected = appState.settings.aiModelPreset == preset
+                    Button {
+                        appState.updateSettings {
+                            $0.aiModelPreset = preset
+                        }
+                    } label: {
+                        Text(preset.shortTitle(l10n))
+                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .foregroundColor(selected ? .white : AppTheme.inkPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .accessibilityIdentifier("SettingsAIModel_\(preset.rawValue)")
+                }
+            }
+
+            Text(appState.settings.aiModelPreset.summaryText(l10n))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .warmCard(cornerRadius: 24, padding: 18)
     }
 
@@ -739,8 +930,18 @@ struct SettingsView: View {
     }
 
     private var aboutFooterCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader(l10n.t("settings.section.about"), icon: "heart.circle.fill", color: AppTheme.skyBottom)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                sectionHeader(l10n.t("settings.section.about"), icon: "heart.circle.fill", color: AppTheme.skyBottom)
+                Spacer()
+                Text(AppLegalLinks.appVersionString)
+                    .font(.system(size: 11.5, weight: .black, design: .rounded))
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(AppTheme.canvasBackground))
+            }
+
             Text(l10n.t("settings.about.kidSafe"))
                 .font(.system(size: 13, weight: .heavy, design: .rounded))
                 .foregroundColor(AppTheme.mintBottom)
@@ -750,9 +951,54 @@ struct SettingsView: View {
             Text(CoreMLGoAIEngine.shared.activeEngineBadge(l10n))
                 .font(.system(size: 11.5, weight: .black, design: .rounded))
                 .foregroundColor(AppTheme.skyBottom)
+
+            Divider()
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+                legalLinkButton(
+                    title: l10n.localized(zh: "隐私政策", en: "Privacy Policy", ja: "プライバシーポリシー", ko: "개인정보 처리방침", zhHant: "隱私政策"),
+                    icon: "hand.raised.fill",
+                    url: AppLegalLinks.privacyPolicyURL(for: appState.settings.language)
+                )
+                legalLinkButton(
+                    title: l10n.localized(zh: "用户协议", en: "User Agreement", ja: "ユーザー契約", ko: "사용자 약관", zhHant: "用戶協議"),
+                    icon: "doc.text.fill",
+                    url: AppLegalLinks.userAgreementURL(for: appState.settings.language)
+                )
+                legalLinkButton(
+                    title: l10n.localized(zh: "使用条款", en: "Terms of Use", ja: "利用規約", ko: "이용약관", zhHant: "使用條款"),
+                    icon: "checkmark.shield.fill",
+                    url: AppLegalLinks.termsOfUseURL(for: appState.settings.language)
+                )
+                legalLinkButton(
+                    title: l10n.localized(zh: "技术支持", en: "Support", ja: "サポート", ko: "고객 지원", zhHant: "技術支援"),
+                    icon: "lifepreserver.fill",
+                    url: AppLegalLinks.supportURL(for: appState.settings.language)
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .warmCard(cornerRadius: 24, padding: 18)
+    }
+
+    private func legalLinkButton(title: String, icon: String, url: URL) -> some View {
+        Button {
+            SoundAndHapticsManager.shared.playUITap(weight: .light)
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                pendingExternalURL = url
+            }
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                .foregroundColor(AppTheme.skyBottom)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(AppTheme.skyTop.opacity(0.12)))
+        }
+        .tactileButton(scale: 0.95, sound: false)
     }
 
     private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {

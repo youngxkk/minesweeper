@@ -32,6 +32,7 @@ struct StarYiGoApp: App {
 
 struct RootNavigationView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.scenePhase) private var scenePhase
 
     private var l10n: L10n { appState.l10n }
 
@@ -194,6 +195,9 @@ struct RootNavigationView: View {
             }
         }
         .tint(AppTheme.jadeAccent)
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            appState.setAppActive(phase == .active)
+        }
         .fullScreenCover(isPresented: $appState.showSettingsSheet) {
             SettingsView()
                 .environmentObject(appState)

@@ -9,7 +9,6 @@ struct RankExamHallView: View {
     @EnvironmentObject var appState: AppState
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
 
     var body: some View {
         ZStack {
@@ -22,8 +21,8 @@ struct RankExamHallView: View {
                     }
                     Spacer()
                     GameTitleCrest(
-                        title: isZh ? "星弈段级位考级室" : "Rank Certification Hall",
-                        subtitle: isZh ? "当前官方认证：\(appState.profile.rankString)" : "Certified Rank: \(appState.profile.rankString)"
+                        title: l10n.localized(zh: "星弈段级位考级室", en: "Rank Certification Hall", ja: "StarYi 段級位認定試験室", ko: "StarYi 급·단 인증 시험실", zhHant: "星弈段級位考級室"),
+                        subtitle: l10n.localized(zh: "当前官方认证：\(appState.profile.rankString)", en: "Certified Rank: \(appState.profile.rankString)", ja: "現在の認定段級位：\(appState.profile.rankString)", ko: "현재 공식 인증: \(appState.profile.rankString)", zhHant: "當前官方認證：\(appState.profile.rankString)")
                     )
                     Spacer()
                 }
@@ -61,7 +60,7 @@ struct RankExamHallView: View {
                     .padding(.vertical, 5)
                     .background(Capsule().fill(certified ? AppTheme.mintBottom : AppTheme.skyBottom))
 
-                Text(spec.title(isChinese: isZh))
+                Text(spec.title(isChinese: l10n.language.isChinese))
                     .font(.system(size: 16, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
 
@@ -76,7 +75,13 @@ struct RankExamHallView: View {
 
             HStack(spacing: 8) {
                 Label(
-                    isZh ? "笔试 5 题（对 \(spec.requiredPuzzlePass) 题）" : "Test (\(spec.requiredPuzzlePass)/5)",
+                    l10n.localized(
+                        zh: "笔试 5 题（对 \(spec.requiredPuzzlePass) 题）",
+                        en: "Test (\(spec.requiredPuzzlePass)/5)",
+                        ja: "筆記試験（5問中\(spec.requiredPuzzlePass)問）",
+                        ko: "필기시험 (5문제 중 \(spec.requiredPuzzlePass)문제)",
+                        zhHant: "筆試 5 題（對 \(spec.requiredPuzzlePass) 題）"
+                    ),
                     systemImage: writtenOK ? "checkmark.circle.fill" : "circle"
                 )
                 .font(.system(size: 12, weight: .bold, design: .rounded))
@@ -85,16 +90,26 @@ struct RankExamHallView: View {
                 Spacer()
 
                 Label(
-                    isZh ? "实战 \(wins)/\(spec.requiredMatchWins) 胜（已赛 \(played)/\(spec.matchSeriesLength)）" : "Matches \(wins)/\(spec.requiredMatchWins) (\(played)/\(spec.matchSeriesLength))",
+                    l10n.localized(
+                        zh: "实战 \(wins)/\(spec.requiredMatchWins) 胜（已赛 \(played)/\(spec.matchSeriesLength)）",
+                        en: "Matches \(wins)/\(spec.requiredMatchWins) (\(played)/\(spec.matchSeriesLength))",
+                        ja: "対局 \(wins)/\(spec.requiredMatchWins)勝（\(played)/\(spec.matchSeriesLength)局）",
+                        ko: "실전 \(wins)/\(spec.requiredMatchWins)승 (\(played)/\(spec.matchSeriesLength)국)",
+                        zhHant: "實戰 \(wins)/\(spec.requiredMatchWins) 勝（已賽 \(played)/\(spec.matchSeriesLength)）"
+                    ),
                     systemImage: matchOK ? "checkmark.circle.fill" : "circle"
                 )
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundColor(matchOK ? AppTheme.mintBottom : AppTheme.inkSecondary)
             }
 
-            Text(isZh
-                 ? "\(spec.boardSize.rawValue)路 · 考场脱拐（无辅助/禁悔棋）· \(spec.timeControl.displayLabel(isChinese: true))"
-                 : "\(spec.boardSize.rawValue)×\(spec.boardSize.rawValue) · Exam Sim (No Assist/Undo) · \(spec.timeControl.displayLabel(isChinese: false))")
+            Text(l10n.localized(
+                zh: "\(spec.boardSize.rawValue)路 · 考场脱拐（无辅助/禁悔棋）· \(spec.timeControl.displayLabel(isChinese: true))",
+                en: "\(spec.boardSize.rawValue)×\(spec.boardSize.rawValue) · Exam Sim (No Assist/Undo) · \(spec.timeControl.displayLabel(isChinese: false))",
+                ja: "\(spec.boardSize.rawValue)路盤 · 本番モード（補助なし・待ったなし）· \(spec.timeControl.displayLabel(isChinese: false))",
+                ko: "\(spec.boardSize.rawValue)줄 바둑판 · 실전 시험 (보조 없음/무르기 금지) · \(spec.timeControl.displayLabel(isChinese: false))",
+                zhHant: "\(spec.boardSize.rawValue)路 · 考場脫拐（無輔助/禁悔棋）· \(spec.timeControl.displayLabel(isChinese: true))"
+            ))
                 .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                 .foregroundColor(AppTheme.inkSecondary)
 
@@ -102,7 +117,12 @@ struct RankExamHallView: View {
                 Button {
                     appState.navigationPath.append(.rankExamTest(tier: spec.tier))
                 } label: {
-                    Label(writtenOK ? (isZh ? "重考笔试" : "Retake Test") : (isZh ? "考死活笔试" : "Take Written Test"), systemImage: "pencil.and.list.clipboard")
+                    Label(
+                        writtenOK
+                            ? l10n.localized(zh: "重考笔试", en: "Retake Test", ja: "筆記を再受験", ko: "필기 재응시", zhHant: "重考筆試")
+                            : l10n.localized(zh: "考死活笔试", en: "Take Written Test", ja: "詰碁筆記を受験", ko: "사활 필기 응시", zhHant: "考死活筆試"),
+                        systemImage: "pencil.and.list.clipboard"
+                    )
                         .font(.system(size: 13, weight: .black, design: .rounded))
                         .foregroundColor(writtenOK ? AppTheme.inkPrimary : .white)
                         .frame(maxWidth: .infinity)
@@ -113,7 +133,7 @@ struct RankExamHallView: View {
                 Button {
                     appState.startRankExamMatch(spec: spec)
                 } label: {
-                    Label(isZh ? "开始定级赛" : "Play Exam Match", systemImage: "flag.checkered")
+                    Label(l10n.localized(zh: "开始定级赛", en: "Play Exam Match", ja: "認定対局を開始", ko: "승급 대국 시작", zhHant: "開始定級賽"), systemImage: "flag.checkered")
                         .font(.system(size: 13, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -142,7 +162,6 @@ struct RankExamWrittenTestView: View {
     @State private var lastResultCorrect: Bool? = nil
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
 
     private var puzzles: [GoPuzzle] {
         spec.examPuzzleIds.compactMap { DojoPuzzleBank.findPuzzle(withId: $0) }
@@ -164,8 +183,14 @@ struct RankExamWrittenTestView: View {
                     }
                     Spacer()
                     GameTitleCrest(
-                        title: isZh ? "\(spec.rankCode) 考级笔试" : "\(spec.rankCode) Written Exam",
-                        subtitle: isZh ? "第 \(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count) 题 · 无提示无辅助" : "Q \(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count) · Exam Mode"
+                        title: l10n.localized(zh: "\(spec.rankCode) 考级笔试", en: "\(spec.rankCode) Written Exam", ja: "\(spec.rankCode) 認定筆記試験", ko: "\(spec.rankCode) 승급 필기시험", zhHant: "\(spec.rankCode) 考級筆試"),
+                        subtitle: l10n.localized(
+                            zh: "第 \(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count) 题 · 无提示无辅助",
+                            en: "Q \(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count) · Exam Mode",
+                            ja: "第 \(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count) 問 · 本番モード",
+                            ko: "\(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count)번 · 시험 모드",
+                            zhHant: "第 \(min(currentIdx + 1, max(1, puzzles.count)))/\(puzzles.count) 題 · 無提示無輔助"
+                        )
                     )
                     Spacer()
                 }
@@ -204,7 +229,9 @@ struct RankExamWrittenTestView: View {
                                     .multilineTextAlignment(.center)
 
                                 if let ok = lastResultCorrect {
-                                    Text(ok ? (isZh ? "✓ 本题答对！" : "✓ Correct!") : (isZh ? "✕ 本题失误" : "✕ Incorrect"))
+                                    Text(ok
+                                         ? l10n.localized(zh: "✓ 本题答对！", en: "✓ Correct!", ja: "✓ 正解！", ko: "✓ 정답!", zhHant: "✓ 本題答對！")
+                                         : l10n.localized(zh: "✕ 本题失误", en: "✕ Incorrect", ja: "✕ 不正解", ko: "✕ 오답", zhHant: "✕ 本題失誤"))
                                         .font(.system(size: 14, weight: .black, design: .rounded))
                                         .foregroundColor(ok ? AppTheme.mintBottom : AppTheme.coralBottom)
                                 }
@@ -226,15 +253,15 @@ struct RankExamWrittenTestView: View {
         return VStack(spacing: 14) {
             Text(passed ? "🎓" : "📚").font(.system(size: 56))
             Text(passed
-                 ? (isZh ? "恭喜通过 \(spec.rankCode) 死活笔试！" : "Passed \(spec.rankCode) Written Test!")
-                 : (isZh ? "答对 \(correctCount)/\(puzzles.count) 题（需 \(spec.requiredPuzzlePass) 题及格）" : "Scored \(correctCount)/\(puzzles.count) (Need \(spec.requiredPuzzlePass))"))
+                 ? l10n.localized(zh: "恭喜通过 \(spec.rankCode) 死活笔试！", en: "Passed \(spec.rankCode) Written Test!", ja: "\(spec.rankCode) 筆記試験に合格！", ko: "\(spec.rankCode) 사활 필기시험 합격!", zhHant: "恭喜通過 \(spec.rankCode) 死活筆試！")
+                 : l10n.localized(zh: "答对 \(correctCount)/\(puzzles.count) 题（需 \(spec.requiredPuzzlePass) 题及格）", en: "Scored \(correctCount)/\(puzzles.count) (Need \(spec.requiredPuzzlePass))", ja: "\(correctCount)/\(puzzles.count) 問正解（合格ライン \(spec.requiredPuzzlePass) 問）", ko: "\(correctCount)/\(puzzles.count)문제 정답 (합격 기준 \(spec.requiredPuzzlePass)문제)", zhHant: "答對 \(correctCount)/\(puzzles.count) 題（需 \(spec.requiredPuzzlePass) 題及格）"))
                 .font(.system(size: 20, weight: .black, design: .rounded))
                 .foregroundColor(passed ? AppTheme.mintBottom : AppTheme.coralBottom)
                 .multilineTextAlignment(.center)
 
             Text(passed
-                 ? (isZh ? "太棒了！再赢下对应定级实战赛即可获得官方 \(spec.rankCode) 认证！" : "Awesome! Complete your timed promotion match series to earn \(spec.rankCode)!")
-                 : (isZh ? "再去分级题库练练手，很快就能一次通关！" : "Practice a few more puzzles in the Dojo and try again!"))
+                 ? l10n.localized(zh: "太棒了！再赢下对应定级实战赛即可获得官方 \(spec.rankCode) 认证！", en: "Awesome! Complete your timed promotion match series to earn \(spec.rankCode)!", ja: "素晴らしい！あとは認定対局シリーズをクリアすれば公式 \(spec.rankCode) を獲得できます！", ko: "훌륭해요! 승급 대국 시리즈까지 통과하면 공식 \(spec.rankCode) 인증을 획득합니다!", zhHant: "太棒了！再贏下對應定級實戰賽即可獲得官方 \(spec.rankCode) 認證！")
+                 : l10n.localized(zh: "再去分级题库练练手，很快就能一次通关！", en: "Practice a few more puzzles in the Dojo and try again!", ja: "道場の詰碁でもう少し練習して再挑戦しましょう！", ko: "도장 문제집에서 조금 더 연습하고 다시 도전해 보세요!", zhHant: "再去分級題庫練練手，很快就能一次通關！"))
                 .font(.system(size: 13.5, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -242,7 +269,7 @@ struct RankExamWrittenTestView: View {
             Button {
                 appState.popRoute()
             } label: {
-                Text(isZh ? "返回考级室" : "Back to Exam Hall")
+                Text(l10n.localized(zh: "返回考级室", en: "Back to Exam Hall", ja: "試験室に戻る", ko: "시험실로 돌아가기", zhHant: "返回考級室"))
                     .font(.system(size: 15, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

@@ -409,4 +409,63 @@ final class StarYiGoUITests: XCTestCase {
         XCTAssertTrue(opt10m.waitForExistence(timeout: 3), "Real center tap on ClockChip (\(clockChip.frame)) MUST open menu!")
         opt10m.tap()
     }
+
+    @MainActor
+    func testFamilyProfileLongPressDeletePersists() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = makeApp()
+        app.launch()
+
+        let settingsBtn = app.buttons["Settings"]
+        XCTAssertTrue(settingsBtn.waitForExistence(timeout: 8), "Settings button must exist on Home")
+        settingsBtn.tap()
+
+        // Add a second family member
+        let addBtn = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Add'")).firstMatch
+        XCTAssertTrue(addBtn.waitForExistence(timeout: 5), "Add member button must exist in Settings")
+        addBtn.tap()
+
+        let okBtn = app.buttons["OK"]
+        XCTAssertTrue(okBtn.waitForExistence(timeout: 3))
+        okBtn.tap()
+
+        // Find the newly added second family profile chip
+        let profileChips = app.buttons.matching(identifier: "FamilyProfileChip")
+        let twoChips = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "count == 2"),
+            object: profileChips
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [twoChips], timeout: 5), .completed, "Should have 2 family profile chips after adding one")
+        let newProfileChip = profileChips.element(boundBy: 1)
+        let deletedLabel = newProfileChip.label
+
+        // Long-press the newly created profile chip to open the system context menu
+        newProfileChip.press(forDuration: 1.0)
+
+        let deleteMenuItem = app.buttons["Delete Profile"]
+        XCTAssertTrue(deleteMenuItem.waitForExistence(timeout: 5), "Context menu must show Delete Profile")
+        deleteMenuItem.tap()
+
+        // Confirm deletion in the glossy gameDialog
+        let confirmDeleteBtn = app.buttons["Delete"]
+        XCTAssertTrue(confirmDeleteBtn.waitForExistence(timeout: 5), "Confirmation dialog must show Delete button")
+        confirmDeleteBtn.tap()
+
+        // Verify the deleted profile disappears immediately
+        let oneChip = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "count == 1"),
+            object: profileChips
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [oneChip], timeout: 5), .completed, "Deleted profile '\(deletedLabel)' must disappear after confirming Delete")
+
+        // Close Settings and reopen to confirm deletion persisted
+        let backBtn = app.buttons["Back"]
+        XCTAssertTrue(backBtn.waitForExistence(timeout: 3))
+        backBtn.tap()
+
+        XCTAssertTrue(settingsBtn.waitForExistence(timeout: 5))
+        settingsBtn.tap()
+        XCTAssertTrue(addBtn.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(identifier: "FamilyProfileChip").count, 1, "Deleted profile '\(deletedLabel)' must stay deleted after closing and reopening Settings")
+    }
 }

@@ -35,9 +35,12 @@ enum GoRadarCalculator {
 
 struct GoPassportView: View {
     @EnvironmentObject var appState: AppState
-    @ObservedObject private var gameCenter = GameCenterService.shared
+    // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+    // @ObservedObject private var gameCenter = GameCenterService.shared
     @State private var stoneFeedbackMessage: String? = nil
     @State private var renderedShareImage: UIImage? = nil
+    @State private var showShareParentalGate = false
+    @State private var showShareSheet = false
 
     private var l10n: L10n { appState.l10n }
     private var radarAxes: [GoRadarCalculator.AxisScore] {
@@ -61,7 +64,8 @@ struct GoPassportView: View {
                         radarChartCard
                         stoneCabinetCard
                         islandStampBookCard
-                        leaderboardsButton
+                        // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+                        // leaderboardsButton
                     }
                     .frame(maxWidth: 820)
                     .padding(.horizontal, 20)
@@ -69,12 +73,36 @@ struct GoPassportView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+
+            if showShareParentalGate {
+                ParentalGateOverlay(
+                    l10n: l10n,
+                    onCancel: {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                            showShareParentalGate = false
+                        }
+                    },
+                    onSuccess: {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                            showShareParentalGate = false
+                        }
+                        showShareSheet = true
+                    }
+                )
+            }
+        }
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: showShareParentalGate)
+        .sheet(isPresented: $showShareSheet) {
+            if let shareImage = renderedShareImage {
+                ActivityShareSheet(activityItems: [shareImage])
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             renderShareableSnapshot()
-            gameCenter.authenticateIfNeeded()
-            gameCenter.syncAllProgress(profile: appState.profile, puzzleProgress: appState.puzzleProgress)
+            // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
+            // gameCenter.authenticateIfNeeded()
+            // gameCenter.syncAllProgress(profile: appState.profile, puzzleProgress: appState.puzzleProgress)
         }
     }
 
@@ -107,14 +135,13 @@ struct GoPassportView: View {
 
             Spacer()
 
-            if let shareImage = renderedShareImage {
-                ShareLink(
-                    item: Image(uiImage: shareImage),
-                    preview: SharePreview(
-                        "\(appState.profile.nickname) · \(appState.profile.rankString)",
-                        image: Image(uiImage: shareImage)
-                    )
-                ) {
+            if renderedShareImage != nil {
+                Button {
+                    SoundAndHapticsManager.shared.playUITap()
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                        showShareParentalGate = true
+                    }
+                } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 13, weight: .black))
@@ -591,6 +618,7 @@ struct GoPassportView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /* [v1.0 暂不启用 Game Center，保留供后续版本恢复]
     private var leaderboardsButton: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -686,6 +714,7 @@ struct GoPassportView: View {
         }
         .warmCard(cornerRadius: 24, padding: 16)
     }
+    */
 
     @MainActor
     private func renderShareableSnapshot() {

@@ -11,13 +11,14 @@ struct IslandDetailView: View {
 
     @State private var selectedMasteryTier: StageMasteryTier = .normal
     @State private var showMicroDemoSheet: Bool = false
+    @State private var showMistakeReviewSheet: Bool = false
+    @State private var pendingLaunchNodeAfterRecovery: CampaignNode? = nil
     @State private var activePulse: Bool = false
     @State private var shakeCounters: [String: CGFloat] = [:]
     @State private var lockedToastMessage: String?
     @State private var toastDismissTask: Task<Void, Never>?
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
     private var pal: GlossyPalette { GlossyPalette.forIsland(campaignIsland.id) }
     private var nodes: [CampaignNode] { campaignIsland.nodes }
     private var seaNumber: Int { (StarYiCampaign.sea(withId: campaignIsland.seaId)?.index ?? 0) + 1 }
@@ -74,7 +75,31 @@ struct IslandDetailView: View {
             IslandMicroDemoSheet(island: campaignIsland)
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $showMistakeReviewSheet) {
+            let fallbackIds = campaignIsland.nodes.flatMap(\.puzzleIds)
+            let fallbackPuzzles = fallbackIds.compactMap { appState.findAnyPuzzle(withId: $0) }
+            MistakeReviewRecoverySheet(
+                reviewPuzzles: appState.pendingMistakeReviewPuzzles(fallbackPuzzles: fallbackPuzzles),
+                headerNote: pendingLaunchNodeAfterRecovery != nil
+                    ? l10n.localized(
+                        zh: "体力已耗尽 · 复盘错题即可立刻满血进入关卡",
+                        en: "Out of hearts — review mistakes to refill and enter stage",
+                        ja: "ハート0 · 間違いを復習して全回復してからステージへ",
+                        ko: "하트 소진 · 오답 복습으로 회복 후 바로 스테이지 진입",
+                        zhHant: "體力已耗盡 · 復盤錯題即可立刻滿血進入關卡"
+                    )
+                    : nil,
+                onRecovered: {
+                    if let pending = pendingLaunchNodeAfterRecovery {
+                        pendingLaunchNodeAfterRecovery = nil
+                        launchNode(pending)
+                    }
+                }
+            )
+            .environmentObject(appState)
+        }
         .onAppear {
+            appState.refreshGauntletHearts()
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 activePulse = true
             }
@@ -120,7 +145,13 @@ struct IslandDetailView: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 7) {
-                        Text(isZh ? "海域\(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)" : "Sea \(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)")
+                        Text(l10n.localized(
+                            zh: "海域\(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)",
+                            en: "Sea \(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)",
+                            ja: "海域\(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)",
+                            ko: "해역 \(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)",
+                            zhHant: "海域\(seaNumber)-\(campaignIsland.orderInSea + 1) · \(campaignIsland.rankRange)"
+                        ))
                             .font(.system(size: 11, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
@@ -133,7 +164,7 @@ struct IslandDetailView: View {
                             .lineLimit(1)
                     }
 
-                    Text(campaignIsland.desc(isChinese: isZh))
+                    Text(campaignIsland.desc(isChinese: l10n.language.isChinese))
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                         .lineLimit(1)
@@ -147,24 +178,37 @@ struct IslandDetailView: View {
 
             Spacer()
 
-            HStack(spacing: 10) {
-                HStack(spacing: 4) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 14, weight: .black))
-                        .foregroundColor(AppTheme.sunBottom)
-                    Text("\(earned)/\(maxStars)")
-                        .font(.system(size: 14, weight: .black, design: .rounded))
-                        .foregroundColor(AppTheme.inkPrimary)
+            HStack(spacing: 8) {
+                GauntletHeartsBadge(onTapWhenNotFull: {
+                    pendingLaunchNodeAfterRecovery = nil
+                    showMistakeReviewSheet = true
+                })
+
+                HStack(spacing: 10) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 14, weight: .black))
+                            .foregroundColor(AppTheme.sunBottom)
+                        Text("\(earned)/\(maxStars)")
+                            .font(.system(size: 14, weight: .black, design: .rounded))
+                            .foregroundColor(AppTheme.inkPrimary)
+                    }
+                    Divider().frame(height: 15)
+                    Text(l10n.localized(
+                        zh: "\(solved)/\(nodes.count)关",
+                        en: "\(solved)/\(nodes.count)",
+                        ja: "\(solved)/\(nodes.count)面",
+                        ko: "\(solved)/\(nodes.count)",
+                        zhHant: "\(solved)/\(nodes.count)關"
+                    ))
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundColor(solved == nodes.count ? AppTheme.mintBottom : pal.bottom)
                 }
-                Divider().frame(height: 15)
-                Text("\(solved)/\(nodes.count)\(isZh ? "关" : "")")
-                    .font(.system(size: 13, weight: .heavy, design: .rounded))
-                    .foregroundColor(solved == nodes.count ? AppTheme.mintBottom : pal.bottom)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(Color.white.opacity(0.96)).shadow(color: AppTheme.skyBottom.opacity(0.14), radius: 10, y: 4))
+                .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Capsule().fill(Color.white.opacity(0.96)).shadow(color: AppTheme.skyBottom.opacity(0.14), radius: 10, y: 4))
-            .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
         }
     }
 
@@ -181,7 +225,7 @@ struct IslandDetailView: View {
                         }
                         SoundAndHapticsManager.shared.playUITap()
                     } label: {
-                        Text(tier.badge(isChinese: isZh))
+                        Text(localizedTierBadge(tier))
                             .font(.system(size: 12, weight: .black, design: .rounded))
                             .foregroundColor(active ? .white : AppTheme.inkPrimary)
                             .padding(.horizontal, 12)
@@ -223,7 +267,13 @@ struct IslandDetailView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text("👻").font(.system(size: 14))
-                        Text(isZh ? "消灭 \(dueGhosts.count) 只错题幽灵（2×星币）" : "Bust \(dueGhosts.count) Mistake Ghost(s) (2× 🪙)")
+                        Text(l10n.localized(
+                            zh: "消灭 \(dueGhosts.count) 只错题幽灵（2×星币）",
+                            en: "Bust \(dueGhosts.count) Mistake Ghost(s) (2× 🪙)",
+                            ja: "ミスおばけ \(dueGhosts.count) 体を退治（星コイン2倍）",
+                            ko: "오답 유령 \(dueGhosts.count)마리 퇴치 (별코인 2배)",
+                            zhHant: "消滅 \(dueGhosts.count) 隻錯題幽靈（2×星幣）"
+                        ))
                             .font(.system(size: 12, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                     }
@@ -338,12 +388,12 @@ struct IslandDetailView: View {
                                 .background(Capsule().fill(Color.black.opacity(0.20)))
                         }
 
-                        Text(node.kind.typeTag(isChinese: isZh))
+                        Text(localizedNodeTypeTag(node.kind))
                             .font(.system(size: 10.5, weight: .black, design: .rounded))
                             .foregroundColor(.white.opacity(0.92))
                             .lineLimit(1)
 
-                        Text(node.title(isChinese: isZh))
+                        Text(node.title(isChinese: l10n.language.isChinese))
                             .font(.system(size: 16.5, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .lineLimit(2)
@@ -352,7 +402,13 @@ struct IslandDetailView: View {
                         Spacer(minLength: 2)
 
                         HStack {
-                            Text(isZh ? "第\(stageNumber)关" : "Stage \(stageNumber)")
+                            Text(l10n.localized(
+                                zh: "第\(stageNumber)关",
+                                en: "Stage \(stageNumber)",
+                                ja: "ステージ \(stageNumber)",
+                                ko: "스테이지 \(stageNumber)",
+                                zhHant: "第\(stageNumber)關"
+                            ))
                                 .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.85))
                             Spacer()
@@ -398,12 +454,12 @@ struct IslandDetailView: View {
                             .background(Capsule().fill(pal.top.opacity(0.14)))
                     }
 
-                    Text(node.kind.typeTag(isChinese: isZh))
+                    Text(localizedNodeTypeTag(node.kind))
                         .font(.system(size: 10.5, weight: .heavy, design: .rounded))
                         .foregroundColor(AppTheme.mintBottom)
                         .lineLimit(1)
 
-                    Text(node.title(isChinese: isZh))
+                    Text(node.title(isChinese: l10n.language.isChinese))
                         .font(.system(size: 16, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .lineLimit(2)
@@ -449,12 +505,12 @@ struct IslandDetailView: View {
                             .foregroundColor(Color(red: 0.50, green: 0.55, blue: 0.62))
                     }
 
-                    Text(node.kind.typeTag(isChinese: isZh))
+                    Text(localizedNodeTypeTag(node.kind))
                         .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .foregroundColor(Color(red: 0.52, green: 0.56, blue: 0.63))
                         .lineLimit(1)
 
-                    Text(node.title(isChinese: isZh))
+                    Text(node.title(isChinese: l10n.language.isChinese))
                         .font(.system(size: 16, weight: .heavy, design: .rounded))
                         .foregroundColor(Color(red: 0.45, green: 0.49, blue: 0.56))
                         .lineLimit(2)
@@ -486,6 +542,12 @@ struct IslandDetailView: View {
         SoundAndHapticsManager.shared.playUITap()
         switch node.kind {
         case .puzzleGauntlet:
+            appState.refreshGauntletHearts()
+            if appState.currentGauntletHearts <= 0 {
+                pendingLaunchNodeAfterRecovery = node
+                showMistakeReviewSheet = true
+                return
+            }
             appState.navigationPath.append(.puzzleGauntlet(nodeId: node.id, masteryTier: selectedMasteryTier))
         case .miniDrill(let kind, let offset, let count):
             appState.navigationPath.append(.miniDrill(kind: kind, campaignNodeId: node.id, startOffset: offset, targetCount: count))
@@ -514,7 +576,7 @@ struct IslandDetailView: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 8) {
-                                Label(boss.title(isChinese: isZh), systemImage: bossDefeated ? "trophy.fill" : "flame.fill")
+                                Label(boss.title(isChinese: l10n.language.isChinese), systemImage: bossDefeated ? "trophy.fill" : "flame.fill")
                                     .font(.system(size: 17, weight: .black, design: .rounded))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
@@ -528,7 +590,7 @@ struct IslandDetailView: View {
                                     .background(Capsule().fill(Color.white))
                             }
 
-                            Text(boss.tagline(isChinese: isZh))
+                            Text(boss.tagline(isChinese: l10n.language.isChinese))
                                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
                                 .foregroundColor(Color.white.opacity(0.94))
                                 .lineLimit(1)
@@ -560,8 +622,14 @@ struct IslandDetailView: View {
                             Text(isCrossSea ? "✈️" : next.boss.difficulty.avatarEmoji).font(.system(size: 22))
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(isCrossSea
-                                     ? (isZh ? "飞往新海域 · \(next.nameZh)" : "Fly to New Sea · \(next.nameEn)")
-                                     : l10n.t("islands.nextIsland", next.name(isChinese: isZh)))
+                                     ? l10n.localized(
+                                        zh: "飞往新海域 · \(next.localizedName(l10n))",
+                                        en: "Fly to New Sea · \(next.localizedName(l10n))",
+                                        ja: "新海域へ出発 · \(next.localizedName(l10n))",
+                                        ko: "새 해역으로 이동 · \(next.localizedName(l10n))",
+                                        zhHant: "飛往新海域 · \(next.localizedName(l10n))"
+                                     )
+                                     : l10n.t("islands.nextIsland", next.localizedName(l10n)))
                                     .font(.system(size: 15, weight: .black, design: .rounded))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
@@ -593,7 +661,7 @@ struct IslandDetailView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 8) {
-                                Text(boss.title(isChinese: isZh))
+                                Text(boss.title(isChinese: l10n.language.isChinese))
                                     .font(.system(size: 16.5, weight: .black, design: .rounded))
                                     .foregroundColor(Color(red: 0.44, green: 0.48, blue: 0.55))
                                 Text(boss.difficulty.rankBadge)
@@ -603,7 +671,13 @@ struct IslandDetailView: View {
                                     .padding(.vertical, 2)
                                     .background(Capsule().fill(Color.white.opacity(0.58)))
                             }
-                            Text(isZh ? "完成本岛全部 \(nodes.count) 关后自动解锁下一岛，并开启守岛 Boss 挑战！" : "Clear all \(nodes.count) stages to unlock the next island and challenge the Island Master Boss!")
+                            Text(l10n.localized(
+                                zh: "完成本岛全部 \(nodes.count) 关后自动解锁下一岛，并开启守岛 Boss 挑战！",
+                                en: "Clear all \(nodes.count) stages to unlock the next island and challenge the Island Master Boss!",
+                                ja: "この島の全 \(nodes.count) ステージをクリアすると次の島が解放され、島のボスに挑戦できます！",
+                                ko: "이 섬의 \(nodes.count)개 스테이지를 모두 클리어하면 다음 섬이 열리고 섬 보스에 도전할 수 있어요!",
+                                zhHant: "完成本島全部 \(nodes.count) 關後自動解鎖下一島，並開啟守島 Boss 挑戰！"
+                            ))
                                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
                                 .foregroundColor(Color(red: 0.52, green: 0.56, blue: 0.63))
                         }
@@ -666,5 +740,63 @@ struct IslandDetailView: View {
         .padding(.vertical, 10)
         .background(Capsule().fill(Color.white.opacity(0.96)).shadow(color: Color.black.opacity(0.16), radius: 14, y: 6))
         .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
+    }
+
+    private func localizedTierBadge(_ tier: StageMasteryTier) -> String {
+        switch tier {
+        case .normal:
+            return l10n.localized(zh: "★ 普通", en: "★ Normal", ja: "★ 通常", ko: "★ 보통", zhHant: "★ 普通")
+        case .transformed:
+            return l10n.localized(zh: "🔄 旋转换色", en: "🔄 Flip", ja: "🔄 回転・反転", ko: "🔄 회전·반전", zhHant: "🔄 旋轉換色")
+        case .examCrown:
+            return l10n.localized(zh: "👑 无提示考", en: "👑 No-Hint", ja: "👑 ノーヒント", ko: "👑 노힌트 시험", zhHant: "👑 無提示考")
+        }
+    }
+
+    private func localizedNodeTypeTag(_ kind: CampaignNodeKind) -> String {
+        switch kind {
+        case .puzzleGauntlet(let ids, let forceExam):
+            if forceExam {
+                return l10n.localized(
+                    zh: "考场连闯 · \(ids.count)题",
+                    en: "Exam Set · \(ids.count)Q",
+                    ja: "試験チャレンジ · \(ids.count)問",
+                    ko: "시험 연전 · \(ids.count)문제",
+                    zhHant: "考場連闖 · \(ids.count)題"
+                )
+            }
+            return l10n.localized(
+                zh: "题组连闯 · \(ids.count)题",
+                en: "Puzzle Set · \(ids.count)Q",
+                ja: "連続パズル · \(ids.count)問",
+                ko: "연속 퍼즐 · \(ids.count)문제",
+                zhHant: "題組連闖 · \(ids.count)題"
+            )
+        case .miniDrill(let drillKind, _, let count):
+            let title = drillKind.localizedTitle(l10n)
+            return l10n.localized(
+                zh: "\(title) · \(count)题",
+                en: "\(title) · \(count)Q",
+                ja: "\(title) · \(count)問",
+                ko: "\(title) · \(count)문제",
+                zhHant: "\(title) · \(count)題"
+            )
+        case .josekiTrial:
+            return l10n.localized(
+                zh: "定式破招课",
+                en: "Joseki Trial",
+                ja: "定石・ハメ手対策",
+                ko: "정석·속임수 격파",
+                zhHant: "定式破招課"
+            )
+        case .tacticalScenario:
+            return l10n.localized(
+                zh: "残局实战演练",
+                en: "Tactical Duel",
+                ja: "実戦シチュエーション",
+                ko: "실전 전술 대결",
+                zhHant: "殘局實戰演練"
+            )
+        }
     }
 }

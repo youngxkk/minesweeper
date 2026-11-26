@@ -68,7 +68,7 @@ struct GoBoardView: View {
         if dragHoverPoint != nil { return true }
         if now.timeIntervalSince(lastMoveTimestamp) < 0.45 { return true }
         if now.timeIntervalSince(captureTimestamp) < 0.60 { return true }
-        if now.timeIntervalSince(illegalTimestamp) < 0.45 { return true }
+        if now.timeIntervalSince(illegalTimestamp) < 0.85 { return true }
         return false
     }
 
@@ -769,16 +769,70 @@ struct GoBoardView: View {
             }
         }
 
-        // 10. Illegal move bounce flash ring
+        // 10. Wrong / Illegal move vivid red flash, X marker & brief red board border pulse
         let illAge = now.timeIntervalSince(illegalTimestamp)
-        if let illPt = activeIllegalPoint, region.contains(illPt), illAge >= 0 && illAge < 0.42 {
-            let p = illAge / 0.42
-            let fade = 1.0 - p
+        if let illPt = activeIllegalPoint, region.contains(illPt), illAge >= 0 && illAge < 0.80 {
+            let p = illAge / 0.80
+            // Keep full visibility for the first ~55% then fade out smoothly
+            let fade = p < 0.55 ? 1.0 : max(0.0, 1.0 - (p - 0.55) / 0.45)
+            let pulse = 0.5 + 0.5 * sin(illAge * 26.0)
             let center = m.center(for: illPt)
-            let r = stoneRadius * (0.65 + p * 0.55)
-            let rRect = CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
-            context.fill(Path(ellipseIn: rRect), with: .color(AppTheme.vermilionAccent.opacity(0.28 * fade)))
-            context.stroke(Path(ellipseIn: rRect), with: .color(AppTheme.vermilionAccent.opacity(0.95 * fade)), lineWidth: 2.8)
+
+            // Subtle red warning flash along the board edge during the shake
+            if illAge < 0.45 {
+                let edgeFade = 1.0 - (illAge / 0.45)
+                context.stroke(
+                    Path(roundedRect: rect.insetBy(dx: 4, dy: 4), cornerRadius: 15),
+                    with: .color(Color.red.opacity(0.65 * edgeFade)),
+                    lineWidth: 6.0
+                )
+            }
+
+            // Expanding red shockwave ring
+            let waveR = stoneRadius * (0.72 + min(1.0, illAge / 0.45) * 0.85)
+            let waveFade = max(0.0, 1.0 - illAge / 0.50)
+            if waveFade > 0 {
+                let waveRect = CGRect(x: center.x - waveR, y: center.y - waveR, width: waveR * 2, height: waveR * 2)
+                context.stroke(
+                    Path(ellipseIn: waveRect),
+                    with: .color(Color.red.opacity(0.90 * waveFade)),
+                    lineWidth: max(1.8, 3.6 * waveFade)
+                )
+            }
+
+            // Vivid pulsing red halo + filled red badge + crisp white X
+            let glowR = stoneRadius * (1.05 + 0.16 * pulse)
+            let glowRect = CGRect(x: center.x - glowR, y: center.y - glowR, width: glowR * 2, height: glowR * 2)
+            context.fill(
+                Path(ellipseIn: glowRect),
+                with: .radialGradient(
+                    Gradient(colors: [
+                        Color.red.opacity(0.55 * fade),
+                        AppTheme.vermilionAccent.opacity(0.22 * fade),
+                        Color.clear
+                    ]),
+                    center: center,
+                    startRadius: stoneRadius * 0.25,
+                    endRadius: glowR
+                )
+            )
+
+            let badgeR = stoneRadius * 0.62
+            let badgeRect = CGRect(x: center.x - badgeR, y: center.y - badgeR, width: badgeR * 2, height: badgeR * 2)
+            context.fill(Path(ellipseIn: badgeRect), with: .color(Color.red.opacity(0.92 * fade)))
+            context.stroke(Path(ellipseIn: badgeRect), with: .color(Color.white.opacity(0.95 * fade)), lineWidth: 2.2)
+
+            let xr = badgeR * 0.46
+            var xPath = Path()
+            xPath.move(to: CGPoint(x: center.x - xr, y: center.y - xr))
+            xPath.addLine(to: CGPoint(x: center.x + xr, y: center.y + xr))
+            xPath.move(to: CGPoint(x: center.x + xr, y: center.y - xr))
+            xPath.addLine(to: CGPoint(x: center.x - xr, y: center.y + xr))
+            context.stroke(
+                xPath,
+                with: .color(Color.white.opacity(fade)),
+                style: StrokeStyle(lineWidth: max(2.4, badgeR * 0.26), lineCap: .round)
+            )
         }
 
         // 11. AI Suggestions

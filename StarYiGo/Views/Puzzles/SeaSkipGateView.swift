@@ -20,7 +20,6 @@ struct SeaSkipGateView: View {
     @State private var replyTask: Task<Void, Never>?
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
 
     private var gatePuzzles: [GoPuzzle] {
         sea.skipGatePuzzleIds.compactMap { appState.findAnyPuzzle(withId: $0) }
@@ -50,8 +49,20 @@ struct SeaSkipGateView: View {
                         }
                         Spacer()
                         GameTitleCrest(
-                            title: isZh ? "🔑 跳级试炼门 · \(sea.nameZh)" : "🔑 Skip Gate · \(sea.nameEn)",
-                            subtitle: isZh ? "无辅助考场 · 需答对 \(sea.skipGatePassCount)/\(gatePuzzles.count) 题直接解锁" : "Exam Mode · Pass \(sea.skipGatePassCount)/\(gatePuzzles.count) to unlock"
+                            title: l10n.localized(
+                                zh: "🔑 跳级试炼门 · \(sea.localizedName(l10n))",
+                                en: "🔑 Skip Gate · \(sea.localizedName(l10n))",
+                                ja: "🔑 飛び級試験 · \(sea.localizedName(l10n))",
+                                ko: "🔑 월반 시험 · \(sea.localizedName(l10n))",
+                                zhHant: "🔑 跳級試煉門 · \(sea.localizedName(l10n))"
+                            ),
+                            subtitle: l10n.localized(
+                                zh: "无辅助考场 · 需答对 \(sea.skipGatePassCount)/\(gatePuzzles.count) 题直接解锁",
+                                en: "Exam Mode · Pass \(sea.skipGatePassCount)/\(gatePuzzles.count) to unlock",
+                                ja: "ヒントなし試験 · \(sea.skipGatePassCount)/\(gatePuzzles.count) 問正解で即解放",
+                                ko: "무힌트 시험 · \(sea.skipGatePassCount)/\(gatePuzzles.count)문제 정답 시 즉시 해금",
+                                zhHant: "無輔助考場 · 需答對 \(sea.skipGatePassCount)/\(gatePuzzles.count) 題直接解鎖"
+                            )
                         )
                         Spacer()
                     }
@@ -121,7 +132,13 @@ struct SeaSkipGateView: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(isZh ? "跳级第 \(index + 1)/\(gatePuzzles.count) 题" : "Gate Q\(index + 1)/\(gatePuzzles.count)")
+                    Text(l10n.localized(
+                        zh: "跳级第 \(index + 1)/\(gatePuzzles.count) 题",
+                        en: "Gate Q\(index + 1)/\(gatePuzzles.count)",
+                        ja: "飛び級 第 \(index + 1)/\(gatePuzzles.count) 問",
+                        ko: "월반 \(index + 1)/\(gatePuzzles.count)번",
+                        zhHant: "跳級第 \(index + 1)/\(gatePuzzles.count) 題"
+                    ))
                         .font(.system(size: 12, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
@@ -131,16 +148,34 @@ struct SeaSkipGateView: View {
                         .font(.system(size: 12, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.grapeBottom)
                     Spacer()
-                    Text(isZh ? "已对 \(correctCount) 题" : "\(correctCount) Passed")
+                    Text(l10n.localized(
+                        zh: "已对 \(correctCount) 题",
+                        en: "\(correctCount) Passed",
+                        ja: "\(correctCount) 問正解",
+                        ko: "\(correctCount)문제 통과",
+                        zhHant: "已對 \(correctCount) 題"
+                    ))
                         .font(.system(size: 12.5, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.mintBottom)
                 }
-                Text(puzzle.category.displayTitle(isChinese: isZh))
+                Text(puzzle.category.localizedTitle(l10n))
                     .font(.system(size: 19, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.inkPrimary)
                 Text(puzzle.playerColor == .black
-                     ? (isZh ? "黑先：考场无提示模式，请找出盘面唯一正解。" : "Black to play: Exam mode (no hints) — find the winning move.")
-                     : (isZh ? "白先：考场无提示模式，请找出盘面唯一正解。" : "White to play: Exam mode (no hints) — find the winning move."))
+                     ? l10n.localized(
+                         zh: "黑先：考场无提示模式，请找出盘面唯一正解。",
+                         en: "Black to play: Exam mode (no hints) — find the winning move.",
+                         ja: "黒番：ヒントなし試験モードです。盤面の正解を見つけよう。",
+                         ko: "흑선: 힌트 없는 시험 모드입니다. 바둑판의 정답을 찾아보세요.",
+                         zhHant: "黑先：考場無提示模式，請找出盤面唯一正解。"
+                     )
+                     : l10n.localized(
+                         zh: "白先：考场无提示模式，请找出盘面唯一正解。",
+                         en: "White to play: Exam mode (no hints) — find the winning move.",
+                         ja: "白番：ヒントなし試験モードです。盤面の正解を見つけよう。",
+                         ko: "백선: 힌트 없는 시험 모드입니다. 바둑판의 정답을 찾아보세요.",
+                         zhHant: "白先：考場無提示模式，請找出盤面唯一正解。"
+                     ))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -162,14 +197,38 @@ struct SeaSkipGateView: View {
         VStack(spacing: 16) {
             Text(didPass ? "🔑✨" : "🧭").font(.system(size: 56))
             Text(didPass
-                 ? (isZh ? "跳级成功！已解锁 \(sea.nameZh)" : "Gate Cleared! \(sea.nameEn) Unlocked!")
-                 : (isZh ? "差一点点！答对 \(correctCount)/\(gatePuzzles.count) 题" : "Almost! Scored \(correctCount)/\(gatePuzzles.count)"))
+                 ? l10n.localized(
+                     zh: "跳级成功！已解锁 \(sea.localizedName(l10n))",
+                     en: "Gate Cleared! \(sea.localizedName(l10n)) Unlocked!",
+                     ja: "飛び級成功！「\(sea.localizedName(l10n))」を解放！",
+                     ko: "월반 성공! \(sea.localizedName(l10n)) 해금!",
+                     zhHant: "跳級成功！已解鎖 \(sea.localizedName(l10n))"
+                 )
+                 : l10n.localized(
+                     zh: "差一点点！答对 \(correctCount)/\(gatePuzzles.count) 题",
+                     en: "Almost! Scored \(correctCount)/\(gatePuzzles.count)",
+                     ja: "あと少し！\(correctCount)/\(gatePuzzles.count) 問正解",
+                     ko: "조금만 더! \(correctCount)/\(gatePuzzles.count)문제 정답",
+                     zhHant: "差一點點！答對 \(correctCount)/\(gatePuzzles.count) 題"
+                 ))
                 .font(.system(size: 22, weight: .black, design: .rounded))
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
             Text(didPass
-                 ? (isZh ? "你的实力已经足够驾驭这片海域！可以直接挑战本海域的岛屿与 Boss！" : "You've proven your strength — dive straight into this Sea!")
-                 : (isZh ? "需要答对至少 \(sea.skipGatePassCount) 题才能跳级，可以先练几关再来挑战！" : "Score at least \(sea.skipGatePassCount) to skip ahead — try again anytime!"))
+                 ? l10n.localized(
+                     zh: "你的实力已经足够驾驭这片海域！可以直接挑战本海域的岛屿与 Boss！",
+                     en: "You've proven your strength — dive straight into this Sea!",
+                     ja: "この海域に挑む実力は十分です！島やボスにすぐ挑戦しよう！",
+                     ko: "이 해역에 도전할 실력이 충분합니다! 섬과 보스에 바로 도전해 보세요!",
+                     zhHant: "你的實力已經足夠駕馭這片海域！可以直接挑戰本海域的島嶼與 Boss！"
+                 )
+                 : l10n.localized(
+                     zh: "需要答对至少 \(sea.skipGatePassCount) 题才能跳级，可以先练几关再来挑战！",
+                     en: "Score at least \(sea.skipGatePassCount) to skip ahead — try again anytime!",
+                     ja: "飛び級には \(sea.skipGatePassCount) 問以上の正解が必要です。少し練習してから再挑戦しよう！",
+                     ko: "월반하려면 최소 \(sea.skipGatePassCount)문제를 맞혀야 합니다. 조금 연습하고 다시 도전해 보세요!",
+                     zhHant: "需要答對至少 \(sea.skipGatePassCount) 題才能跳級，可以先練幾關再來挑戰！"
+                 ))
                 .font(.system(size: 14, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -182,7 +241,7 @@ struct SeaSkipGateView: View {
                         finished = false
                         loadQuestion()
                     } label: {
-                        Text(isZh ? "重新试炼" : "Try Again")
+                        Text(l10n.localized(zh: "重新试炼", en: "Try Again", ja: "再挑戦", ko: "다시 시험", zhHant: "重新試煉"))
                             .font(.system(size: 15, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -193,7 +252,9 @@ struct SeaSkipGateView: View {
                 Button {
                     appState.popRoute()
                 } label: {
-                    Text(didPass ? (isZh ? "扬帆起航 →" : "Set Sail →") : (isZh ? "返回地图" : "Back to Map"))
+                    Text(didPass
+                         ? l10n.localized(zh: "扬帆起航 →", en: "Set Sail →", ja: "出航する →", ko: "출항하기 →", zhHant: "揚帆起航 →")
+                         : l10n.localized(zh: "返回地图", en: "Back to Map", ja: "マップへ戻る", ko: "지도로 돌아가기", zhHant: "返回地圖"))
                         .font(.system(size: 15, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -268,13 +329,19 @@ struct SeaSkipGateView: View {
         isLocked = true
         if passed {
             correctCount += 1
-            statusBanner = isZh ? "✅ 正解！" : "✅ Correct!"
+            statusBanner = l10n.localized(zh: "✅ 正解！", en: "✅ Correct!", ja: "✅ 正解！", ko: "✅ 정답!", zhHant: "✅ 正解！")
             SoundAndHapticsManager.shared.playSuccess()
             if index + 1 < gatePuzzles.count {
                 SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.10)
             }
         } else {
-            statusBanner = isZh ? "❌ 本题未通过，继续下一题" : "❌ Missed — moving to next question"
+            statusBanner = l10n.localized(
+                zh: "❌ 本题未通过，继续下一题",
+                en: "❌ Missed — moving to next question",
+                ja: "❌ 不正解・次の問題へ進みます",
+                ko: "❌ 오답 · 다음 문제로 넘어갑니다",
+                zhHant: "❌ 本題未通過，繼續下一題"
+            )
             SoundAndHapticsManager.shared.playWrong()
             if index + 1 < gatePuzzles.count {
                 SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)

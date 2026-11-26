@@ -307,11 +307,11 @@ final class PuzzleViewModel: ObservableObject {
                 self.currentNode = oppResponse
 
                 if let c = oppResponse.comment?.uppercased(), c.contains("WRONG") {
-                    self.markWrong(at: nil)
+                    self.markWrong(at: point)
                 } else if let c = oppResponse.comment?.uppercased(), c.contains("CORRECT") {
                     self.markSolved()
                 } else if oppResponse.children.isEmpty {
-                    self.markWrong(at: nil)
+                    self.markWrong(at: point)
                 } else {
                     self.status = .playing
                 }

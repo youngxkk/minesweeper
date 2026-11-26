@@ -32,7 +32,6 @@ struct TrainingDojoView: View {
     )
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
 
     private var filteredDojoPuzzles: [GoPuzzle] {
         DojoPuzzleBank.puzzles(category: selectedCategory, rankBand: selectedRankBand, includeExpandedPack: true)
@@ -57,10 +56,16 @@ struct TrainingDojoView: View {
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: paperPalette, rimHeight: 3))
 
                     VStack(spacing: 3) {
-                        Text(isZh ? "围棋道场" : "Go Training Dojo")
+                        Text(l10n.localized(zh: "围棋道场", en: "Go Training Dojo", ja: "囲碁道場", ko: "바둑 도장", zhHant: "圍棋道場"))
                             .font(.system(size: 20, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text(isZh ? "\(DojoPuzzleBank.fullCatalog.count)+ 题库 · 定式破招 · 专项训练 · 考级室" : "\(DojoPuzzleBank.fullCatalog.count)+ Puzzles · Joseki · Drills · Rank Exams")
+                        Text(l10n.localized(
+                            zh: "\(DojoPuzzleBank.fullCatalog.count)+ 题库 · 定式破招 · 专项训练 · 考级室",
+                            en: "\(DojoPuzzleBank.fullCatalog.count)+ Puzzles · Joseki · Drills · Rank Exams",
+                            ja: "\(DojoPuzzleBank.fullCatalog.count)+ 詰碁 · 定石対策 · 特訓 · 段級位試験",
+                            ko: "\(DojoPuzzleBank.fullCatalog.count)+ 사활 문제 · 정석 · 특훈 · 급·단 승급 시험",
+                            zhHant: "\(DojoPuzzleBank.fullCatalog.count)+ 題庫 · 定石破招 · 專項訓練 · 考級室"
+                        ))
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -76,11 +81,11 @@ struct TrainingDojoView: View {
                 // Top 5 Section Tabs
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        sectionTab(.tsumego, title: isZh ? "分级题库 (\(DojoPuzzleBank.fullCatalog.count))" : "Tsumego (\(DojoPuzzleBank.fullCatalog.count))", icon: "square.grid.2x2.fill")
-                        sectionTab(.srsMistakes, title: isZh ? "SRS 错题 (\(appState.puzzleProgress.srsMistakeItems.count))" : "SRS Review (\(appState.puzzleProgress.srsMistakeItems.count))", icon: "bookmark.fill")
-                        sectionTab(.joseki, title: isZh ? "定式与破招" : "Joseki Tree", icon: "arrow.triangle.branch")
-                        sectionTab(.drills, title: isZh ? "五大专项小练" : "5 Mini-Drills", icon: "bolt.circle.fill")
-                        sectionTab(.exams, title: isZh ? "星弈考级室" : "Rank Exams", icon: "rosette")
+                        sectionTab(.tsumego, title: l10n.localized(zh: "分级题库 (\(DojoPuzzleBank.fullCatalog.count))", en: "Tsumego (\(DojoPuzzleBank.fullCatalog.count))", ja: "詰碁問題集 (\(DojoPuzzleBank.fullCatalog.count))", ko: "등급별 문제집 (\(DojoPuzzleBank.fullCatalog.count))", zhHant: "分級題庫 (\(DojoPuzzleBank.fullCatalog.count))"), icon: "square.grid.2x2.fill")
+                        sectionTab(.srsMistakes, title: l10n.localized(zh: "SRS 错题 (\(appState.puzzleProgress.srsMistakeItems.count))", en: "SRS Review (\(appState.puzzleProgress.srsMistakeItems.count))", ja: "SRS 復習 (\(appState.puzzleProgress.srsMistakeItems.count))", ko: "SRS 오답 복습 (\(appState.puzzleProgress.srsMistakeItems.count))", zhHant: "SRS 錯題 (\(appState.puzzleProgress.srsMistakeItems.count))"), icon: "bookmark.fill")
+                        sectionTab(.joseki, title: l10n.localized(zh: "定式与破招", en: "Joseki Tree", ja: "定石と対策", ko: "정석과 파훼", zhHant: "定石與破招"), icon: "arrow.triangle.branch")
+                        sectionTab(.drills, title: l10n.localized(zh: "五大专项小练", en: "5 Mini-Drills", ja: "5大ミニ特訓", ko: "5대 미니 특훈", zhHant: "五大專項小練"), icon: "bolt.circle.fill")
+                        sectionTab(.exams, title: l10n.localized(zh: "星弈考级室", en: "Rank Exams", ja: "段級位試験室", ko: "급·단 승급 시험실", zhHant: "星弈考級室"), icon: "rosette")
                     }
                     .padding(.horizontal, 24)
                 }
@@ -188,7 +193,7 @@ struct TrainingDojoView: View {
                             selectedRankBand = band
                             SoundAndHapticsManager.shared.playUITap()
                         } label: {
-                            Text(band.title(isChinese: isZh))
+                            Text(band.title(isChinese: l10n.language.isChinese))
                                 .font(.system(size: 12, weight: .black, design: .rounded))
                                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                                 .padding(.horizontal, 12)
@@ -205,14 +210,20 @@ struct TrainingDojoView: View {
             // 6-Category Filter
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    categoryChip(nil, title: isZh ? "全部题型" : "All Topics", icon: "sparkles")
+                    categoryChip(nil, title: l10n.localized(zh: "全部题型", en: "All Topics", ja: "すべての分野", ko: "전체 유형", zhHant: "全部題型"), icon: "sparkles")
                     ForEach(PuzzleCategory.allCases) { cat in
-                        categoryChip(cat, title: cat.displayTitle(isChinese: isZh), icon: cat.symbolName)
+                        categoryChip(cat, title: cat.displayTitle(isChinese: l10n.language.isChinese), icon: cat.symbolName)
                     }
                 }
             }
 
-            Text(isZh ? "共筛选出 \(filteredDojoPuzzles.count) 道精校题目（支持棋盘旋转、镜像与黑白互换防背图）" : "\(filteredDojoPuzzles.count) verified puzzles (rotation, reflection & color-swap supported)")
+            Text(l10n.localized(
+                zh: "共筛选出 \(filteredDojoPuzzles.count) 道精校题目（支持棋盘旋转、镜像与黑白互换防背图）",
+                en: "\(filteredDojoPuzzles.count) verified puzzles (rotation, reflection & color-swap supported)",
+                ja: "\(filteredDojoPuzzles.count) 問の厳選問題（回転・反転・白黒入替対応で暗記を防止）",
+                ko: "엄선된 \(filteredDojoPuzzles.count)문제 (회전·반전·흑백 전환 지원으로 암기 방지)",
+                zhHant: "共篩選出 \(filteredDojoPuzzles.count) 道精校題目（支援棋盤旋轉、鏡像與黑白互換防背圖）"
+            ))
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
                 .foregroundColor(AppTheme.inkSecondary)
 
@@ -255,7 +266,7 @@ struct TrainingDojoView: View {
                         .padding(.horizontal, 9)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(badgeFill))
-                    Text(puzzle.category.displayTitle(isChinese: isZh))
+                    Text(puzzle.category.displayTitle(isChinese: l10n.language.isChinese))
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                     Spacer()
@@ -294,10 +305,22 @@ struct TrainingDojoView: View {
                     .font(.system(size: 26, weight: .black))
                     .foregroundColor(AppTheme.coralBottom)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isZh ? "艾宾浩斯间隔重复错题本（1天 → 3天 → 7天巩固）" : "Spaced-Repetition Mistake Book (1d -> 3d -> 7d)")
+                    Text(l10n.localized(
+                        zh: "艾宾浩斯间隔重复错题本（1天 → 3天 → 7天巩固）",
+                        en: "Spaced-Repetition Mistake Book (1d -> 3d -> 7d)",
+                        ja: "忘却曲線・間隔反復ミスノート（1日後 → 3日後 → 7日後）",
+                        ko: "에빙하우스 간격 반복 오답노트 (1일 → 3일 → 7일 복습)",
+                        zhHant: "艾賓浩斯間隔重複錯題本（1天 → 3天 → 7天鞏固）"
+                    ))
                         .font(.system(size: 15, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text(isZh ? "包含刷题错题 + AI 复盘一键转化的「我的实战恶手题」，连续答对 3 轮彻底毕业！" : "Combines tsumego mistakes & your own game blunders. Pass 3 review intervals to master!")
+                    Text(l10n.localized(
+                        zh: "包含刷题错题 + AI 复盘一键转化的「我的实战恶手题」，连续答对 3 轮彻底毕业！",
+                        en: "Combines tsumego mistakes & your own game blunders. Pass 3 review intervals to master!",
+                        ja: "詰碁のミスとAI検討から変換した実戦の悪手を収録。3回連続正解でマスター！",
+                        ko: "사활 오답과 AI 복기에서 변환한 실전 악수 문제를 수록. 3회 연속 정답 시 마스터!",
+                        zhHant: "包含刷題錯題 + AI 復盤一鍵轉化的「我的實戰惡手題」，連續答對 3 輪徹底畢業！"
+                    ))
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -307,7 +330,13 @@ struct TrainingDojoView: View {
             if appState.puzzleProgress.srsMistakeItems.isEmpty {
                 VStack(spacing: 10) {
                     Text("🏆").font(.system(size: 46))
-                    Text(isZh ? "目前没有待复习的错题！去刷题或用 AI 复盘收集实战恶手吧。" : "No mistakes due! Solve puzzles or convert game blunders in AI Review.")
+                    Text(l10n.localized(
+                        zh: "目前没有待复习的错题！去刷题或用 AI 复盘收集实战恶手吧。",
+                        en: "No mistakes due! Solve puzzles or convert game blunders in AI Review.",
+                        ja: "復習待ちのミスはありません！問題を解くかAI検討で実戦の悪手を登録しましょう。",
+                        ko: "복습할 오답이 없습니다! 문제를 풀거나 AI 복기에서 실전 악수를 수집해 보세요.",
+                        zhHant: "目前沒有待複習的錯題！去刷題或用 AI 復盤收集實戰惡手吧。"
+                    ))
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -323,14 +352,16 @@ struct TrainingDojoView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 7) {
                                     HStack {
-                                        Text(item.isDueNow ? (isZh ? "今日待复习" : "Due Now") : (isZh ? "\(item.intervalDays)天后复习" : "In \(item.intervalDays)d"))
+                                        Text(item.isDueNow
+                                             ? l10n.localized(zh: "今日待复习", en: "Due Now", ja: "本日復習", ko: "오늘 복습", zhHant: "今日待複習")
+                                             : l10n.localized(zh: "\(item.intervalDays)天后复习", en: "In \(item.intervalDays)d", ja: "\(item.intervalDays)日後に復習", ko: "\(item.intervalDays)일 후 복습", zhHant: "\(item.intervalDays)天後複習"))
                                             .font(.system(size: 11, weight: .black, design: .rounded))
                                             .foregroundColor(.white)
                                             .padding(.horizontal, 9)
                                             .padding(.vertical, 3)
                                             .background(Capsule().fill(item.isDueNow ? AppTheme.coralBottom : AppTheme.mintBottom))
                                         Spacer()
-                                        Text(isZh ? "巩固进度 \(item.correctStreak)/3" : "Mastery \(item.correctStreak)/3")
+                                        Text(l10n.localized(zh: "巩固进度 \(item.correctStreak)/3", en: "Mastery \(item.correctStreak)/3", ja: "定着度 \(item.correctStreak)/3", ko: "숙달도 \(item.correctStreak)/3", zhHant: "鞏固進度 \(item.correctStreak)/3"))
                                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                                             .foregroundColor(AppTheme.skyBottom)
                                     }
@@ -373,7 +404,7 @@ struct TrainingDojoView: View {
                                 .background(Capsule().fill(AppTheme.grapeBottom))
                             Spacer()
                             if done {
-                                Label(isZh ? "已通关 ★" : "Cleared ★", systemImage: "checkmark.seal.fill")
+                                Label(l10n.localized(zh: "已通关 ★", en: "Cleared ★", ja: "クリア済 ★", ko: "클리어 ★", zhHant: "已通關 ★"), systemImage: "checkmark.seal.fill")
                                     .font(.system(size: 12, weight: .black, design: .rounded))
                                     .foregroundColor(AppTheme.mintBottom)
                             }
@@ -419,10 +450,10 @@ struct TrainingDojoView: View {
                             .background(Circle().fill(Color.white).shadow(color: pal.rim.opacity(0.28), radius: 6, y: 2))
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(kind.title(isChinese: isZh))
+                            Text(kind.title(isChinese: l10n.language.isChinese))
                                 .font(.system(size: 17, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
-                            Text(kind.subtitle(isChinese: isZh))
+                            Text(kind.subtitle(isChinese: l10n.language.isChinese))
                                 .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundColor(.white.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -443,25 +474,31 @@ struct TrainingDojoView: View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(isZh ? "星弈正规段级位认证体系" : "StarYi Official Rank Certification")
+                    Text(l10n.localized(zh: "星弈正规段级位认证体系", en: "StarYi Official Rank Certification", ja: "StarYi 公式段級位認定システム", ko: "StarYi 공식 급·단 인증 시스템", zhHant: "星弈正規段級位認證體系"))
                         .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                     Spacer()
-                    Text(isZh ? "当前认证：\(appState.profile.rankString)" : "Current: \(appState.profile.rankString)")
+                    Text(l10n.localized(zh: "当前认证：\(appState.profile.rankString)", en: "Current: \(appState.profile.rankString)", ja: "現在の段級位：\(appState.profile.rankString)", ko: "현재 인증: \(appState.profile.rankString)", zhHant: "當前認證：\(appState.profile.rankString)"))
                         .font(.system(size: 13, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
                         .background(Capsule().fill(AppTheme.mintBottom))
                 }
-                Text(isZh ? "每个段级位都需要同时通过【考场无辅助笔试 5 题（对 4 题）】+【定时无悔棋晋级实战赛】，真正检验棋力！" : "Each certified rank requires BOTH an Exam-Mode 5-puzzle test (4/5+) AND a timed no-undo promotion match series!")
+                Text(l10n.localized(
+                    zh: "每个段级位都需要同时通过【考场无辅助笔试 5 题（对 4 题）】+【定时无悔棋晋级实战赛】，真正检验棋力！",
+                    en: "Each certified rank requires BOTH an Exam-Mode 5-puzzle test (4/5+) AND a timed no-undo promotion match series!",
+                    ja: "各段級位の認定には【補助なし筆記試験 5問中4問正解】と【時間制限・待ったなし昇級昇段対局】の両方の合格が必要です！",
+                    ko: "각 급·단 인증을 받으려면 [무보조 필기시험 5문제 중 4문제 정답]과 [시간제한·무르기 금지 승급 대국]을 모두 통과해야 합니다!",
+                    zhHant: "每個段級位都需要同時通過【考場無輔助筆試 5 題（對 4 題）】+【定時無悔棋晉級實戰賽】，真正檢驗棋力！"
+                ))
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(AppTheme.inkSecondary)
 
                 Button {
                     appState.navigationPath.append(.rankExamHall)
                 } label: {
-                    Label(isZh ? "进入星弈考级室 →" : "Enter Rank Exam Hall →", systemImage: "rosette")
+                    Label(l10n.localized(zh: "进入星弈考级室 →", en: "Enter Rank Exam Hall →", ja: "段級位試験室へ →", ko: "승급 시험실 입장 →", zhHant: "進入星弈考級室 →"), systemImage: "rosette")
                         .font(.system(size: 16, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)

@@ -39,7 +39,6 @@ struct GameReviewView: View {
     @State private var justStampedBanner: Bool = false
 
     private var l10n: L10n { appState.l10n }
-    private var isZh: Bool { l10n.language.isChinese }
     private var academyEntry: AcademyEntry? { GoAcademyLibrary.entry(forRecordId: record.id) }
     private var isAcademyStudied: Bool {
         guard let entry = academyEntry else { return false }
@@ -120,11 +119,15 @@ struct GameReviewView: View {
                     .frame(height: topBarHeight)
 
                     if isCompact {
-                        let boardSide = min(w - pad * 2, h * 0.44)
+                        let boardSide = max(0, min(w - pad * 2, h * 0.42))
                         reviewBoard.frame(width: boardSide, height: boardSide)
-                        ScrollView(showsIndicators: false) {
-                            reviewControlsPanel
+                        VStack(spacing: 10) {
+                            ScrollView(showsIndicators: false) {
+                                reviewScrollableContent
+                            }
+                            reviewPinnedPlaybackDock
                         }
+                        .frame(maxHeight: .infinity)
                     } else {
                         let sidebarWidth = min(400, max(336, w * 0.33))
                         let boardSide = max(260, min(w - sidebarWidth - pad * 3, h - topBarHeight - pad * 2 - 12))
@@ -133,10 +136,14 @@ struct GameReviewView: View {
                                 .frame(width: boardSide, height: boardSide)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                            ScrollView(showsIndicators: false) {
-                                reviewControlsPanel
+                            VStack(spacing: 10) {
+                                ScrollView(showsIndicators: false) {
+                                    reviewScrollableContent
+                                }
+                                reviewPinnedPlaybackDock
                             }
                             .frame(width: sidebarWidth)
+                            .frame(maxHeight: .infinity)
                         }
                     }
                 }
@@ -168,7 +175,7 @@ struct GameReviewView: View {
         GoBoardView(
             boardState: activeState,
             theme: appState.settings.boardTheme,
-            showCoordinates: appState.settings.showCoordinates,
+            showCoordinates: appState.settings.showCoordinates || academyEntry != nil,
             showMoveNumbers: showMoveNumbers && !isVariationMode,
             moveNumbers: activeMoveNumbers,
             highlightAtari: appState.settings.highlightAtari,
@@ -205,7 +212,7 @@ struct GameReviewView: View {
         )
     }
 
-    private var reviewControlsPanel: some View {
+    private var reviewScrollableContent: some View {
         VStack(spacing: 11) {
             // Header Card
             VStack(alignment: .leading, spacing: 7) {
@@ -235,7 +242,11 @@ struct GameReviewView: View {
                                     Image(systemName: "waveform.path.ecg")
                                         .font(.system(size: 11, weight: .black))
                                 }
-                                Text(isAnalyzingGame ? (isZh ? "分析中..." : "Analyzing...") : (isZh ? "AI 深度复盘" : "AI Review"))
+                                Text(
+                                    isAnalyzingGame
+                                    ? l10n.localized(zh: "分析中...", en: "Analyzing...", ja: "解析中...", ko: "분석 중...", zhHant: "分析中...")
+                                    : l10n.localized(zh: "AI 深度复盘", en: "AI Review", ja: "AI 詳細検討", ko: "AI 심층 복기", zhHant: "AI 深度復盤")
+                                )
                                     .font(.system(size: 11.5, weight: .black, design: .rounded))
                             }
                             .foregroundColor(.white)
@@ -292,62 +303,13 @@ struct GameReviewView: View {
                         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white, lineWidth: 2.5))
                 )
             }
+        }
+    }
 
-            // Scrubber / Variation Banner
-            if isVariationMode {
-                HStack(spacing: 10) {
-                    Image(systemName: "hand.tap.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(AppTheme.coralBottom)
-                    Text(l10n.t("review.variationBanner"))
-                        .font(.system(size: 13.5, weight: .heavy, design: .rounded))
-                        .foregroundColor(AppTheme.coralBottom)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(AppTheme.coralTop.opacity(0.14))
-                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white, lineWidth: 2.5))
-                )
-            } else if mainLineStates.count > 1 {
-                VStack(spacing: 10) {
-                    Slider(
-                        value: Binding(
-                            get: { Double(stepIndex) },
-                            set: {
-                                stopAutoPlay()
-                                let next = Int($0)
-                                if next != stepIndex {
-                                    stepIndex = next
-                                    SoundAndHapticsManager.shared.playGridTick()
-                                }
-                            }
-                        ),
-                        in: 0...Double(mainLineStates.count - 1),
-                        step: 1
-                    )
-                    .tint(AppTheme.skyBottom)
-
-                    HStack(spacing: 8) {
-                        navButton("backward.end.fill") { stopAutoPlay(); stepIndex = 0 }
-                        navButton("chevron.left") { stopAutoPlay(); stepIndex = max(0, stepIndex - 1) }
-                        Button { toggleAutoPlay() } label: {
-                            Image(systemName: isAutoPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 15, weight: .black))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 9)
-                        }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: isAutoPlaying ? .coral : .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                        navButton("chevron.right") { stopAutoPlay(); stepIndex = min(mainLineStates.count - 1, stepIndex + 1) }
-                        navButton("forward.end.fill") { stopAutoPlay(); stepIndex = mainLineStates.count - 1 }
-                    }
-                }
-                .warmCard(cornerRadius: 22, padding: 12)
-            }
-
-            // Action Buttons
+    /// Fixed bottom action buttons + playback controls so neither section shifts vertically as commentary changes.
+    private var reviewPinnedPlaybackDock: some View {
+        VStack(spacing: 10) {
+            // Action Buttons (pinned right above playback controls)
             VStack(spacing: 10) {
                 Button {
                     stopAutoPlay()
@@ -364,17 +326,17 @@ struct GameReviewView: View {
                         isVariationMode ? l10n.t("review.exitVariation") : l10n.t("review.tryVariation"),
                         systemImage: isVariationMode ? "arrow.uturn.backward.circle.fill" : "hand.tap.fill"
                     )
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundColor(.white)
+                    .font(.system(size: 14.5, weight: .heavy, design: .rounded))
+                    .foregroundColor(isVariationMode ? .white : AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
+                    .padding(.vertical, 12)
                 }
                 .buttonStyle(
                     GlossyCapsuleButtonStyle(
-                        palette: isVariationMode ? .coral : .sky,
+                        palette: isVariationMode ? .coral : .snow,
                         cornerRadius: 999,
-                        rimHeight: 5,
-                        whiteBorderWidth: 3
+                        rimHeight: 4,
+                        whiteBorderWidth: 2.5
                     )
                 )
 
@@ -409,6 +371,61 @@ struct GameReviewView: View {
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: copiedFeedback ? .mint : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
                 }
             }
+
+            if isVariationMode {
+                HStack(spacing: 10) {
+                    Image(systemName: "hand.tap.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(AppTheme.coralBottom)
+                    Text(l10n.t("review.variationBanner"))
+                        .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                        .foregroundColor(AppTheme.coralBottom)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(AppTheme.coralTop.opacity(0.14))
+                        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.white, lineWidth: 2.5))
+                )
+            } else if mainLineStates.count > 1 {
+                VStack(spacing: 10) {
+                    currentMoveCoordinateRow
+
+                    Slider(
+                        value: Binding(
+                            get: { Double(stepIndex) },
+                            set: {
+                                stopAutoPlay()
+                                let next = Int($0)
+                                if next != stepIndex {
+                                    stepIndex = next
+                                    SoundAndHapticsManager.shared.playGridTick()
+                                }
+                            }
+                        ),
+                        in: 0...Double(mainLineStates.count - 1),
+                        step: 1
+                    )
+                    .tint(AppTheme.skyBottom)
+
+                    HStack(spacing: 8) {
+                        navButton("backward.end.fill") { stopAutoPlay(); stepIndex = 0 }
+                        navButton("chevron.left") { stopAutoPlay(); stepIndex = max(0, stepIndex - 1) }
+                        Button { toggleAutoPlay() } label: {
+                            Image(systemName: isAutoPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 15, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: isAutoPlaying ? .coral : .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                        navButton("chevron.right") { stopAutoPlay(); stepIndex = min(mainLineStates.count - 1, stepIndex + 1) }
+                        navButton("forward.end.fill") { stopAutoPlay(); stepIndex = mainLineStates.count - 1 }
+                    }
+                }
+                .warmCard(cornerRadius: 22, padding: 12)
+            }
         }
     }
 
@@ -419,13 +436,27 @@ struct GameReviewView: View {
         let lead = report.scoreLeadHistory[min(stepIndex, report.scoreLeadHistory.count - 1)]
         let pct = Int(round(wr * 100))
 
+        let leadStr = String(format: "%+.1f", lead)
+
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(isZh ? "胜率曲线 · 点击跳转" : "Winrate Curve · Tap to Jump")
+                Text(l10n.localized(
+                    zh: "胜率曲线 · 点击跳转",
+                    en: "Winrate Curve · Tap to Jump",
+                    ja: "勝率グラフ · タップで移動",
+                    ko: "승률 그래프 · 탭하여 이동",
+                    zhHant: "勝率曲線 · 點擊跳轉"
+                ))
                     .font(.system(size: 11.5, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.grapeBottom)
                 Spacer()
-                Text(isZh ? "黑胜率 \(pct)% (\(String(format: "%+.1f", lead))目)" : "B \(pct)% (\(String(format: "%+.1f", lead)))")
+                Text(l10n.localized(
+                    zh: "黑胜率 \(pct)% (\(leadStr)目)",
+                    en: "B \(pct)% (\(leadStr) pts)",
+                    ja: "黒勝率 \(pct)% (\(leadStr)目)",
+                    ko: "흑 승률 \(pct)% (\(leadStr)집)",
+                    zhHant: "黑勝率 \(pct)% (\(leadStr)目)"
+                ))
                     .font(.system(size: 11, weight: .heavy, design: .monospaced))
                     .foregroundColor(AppTheme.inkPrimary)
             }
@@ -485,7 +516,13 @@ struct GameReviewView: View {
                                 stopAutoPlay()
                                 stepIndex = m.moveNumber
                             } label: {
-                                Text(isZh ? "第\(m.moveNumber)手 \(m.quality.symbol)" : "#\(m.moveNumber) \(m.quality.symbol)")
+                                Text(l10n.localized(
+                                    zh: "第\(m.moveNumber)手 \(m.quality.symbol)",
+                                    en: "#\(m.moveNumber) \(m.quality.symbol)",
+                                    ja: "\(m.moveNumber)手目 \(m.quality.symbol)",
+                                    ko: "\(m.moveNumber)수 \(m.quality.symbol)",
+                                    zhHant: "第\(m.moveNumber)手 \(m.quality.symbol)"
+                                ))
                                     .font(.system(size: 10.5, weight: .black, design: .rounded))
                                     .foregroundColor(stepIndex == m.moveNumber ? .white : AppTheme.coralBottom)
                                     .padding(.horizontal, 9)
@@ -518,7 +555,13 @@ struct GameReviewView: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(isZh ? "第 \(rev.moveNumber) 手诊断 \(rev.quality.symbol)" : "Move #\(rev.moveNumber) \(rev.quality.symbol)")
+                Text(l10n.localized(
+                    zh: "第 \(rev.moveNumber) 手诊断 \(rev.quality.symbol)",
+                    en: "Move #\(rev.moveNumber) \(rev.quality.symbol)",
+                    ja: "\(rev.moveNumber)手目の診断 \(rev.quality.symbol)",
+                    ko: "\(rev.moveNumber)수 진단 \(rev.quality.symbol)",
+                    zhHant: "第 \(rev.moveNumber) 手診斷 \(rev.quality.symbol)"
+                ))
                     .font(.system(size: 12, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
@@ -532,7 +575,9 @@ struct GameReviewView: View {
                         togglePVPreview(variation: firstVar)
                     } label: {
                         Label(
-                            pvPreviewLabels.isEmpty ? (isZh ? "看推荐变化" : "Show AI PV") : (isZh ? "隐藏变化" : "Hide PV"),
+                            pvPreviewLabels.isEmpty
+                            ? l10n.localized(zh: "看推荐变化", en: "Show AI PV", ja: "推奨変化を見る", ko: "추천 변화도 보기", zhHant: "看推薦變化")
+                            : l10n.localized(zh: "隐藏变化", en: "Hide PV", ja: "変化を隠す", ko: "변화도 숨기기", zhHant: "隱藏變化"),
                             systemImage: "sparkles"
                         )
                         .font(.system(size: 11, weight: .black, design: .rounded))
@@ -557,8 +602,8 @@ struct GameReviewView: View {
                 } label: {
                     Label(
                         alreadySaved
-                        ? (isZh ? "已加入我的实战错题本 ✓" : "Added to Mistake Book ✓")
-                        : (isZh ? "一键转成我的实战错题" : "Save Blunder as Practice Puzzle"),
+                        ? l10n.localized(zh: "已加入我的实战错题本 ✓", en: "Added to Mistake Book ✓", ja: "実戦ミス帳に追加済み ✓", ko: "실전 오답노트에 추가됨 ✓", zhHant: "已加入我的實戰錯題本 ✓")
+                        : l10n.localized(zh: "一键转成我的实战错题", en: "Save Blunder as Practice Puzzle", ja: "実戦ミス問題として保存", ko: "실전 오답 문제로 저장", zhHant: "一鍵轉成我的實戰錯題"),
                         systemImage: alreadySaved ? "checkmark.circle.fill" : "bookmark.fill"
                     )
                     .font(.system(size: 12, weight: .black, design: .rounded))
@@ -617,6 +662,52 @@ struct GameReviewView: View {
                     self.stepIndex = worst.moveNumber
                 }
             }
+        }
+    }
+
+    private var currentMoveCoordinateRow: some View {
+        let total = max(0, mainLineStates.count - 1)
+        return HStack(spacing: 8) {
+            if stepIndex > 0, stepIndex <= mainLineMoves.count {
+                let mv = mainLineMoves[stepIndex - 1]
+                let colorDot = mv.color == .black ? "⚫️" : "⚪️"
+                let pointText: String = {
+                    switch mv.action {
+                    case .place(let pt):
+                        return pt.humanLabel(boardSize: record.boardSize)
+                    case .pass:
+                        return l10n.localized(zh: "虚着", en: "Pass", ja: "パス", ko: "패스", zhHant: "虛著")
+                    case .resign:
+                        return l10n.localized(zh: "认输", en: "Resign", ja: "投了", ko: "기권", zhHant: "認輸")
+                    }
+                }()
+                Text(l10n.localized(
+                    zh: "第 \(mv.moveNumber) 手 · \(colorDot) 落点 \(pointText)",
+                    en: "Move #\(mv.moveNumber) · \(colorDot) \(pointText)",
+                    ja: "\(mv.moveNumber)手目 · \(colorDot) \(pointText)",
+                    ko: "\(mv.moveNumber)수 · \(colorDot) \(pointText)",
+                    zhHant: "第 \(mv.moveNumber) 手 · \(colorDot) 落點 \(pointText)"
+                ))
+                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                .foregroundColor(AppTheme.inkPrimary)
+            } else {
+                Text(l10n.localized(
+                    zh: "开局前 · 全谱共 \(total) 手",
+                    en: "Start · \(total) moves total",
+                    ja: "開始前 · 全\(total)手",
+                    ko: "시작 전 · 총 \(total)수",
+                    zhHant: "開局前 · 全譜共 \(total) 手"
+                ))
+                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                .foregroundColor(AppTheme.inkSecondary)
+            }
+            Spacer()
+            Text("\(stepIndex) / \(total)")
+                .font(.system(size: 11.5, weight: .heavy, design: .monospaced))
+                .foregroundColor(AppTheme.skyBottom)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(AppTheme.skyTop.opacity(0.14)))
         }
     }
 
