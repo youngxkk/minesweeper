@@ -164,7 +164,7 @@ final class SoundAndHapticsManager {
     }
 
     func updateBGMPlayback() {
-        let mood = isAppActive && soundEnabled && bgmEnabled && !zenDojoMode ? currentMood : .none
+        let mood = isAppActive && bgmEnabled && !zenDojoMode ? currentMood : .none
         let tension = (mood == .match) && tensionActive
         audio.updateMusic(to: mood, tensionLayer: tension)
     }

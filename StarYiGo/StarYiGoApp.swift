@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UIKit
+import StoreKit
 
 final class StarYiAppDelegate: NSObject, UIApplicationDelegate {
     func application(
@@ -30,6 +31,7 @@ struct StarYiGoApp: App {
             return
         }
         #endif
+        _ = ReviewPromptPolicy.shared
         _appState = StateObject(wrappedValue: AppState())
     }
 
@@ -55,6 +57,8 @@ struct HomeLogoFramePreferenceKey: PreferenceKey {
 }
 
 struct RootNavigationView: View {
+    @ObservedObject private var reviewPolicy = ReviewPromptPolicy.shared
+    @Environment(\.requestReview) private var requestReview
     @EnvironmentObject var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -355,6 +359,18 @@ struct RootNavigationView: View {
         }
         .onChange(of: legibilityWeight) { _, _ in
             AppFont.clearFontCache()
+        }
+        .task(id: scenePhase == .active ? reviewPolicy.pendingRequestDate : nil) {
+            guard scenePhase == .active, let deadline = reviewPolicy.pendingRequestDate else { return }
+            do {
+                try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, scenePhase == .active else { return }
+            if reviewPolicy.consumeRequestIfEligible() {
+                requestReview()
+            }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             appState.setAppActive(phase == .active)

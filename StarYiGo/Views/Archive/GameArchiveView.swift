@@ -9,6 +9,7 @@ import SwiftUI
 struct GameArchiveView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     private enum ArchiveTab: Equatable {
         case hall(AcademyHall)
@@ -17,6 +18,7 @@ struct GameArchiveView: View {
 
     @State private var selectedTab: ArchiveTab = .hall(.masterpieces)
     @State private var selectedLevel: AcademyLevel = .all
+    @State private var showStarCoinGuide = false
 
     private var l10n: L10n { appState.l10n }
 
@@ -71,16 +73,43 @@ struct GameArchiveView: View {
 
                     Spacer()
 
-                    HStack(spacing: 5) {
-                        StarCoinBadgeView(size: 17)
-                        Text("\(appState.profile.starCoins)")
-                            .font(AppFont.rounded(size: 14.5, weight: .black))
-                            .foregroundColor(AppTheme.inkPrimary)
+                    Button {
+                        showStarCoinGuide = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            StarCoinBadgeView(size: 17)
+                            Text("\(appState.profile.starCoins)")
+                                .font(AppFont.rounded(size: 14.5, weight: .black))
+                                .foregroundColor(AppTheme.inkPrimary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(Color.white.opacity(0.95)).shadow(color: AppTheme.sunBottom.opacity(0.14), radius: 8, y: 3))
+                        .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.white.opacity(0.95)).shadow(color: AppTheme.sunBottom.opacity(0.14), radius: 8, y: 3))
-                    .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
+                    .buttonStyle(.plain)
+                    .tactileButton(scale: 0.95, sound: false)
+                    .accessibilityLabel(l10n.localized(
+                        zh: "星币 \(appState.profile.starCoins)",
+                        en: "\(appState.profile.starCoins) Star Coins",
+                        ja: "星コイン \(appState.profile.starCoins)",
+                        ko: "별코인 \(appState.profile.starCoins)",
+                        zhHant: "星幣 \(appState.profile.starCoins)"
+                    ))
+                    .accessibilityHint(l10n.localized(
+                        zh: "查看星币说明",
+                        en: "Learn what Star Coins are for",
+                        ja: "星コインの説明を見る",
+                        ko: "별코인 안내 보기",
+                        zhHant: "查看星幣說明"
+                    ))
+                    .accessibilityIdentifier("ArchiveStarCoinButton")
+                    .popover(isPresented: $showStarCoinGuide, arrowEdge: .top) {
+                        starCoinGuidePopover
+                            .presentationCompactAdaptation(.sheet)
+                            .presentationDetents([.medium])
+                            .presentationDragIndicator(.visible)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 14)
@@ -96,25 +125,25 @@ struct GameArchiveView: View {
                         codexTabPill
                     }
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 10)
                 }
 
                 if selectedTab == .codex {
                     GoCodexView(embeddedInArchive: true)
                 } else {
-                    // Row 2: Level Filter Pills (全部 / 启蒙 / 进阶 / 高阶 / 段位)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(AcademyLevel.allCases) { level in
-                                levelPill(level: level)
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-
-                    // Hall Content Grid
+                    // Hall Content Grid — the small rank filter pills travel with the
+                    // scrolling content; only the big archive crest above stays pinned.
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 14) {
+                            // Row 2: Level Filter Pills (全部 / 启蒙 / 进阶 / 高阶 / 段位)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(AcademyLevel.allCases) { level in
+                                        levelPill(level: level)
+                                    }
+                                }
+                            }
+
                             hallHeaderBanner(selectedHall)
 
                             if filteredEntries.isEmpty {
@@ -165,6 +194,81 @@ struct GameArchiveView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    // MARK: - Star Coin Guide Popover
+
+    /// Compact explanation shown when the star-coin capsule in the top bar is tapped.
+    private var starCoinGuidePopover: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                StarCoinBadgeView(size: 38)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(l10n.localized(
+                        zh: "星币",
+                        en: "Star Coins",
+                        ja: "星コイン",
+                        ko: "별코인",
+                        zhHant: "星幣"
+                    ))
+                    .font(AppFont.rounded(size: 18, weight: .black))
+                    .foregroundColor(AppTheme.inkPrimary)
+
+                    Text(l10n.localized(
+                        zh: "当前 \(appState.profile.starCoins) 枚",
+                        en: "\(appState.profile.starCoins) in hand",
+                        ja: "いま \(appState.profile.starCoins) 枚",
+                        ko: "현재 \(appState.profile.starCoins)개",
+                        zhHant: "目前 \(appState.profile.starCoins) 枚"
+                    ))
+                    .font(AppFont.rounded(size: 12.5, weight: .black))
+                    .foregroundColor(AppTheme.sunBottom)
+                }
+
+                Spacer(minLength: 8)
+
+                Button {
+                    showStarCoinGuide = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(AppTheme.inkSecondary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(l10n.localized(
+                zh: "做题、对局、每日道场和定式都会奖励星币。星币可以在「设置」里解锁新的棋盘和棋子外观，不兑换就不会消耗。",
+                en: "Puzzles, matches, the Daily Dojo and joseki all reward Star Coins. Spend them in Settings to unlock new board and stone styles — they are only used when you redeem them.",
+                ja: "問題・対局・毎日道場・定石で星コインがもらえます。設定で新しい碁盤や碁石の見た目と交換でき、交換しない限り減りません。",
+                ko: "퍼즐, 대국, 매일 도장, 정석에서 별코인을 받을 수 있어요. 설정에서 새로운 바둑판과 바둑돌 모양으로 교환할 수 있으며, 교환할 때만 사용돼요.",
+                zhHant: "做題、對局、每日道場和定式都會獎勵星幣。星幣可以在「設定」裡解鎖新的棋盤和棋子外觀，不兌換就不會消耗。"
+            ))
+            .font(AppFont.rounded(size: 13.5, weight: .semibold))
+            .foregroundColor(AppTheme.inkSecondary(for: colorSchemeContrast))
+            .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                showStarCoinGuide = false
+            } label: {
+                Text(l10n.localized(
+                    zh: "知道了",
+                    en: "Got it",
+                    ja: "わかった",
+                    ko: "알겠어요",
+                    zhHant: "知道了"
+                ))
+                .font(AppFont.rounded(size: 14, weight: .black))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.5))
+        }
+        .padding(18)
+        .frame(minWidth: 300, idealWidth: 340, maxWidth: 380)
+        .background(Color(red: 0.97, green: 0.985, blue: 1.0))
     }
 
     // MARK: - Hall & Level Pills

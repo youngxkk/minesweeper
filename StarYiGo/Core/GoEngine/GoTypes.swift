@@ -94,10 +94,11 @@ enum BoardSize: Int, CaseIterable, Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// Standard Go scoring rulesets (Chinese Area Scoring vs Japanese/Korean Territory Scoring).
+/// Standard Go scoring rulesets (Chinese Area Scoring vs Japanese/Korean Territory Scoring vs AGA Area Scoring).
 enum ScoringRule: String, CaseIterable, Codable, Identifiable, Hashable, Sendable {
     case chinese
     case japanese
+    case aga
 
     var id: String { rawValue }
 
@@ -105,12 +106,18 @@ enum ScoringRule: String, CaseIterable, Codable, Identifiable, Hashable, Sendabl
         switch self {
         case .chinese: return "scoring.rule.chinese"
         case .japanese: return "scoring.rule.japanese"
+        case .aga: return "scoring.rule.aga"
         }
+    }
+
+    /// Chinese and AGA both use area scoring; Japanese/Korean use territory scoring.
+    var isAreaScoring: Bool {
+        self != .japanese
     }
 
     func defaultKomi(for size: BoardSize) -> Double {
         switch self {
-        case .chinese:
+        case .chinese, .aga:
             return size.defaultKomi
         case .japanese:
             switch size {
@@ -120,6 +127,40 @@ enum ScoringRule: String, CaseIterable, Codable, Identifiable, Hashable, Sendabl
             case .thirteen: return 5.5
             case .nineteen: return 6.5
             }
+        }
+    }
+}
+
+/// User-facing global scoring preference. `automatic` resolves once from the
+/// device region; the other three pin an explicit scoring family.
+enum ScoringRulePreference: String, CaseIterable, Codable, Identifiable, Hashable, Sendable {
+    case automatic
+    case chinese
+    case japanese
+    case aga
+
+    var id: String { rawValue }
+
+    var resolvedRule: ScoringRule {
+        switch self {
+        case .automatic: return Self.regionalRule
+        case .chinese: return .chinese
+        case .japanese: return .japanese
+        case .aga: return .aga
+        }
+    }
+
+    /// Region-based default used by `automatic`.
+    static var regionalRule: ScoringRule {
+        switch Locale.current.region?.identifier.uppercased() {
+        case "CN", "HK", "MO", "TW":
+            return .chinese
+        case "JP", "KR":
+            return .japanese
+        case "US", "CA", "GB":
+            return .aga
+        default:
+            return .japanese
         }
     }
 }
@@ -470,12 +511,20 @@ struct GameResult: Hashable, Codable, Sendable {
         let blackThreshold = baseHalf + komi / 2.0
         if isChinese {
             let winnerLabel = winner == .black ? "黑胜" : "白胜"
+            if scoringRule == .aga {
+                let blackPoints = String(format: "%.1f", blackScore)
+                let needPoints = String(format: "%.2f", blackThreshold)
+                return "AGA面积法 · 黑 \(blackPoints) 点（过 \(needPoints) 胜）· \(winnerLabel) \(margin) 点"
+            }
             let ziStr = Self.formatChineseZi(chineseZiMargin)
             let blackZi = String(format: "%.1f", blackScore)
             let needZi = String(format: "%.2f", blackThreshold)
             return "数子法 · 黑 \(blackZi) 子（过 \(needZi) 胜）· \(winnerLabel) \(ziStr)"
         } else {
             let winnerLabel = winner == .black ? "Black" : "White"
+            if scoringRule == .aga {
+                return String(format: "AGA Area · %@ +%.1f pts", winnerLabel, margin)
+            }
             return String(format: "Chinese Area · %@ +%.1f (%.2f Zi)", winnerLabel, margin, chineseZiMargin)
         }
     }

@@ -166,17 +166,15 @@ struct GoCodexView: View {
             SoundAndHapticsManager.shared.playUITap()
         } label: {
             Text(title)
-                .font(AppFont.rounded(size: 13, weight: .black))
+                .font(AppFont.rounded(size: 12.5, weight: .black))
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .frame(minHeight: AppTheme.buttonFaceHeight)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .background(
                     Capsule()
                         .fill(active ? accent : Color.white.opacity(0.92))
-                        .shadow(color: active ? accent.opacity(0.28) : Color.black.opacity(0.06), radius: 6, y: 2)
                 )
-                .overlay(Capsule().strokeBorder(.white, lineWidth: active ? 2 : 1.5))
+                .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
         }
         .tactileButton(scale: 0.95, sound: false)
     }

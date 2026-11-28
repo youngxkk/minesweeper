@@ -489,7 +489,13 @@ struct TrainingDojoView: View {
                     .padding(.vertical, 13)
                     .frame(minWidth: 220)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(
+                    palette: .mint,
+                    cornerRadius: 999,
+                    rimHeight: 3,
+                    whiteBorderWidth: 3,
+                    showsContactShadow: false
+                ))
                 .padding(.top, 2)
             }
             .frame(maxWidth: 420)

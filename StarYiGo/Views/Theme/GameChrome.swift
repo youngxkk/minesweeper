@@ -83,6 +83,8 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
     var whiteBorderWidth: CGFloat = 3.0
     var showStripeSheen: Bool = false
     var playTapSound: Bool = true
+    /// Set false for a flat bottom edge without the soft contact shadow.
+    var showsContactShadow: Bool = true
 
     var pressStyle: PressStyle = .button
 
@@ -186,7 +188,7 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                 .fill(palette.rim)
                 .padding(.horizontal, 2)
                 .shadow(
-                    color: palette.glow.opacity(pressed ? 0.08 : 0.18),
+                    color: showsContactShadow ? palette.glow.opacity(pressed ? 0.08 : 0.18) : .clear,
                     radius: pressed ? 1.5 : 4,
                     y: pressed ? 0.5 : 2.5
                 )
@@ -381,7 +383,6 @@ struct GameCircleButton: View {
 
     var body: some View {
         let diameter = max(size, minimumHeight)
-        let proportionalRim = max(2.0, min(3.0, (diameter * 0.055 * 2).rounded() / 2))
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: max(size * 0.42, diameter * 0.38), weight: .heavy, design: .rounded))
@@ -392,7 +393,7 @@ struct GameCircleButton: View {
             GlossyCapsuleButtonStyle(
                 palette: palette,
                 cornerRadius: diameter / 2,
-                rimHeight: proportionalRim,
+                rimHeight: 3,
                 whiteBorderWidth: 2.2,
                 playTapSound: playTapSound
             )
@@ -403,6 +404,8 @@ struct GameCircleButton: View {
 /// Playful glossy Nintendo floating capsule title banner with a unified height across all screens,
 /// regardless of whether a subtitle is present.
 struct GameTitleCrest: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     let title: String
     var subtitle: String? = nil
     var minHeight: CGFloat = AppTheme.titleCrestHeight
@@ -423,7 +426,7 @@ struct GameTitleCrest: View {
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(AppFont.rounded(size: 11, weight: .bold))
-                        .foregroundColor(AppTheme.skyBottom)
+                        .foregroundColor(AppTheme.inkSecondary(for: colorSchemeContrast))
                         .lineLimit(1)
                 }
             }
@@ -446,13 +449,9 @@ struct GameTitleCrest: View {
                         endPoint: .bottom
                     )
                 )
-                .shadow(color: AppTheme.skyBottom.opacity(0.16), radius: 12, y: 5)
         )
         .overlay(
             Capsule().strokeBorder(.white, lineWidth: 3)
-        )
-        .overlay(
-            Capsule().strokeBorder(AppTheme.skyTop.opacity(0.28), lineWidth: 1)
         )
     }
 }

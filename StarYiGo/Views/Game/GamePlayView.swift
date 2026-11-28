@@ -122,7 +122,7 @@ struct GamePlayView: View {
                 Group {
                     if viewModel.isTwoPlayer && viewModel.isTabletopFaceToFace {
                         tabletopTwoPlayerLayout(w: w, h: h, pad: pad)
-                    } else if w < 720 || h > w * 1.15 {
+                    } else if h > w * 1.15 || w < 620 {
                         compactPortraitArena(w: w, h: h, pad: pad)
                     } else {
                         standardLandscapeArena(w: w, h: h, pad: pad)
@@ -130,6 +130,10 @@ struct GamePlayView: View {
                 }
                 .frame(width: w, height: h)
             }
+            // Let the arena breathe all the way down to the physical bottom edge instead of
+            // stopping at the home-indicator safe area. The board's coordinates keep the last
+            // playable row comfortably above the system gesture region.
+            .ignoresSafeArea(.container, edges: .bottom)
 
             // Custom Game-Styled Top-Right Actions Dropdown Menu (crisp white icons!)
             if showActionsMenu {
@@ -147,7 +151,7 @@ struct GamePlayView: View {
                     HStack {
                         Spacer()
                         gameActionsDropdownCard
-                            .padding(.top, topBarHeight + 14)
+                            .padding(.top, topBarHeight + 10)
                             .padding(.trailing, 20)
                     }
                     Spacer()
@@ -227,6 +231,7 @@ struct GamePlayView: View {
                 )
                 .transition(.scale(scale: 0.88).combined(with: .opacity))
                 .zIndex(30)
+
             }
         }
         .animation(.spring(response: 0.30, dampingFraction: 0.78), value: showResultOverlay)
@@ -273,6 +278,8 @@ struct GamePlayView: View {
         .onChange(of: viewModel.gameResult) { _, newValue in
             if newValue != nil {
                 showResultOverlay = true
+            } else {
+                showResultOverlay = false
             }
         }
         .gameDialog(
@@ -303,11 +310,11 @@ struct GamePlayView: View {
                 )),
                 .primary(
                     l10n.localized(
-                        zh: "保存并返回",
-                        en: "Save & Leave",
-                        ja: "保存して戻る",
-                        ko: "저장하고 나가기",
-                        zhHant: "儲存並返回"
+                        zh: "离开",
+                        en: "Leave",
+                        ja: "退出",
+                        ko: "나가기",
+                        zhHant: "離開"
                     ),
                     palette: .sky
                 ) {
@@ -424,12 +431,18 @@ struct GamePlayView: View {
     // MARK: - Standard Landscape Arena (Immutable Board Left + Glossy Controls Right)
 
     private func standardLandscapeArena(w: CGFloat, h: CGFloat, pad: CGFloat) -> some View {
-        let sidebarWidth = min(380, max(324, w * 0.31))
+        let sidebarWidth = min(360, max(300, w * 0.28))
         let boardMaxW = max(260, w - sidebarWidth - pad * 3)
-        let contentHeight = max(0, h - topBarHeight - 36)
+        let topPadding: CGFloat = 8
+        // 底部留白与棋盘左侧留白保持一致（都使用页面的 horizontal pad）。
+        let bottomPadding: CGFloat = pad
+        let headerGap: CGFloat = 6
+        let contentHeight = max(0, h - topBarHeight - topPadding - bottomPadding - headerGap)
         let boardSide = min(boardMaxW, contentHeight)
+        // 让控制面板铺满棋盘右侧的剩余宽度：它与棋盘、屏幕右缘的间距都等于 pad。
+        let controlPanelWidth = max(0, w - pad * 3 - boardSide)
 
-        return VStack(spacing: 12) {
+        return VStack(spacing: headerGap) {
             gameTopBar
                 .frame(height: topBarHeight)
                 .modifier(arenaEntrance(0.0, y: -64, scale: 0.94, animation: MotionToken.homeTopBarEntrance))
@@ -438,26 +451,31 @@ struct GamePlayView: View {
                 boardView
                     .frame(width: boardSide, height: boardSide)
                     .modifier(arenaEntrance(0.06, y: 36, scale: 0.90))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
                 ScrollView(showsIndicators: false) {
                     rightControlPanel
+                        // 底部操作按钮整体上提 20pt，避免贴住屏幕下缘。
+                        .padding(.bottom, 20)
                         .frame(minHeight: contentHeight)
                 }
                 .scrollClipDisabled()
                 .scrollBounceBehavior(.basedOnSize)
-                .frame(width: sidebarWidth)
+                .frame(width: controlPanelWidth)
             }
             .frame(height: contentHeight)
         }
         .padding(.horizontal, pad)
-        .padding(.vertical, 12)
+        .padding(.top, topPadding)
+        .padding(.bottom, bottomPadding)
     }
 
     // MARK: - Responsive Compact Portrait Arena (iPhone Support!)
 
     private func compactPortraitArena(w: CGFloat, h: CGFloat, pad: CGFloat) -> some View {
-        let boardSide = max(0, min(w - pad * 2, h * 0.50))
+        // 19 路石头最小，多留一点纵向空间给棋盘，下面的控制面板本来就可以滚动。
+        let boardHeightFraction: CGFloat = viewModel.boardSize == .nineteen ? 0.56 : 0.52
+        let boardSide = max(0, min(w - pad * 2, h * boardHeightFraction))
 
         return VStack(spacing: 10) {
             gameTopBar
@@ -468,6 +486,7 @@ struct GamePlayView: View {
                 boardView
                     .frame(width: boardSide, height: boardSide)
                     .modifier(arenaEntrance(0.06, y: 36, scale: 0.90))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             ScrollView(showsIndicators: false) {
@@ -774,6 +793,8 @@ struct GamePlayView: View {
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 }
 
+                bgmToggleButton
+
                 soundToggleButton
 
                 voiceToggleButton
@@ -790,12 +811,8 @@ struct GamePlayView: View {
                         .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
-                        .background(
-                            SnowCapsuleSurface(rimHeight: 5)
-                        )
-                        .padding(.bottom, 5)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.2, playTapSound: false))
                 .accessibilityIdentifier("GameActionsMenu")
                 .accessibilityLabel(l10n.localized(zh: "对局菜单", en: "Game Menu", ja: "対局メニュー", ko: "대국 메뉴", zhHant: "對局選單"))
             }
@@ -916,6 +933,35 @@ struct GamePlayView: View {
         }
     }
 
+    private var bgmToggleButton: some View {
+        let isOn = appState.settings.bgmEnabled
+
+        return Button {
+            let nextValue = !appState.settings.bgmEnabled
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.72)) {
+                appState.updateSettings { $0.bgmEnabled = nextValue }
+                if showActionsMenu {
+                    showActionsMenu = false
+                }
+            }
+            if nextValue {
+                SoundAndHapticsManager.shared.playUITap(weight: .light)
+            }
+        } label: {
+            Image(systemName: isOn ? "music.note" : "music.note.slash")
+                .font(.system(size: 17, weight: .black, design: .rounded))
+                .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
+                .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
+        }
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.2, playTapSound: false))
+        .accessibilityLabel(
+            isOn
+                ? l10n.localized(zh: "背景音乐：开", en: "Background Music: On", ja: "BGM：オン", ko: "배경음악: 켜짐", zhHant: "背景音樂：開")
+                : l10n.localized(zh: "背景音乐：关", en: "Background Music: Off", ja: "BGM：オフ", ko: "배경음악: 꺼짐", zhHant: "背景音樂：關")
+        )
+        .accessibilityIdentifier("GameBGMToggleButton")
+    }
+
     private var soundToggleButton: some View {
         let isOn = appState.settings.soundEnabled
 
@@ -935,12 +981,8 @@ struct GamePlayView: View {
                 .font(.system(size: 17, weight: .black, design: .rounded))
                 .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
                 .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
-                .background(
-                    SnowCapsuleSurface(rimHeight: 5)
-                )
-                .padding(.bottom, 5)
         }
-        .tactileButton(scale: 0.92, sound: false)
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.2, playTapSound: false))
         .accessibilityLabel(
             isOn
                 ? l10n.localized(zh: "落子与按钮音效：开", en: "Sound Effects: On", ja: "効果音：オン", ko: "효과음: 켜짐", zhHant: "落子與按鈕音效：開")
@@ -968,22 +1010,14 @@ struct GamePlayView: View {
 
                 if !isOn {
                     Capsule()
-                        .fill(AppTheme.coralBottom)
+                        .fill(AppTheme.inkSecondary.opacity(0.65))
                         .frame(width: 24, height: 2.6)
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.white.opacity(0.95), lineWidth: 0.8)
-                        )
-                        .rotationEffect(.degrees(-40))
+                        .rotationEffect(.degrees(40))
                 }
             }
             .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
-            .background(
-                SnowCapsuleSurface(rimHeight: 5)
-            )
-            .padding(.bottom, 5)
         }
-        .tactileButton(scale: 0.92, sound: false)
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.2, playTapSound: false))
         .accessibilityLabel(
             isOn
                 ? l10n.localized(zh: "人声语音：开", en: "Voice Lines: On", ja: "音声ガイド：オン", ko: "음성 안내: 켜짐", zhHant: "人聲語音：開")
@@ -1062,12 +1096,8 @@ struct GamePlayView: View {
                 .transition(.scale(scale: 0.72).combined(with: .opacity))
             }
             .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
-            .background(
-                SnowCapsuleSurface(rimHeight: 5)
-            )
-            .padding(.bottom, 5)
         }
-        .tactileButton(scale: 0.92, sound: false)
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.2, playTapSound: false))
         .accessibilityLabel(stoneDisplayAccessibilityLabel)
         .accessibilityIdentifier("GameStoneDisplayToggleButton")
     }
@@ -1646,33 +1676,29 @@ struct GamePlayView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Chinese Area vs Japanese Territory rule toggle + visual pocket count button
             HStack(spacing: 6) {
-                ForEach(ScoringRule.allCases) { rule in
-                    let selected = viewModel.scoringRule == rule
-                    Button {
-                        viewModel.switchScoringRule(rule)
-                    } label: {
-                        Text(
-                            rule == .chinese
-                            ? l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국 규칙", zhHant: "中國數子法")
-                            : l10n.localized(zh: "日韩数目法", en: "Japanese Terr.", ja: "日本・韓国ルール", ko: "한·일 규칙", zhHant: "日韓數目法")
+                // Read-only: scoring follows the global setting, no per-game picker.
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 10, weight: .black, design: .rounded))
+                    Text(
+                        l10n.localized(
+                            zh: "计分：\(scoringRuleTitle(viewModel.scoringRule))",
+                            en: "Scoring: \(scoringRuleTitle(viewModel.scoringRule))",
+                            ja: "計算：\(scoringRuleTitle(viewModel.scoringRule))",
+                            ko: "계가: \(scoringRuleTitle(viewModel.scoringRule))",
+                            zhHant: "計分：\(scoringRuleTitle(viewModel.scoringRule))"
                         )
-                            .font(AppFont.rounded(size: 11, weight: .black))
-                            .foregroundColor(selected ? .white : AppTheme.inkSecondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .frame(minHeight: AppTheme.buttonFaceHeight)
-                            .background(
-                                Capsule().fill(
-                                    selected
-                                    ? AnyShapeStyle(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom))
-                                    : AnyShapeStyle(AppTheme.canvasBackground)
-                                )
-                            )
-                    }
-                    .tactileButton(scale: 0.94, sound: false)
+                    )
+                    .font(AppFont.rounded(size: 11, weight: .black))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 }
+                .foregroundColor(AppTheme.inkSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .frame(minHeight: AppTheme.buttonFaceHeight)
+                .background(Capsule().fill(AppTheme.canvasBackground))
 
                 Spacer()
 
@@ -1767,9 +1793,33 @@ struct GamePlayView: View {
         .warmCard(cornerRadius: 24, padding: 0)
     }
 
+    private func scoringRuleTitle(_ rule: ScoringRule) -> String {
+        switch rule {
+        case .chinese:
+            return l10n.localized(zh: "中国数子", en: "Chinese Area", ja: "中国数子", ko: "중국 수자", zhHant: "中國數子")
+        case .japanese:
+            return l10n.localized(zh: "日韩数目", en: "JP/KR Territory", ja: "日韓数目", ko: "한일 수목", zhHant: "日韓數目")
+        case .aga:
+            return l10n.localized(zh: "AGA 面积", en: "AGA Area", ja: "AGA 面積", ko: "AGA 면적", zhHant: "AGA 面積")
+        }
+    }
+
     private func localizedScoreSummary(_ preview: GameResult) -> String {
         let marginStr = String(format: "%.1f", preview.margin)
-        if preview.scoringRule == .chinese {
+        if preview.scoringRule.isAreaScoring {
+            if preview.scoringRule == .aga {
+                let baseHalf = Double(preview.boardSize * preview.boardSize) / 2.0
+                let blackThreshold = baseHalf + preview.komi / 2.0
+                let blackPoints = String(format: "%.1f", preview.blackScore)
+                let needPoints = String(format: "%.2f", blackThreshold)
+                return l10n.localized(
+                    zh: "AGA面积法 · 黑 \(blackPoints) 点（过 \(needPoints) 胜）· \(preview.winner == .black ? "黑胜" : "白胜") \(marginStr) 点",
+                    en: "AGA Area · \(preview.winner == .black ? "Black" : "White") +\(marginStr) pts",
+                    ja: "AGA面積 · \(preview.winner == .black ? "黒" : "白") +\(marginStr)点",
+                    ko: "AGA 면적 · \(preview.winner == .black ? "흑" : "백") +\(marginStr)점",
+                    zhHant: "AGA面積法 · 黑 \(blackPoints) 點（過 \(needPoints) 勝）· \(preview.winner == .black ? "黑勝" : "白勝") \(marginStr) 點"
+                )
+            }
             let baseHalf = Double(preview.boardSize * preview.boardSize) / 2.0
             let blackThreshold = baseHalf + preview.komi / 2.0
             let ziStr = GameResult.formatChineseZi(preview.chineseZiMargin)

@@ -807,12 +807,6 @@ final class GameViewModel: ObservableObject {
         )
     }
 
-    func switchScoringRule(_ newRule: ScoringRule) {
-        scoringRule = newRule
-        updateDeadStonePreview()
-        SoundAndHapticsManager.shared.playUITap()
-    }
-
     /// Gently animates enclosed territory pockets one-by-one so kids visually understand how territory is counted!
     func runVisualPocketCountingDemo() {
         pocketAnimTask?.cancel()
@@ -1667,6 +1661,7 @@ final class GameViewModel: ObservableObject {
         let isFirstFinalization = !hasFinalizedMatchOnce
         hasFinalizedMatchOnce = true
         if isFirstFinalization {
+            ReviewPromptPolicy.shared.recordCompletedGame()
             if let examTier {
                 appState.recordExamMatchResult(tier: examTier, didWin: didHumanWin)
             }

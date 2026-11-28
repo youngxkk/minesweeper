@@ -196,27 +196,27 @@ enum KataGoModelPreset: String, CaseIterable, Codable, Identifiable, Sendable {
         switch self {
         case .b6c96:
             return l10n.localized(
-                zh: "KataGo g170-b6c96（极速省电 · 业余 5D 棋力，发热量最低）",
-                en: "KataGo g170-b6c96 (Ultra-fast & cool · Amateur 5D strength)",
-                ja: "KataGo g170-b6c96（超高速・省電力・アマ5段相当）",
-                ko: "KataGo g170-b6c96 (초고속·저전력 · 아마 5단 기력)",
-                zhHant: "KataGo g170-b6c96（極速省電 · 業餘 5D 棋力，發熱量最低）"
+                zh: "计算轻巧、响应更快，适合初学者、儿童启蒙和碎片时间快练。",
+                en: "Lightweight computation and faster responses. For beginners, children learning Go, and quick practice.",
+                ja: "計算が軽く、応答も速め。初心者やお子様の入門、短時間の練習に。",
+                ko: "계산 부담이 적고 응답이 빠른 편이에요. 입문자·어린이·짧은 연습에 적합해요.",
+                zhHant: "計算輕巧、回應更快，適合初學者、兒童啟蒙和零碎時間快練。"
             )
         case .b10c128:
             return l10n.localized(
-                zh: "KataGo kata1-b10c128（默认推荐 · 速度与高段死活/官子精度均衡）",
-                en: "KataGo kata1-b10c128 (Default · Great balance of speed and strong reading)",
-                ja: "KataGo kata1-b10c128（標準おすすめ・速度と読み精度の好バランス）",
-                ko: "KataGo kata1-b10c128 (기본 추천 · 속도와 수읽기 정확도의 최적 균형)",
-                zhHant: "KataGo kata1-b10c128（預設推薦 · 速度與高段死活/官子精度均衡）"
+                zh: "兼顾响应速度与局面判断，适合大多数棋友日常对弈、进阶练习，默认推荐。",
+                en: "Balances response speed and position judgment. Recommended for everyday games and improving players.",
+                ja: "応答速度と局面判断のバランス型。日常の対局や上達を目指す方におすすめ。",
+                ko: "응답 속도와 형세 판단의 균형형이에요. 일상 대국과 실력 향상 연습에 추천해요.",
+                zhHant: "兼顧回應速度與局面判斷，適合大多數棋友日常對弈、進階練習，預設推薦。"
             )
         case .b18c384nbt:
             return l10n.localized(
-                zh: "KataGo kata1-b18c384nbt（职业级大模型 · 复杂对杀与复盘最精准，思考稍慢）",
-                en: "KataGo kata1-b18c384nbt (Pro-grade · Deepest reading & review accuracy, slightly slower)",
-                ja: "KataGo kata1-b18c384nbt（プロ級大型モデル・複雑な攻め合いと検討が最高精度）",
-                ko: "KataGo kata1-b18c384nbt (프로급 대형 모델 · 복잡한 수상전·복기 최고 정확도)",
-                zhHant: "KataGo kata1-b18c384nbt（職業級大模型 · 複雜對殺與複盤最精準，思考稍慢）"
+                zh: "模型更大、计算更重，等待可能更久；适合有基础、希望深入练习复杂局面的棋友。",
+                en: "A larger model with heavier computation; moves may take longer. For experienced players practicing complex positions.",
+                ja: "大型モデルで計算量が多く、待ち時間も長め。基礎を身につけ、複雑な局面に取り組む方に。",
+                ko: "더 큰 모델이라 계산량이 많고 기다림이 길어질 수 있어요. 기초를 익히고 복잡한 국면을 연습하는 분께 적합해요.",
+                zhHant: "模型更大、計算更重，等待可能更久；適合有基礎、希望深入練習複雜局面的棋友。"
             )
         }
     }

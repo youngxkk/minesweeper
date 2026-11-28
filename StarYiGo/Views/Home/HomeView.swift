@@ -589,45 +589,31 @@ struct HomeView: View {
 
             HStack(spacing: isCompact ? 8 : 10) {
 
-                if isCompact || appState.hasTappedPhotoJudge {
-                    GameCircleButton(
-                        icon: "camera.viewfinder",
-                        palette: .grape,
-                        tint: .white,
-                        size: isCompact ? 40 : 44
-                    ) {
-                        appState.markPhotoJudgeTapped()
-                        appState.navigationPath.append(.photoJudge)
+                Button {
+                    appState.markPhotoJudgeTapped()
+                    appState.navigationPath.append(.photoJudge)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 15, weight: .black, design: .rounded))
+                        Text(l10n.localized(
+                            zh: "拍照判胜负",
+                            en: "Photo Judge",
+                            ja: "写真判定",
+                            ko: "사진 판정",
+                            zhHant: "拍照判勝負"
+                        ))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                     }
-                    .accessibilityLabel(l10n.localized(zh: "拍照判胜负", en: "Photo Judge", ja: "写真判定", ko: "사진 판정", zhHant: "拍照判勝負"))
-                    .accessibilityIdentifier("HomePhotoJudgeButton")
-                    .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.92, animation: MotionToken.homeTopBarEntrance))
-                } else {
-                    Button {
-                        appState.markPhotoJudgeTapped()
-                        appState.navigationPath.append(.photoJudge)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "camera.viewfinder")
-                                .font(.system(size: 15, weight: .black, design: .rounded))
-                            Text(l10n.localized(
-                                zh: "拍照判胜负",
-                                en: "Photo Judge",
-                                ja: "写真判定",
-                                ko: "사진 판정",
-                                zhHant: "拍照判勝負"
-                            ))
-                            .font(AppFont.rounded(size: 13, weight: .black))
-                        }
-                        .foregroundColor(.white)
-                        .shadow(color: AppTheme.grapeRim.opacity(0.45), radius: 1, y: 1.5)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.2))
-                    .accessibilityIdentifier("HomePhotoJudgeButton")
-                    .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
+                    .foregroundColor(.white)
+                    .shadow(color: AppTheme.grapeRim.opacity(0.45), radius: 1, y: 1.5)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                 }
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.2))
+                .accessibilityLabel(l10n.localized(zh: "拍照判胜负", en: "Photo Judge", ja: "写真判定", ko: "사진 판정", zhHant: "拍照判勝負"))
+                .accessibilityIdentifier("HomePhotoJudgeButton")
+                .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
                 GameCircleButton(
                     icon: appState.settings.bgmEnabled ? "music.note" : "music.note.slash",
@@ -655,13 +641,8 @@ struct HomeView: View {
 
                 GameCircleButton(
                     icon: "gearshape.fill",
-                    palette: GlossyPalette(
-                        top: Color(red: 0.23, green: 0.32, blue: 0.47),
-                        bottom: Color(red: 0.12, green: 0.18, blue: 0.30),
-                        rim: Color(red: 0.07, green: 0.11, blue: 0.20),
-                        glow: AppTheme.inkPrimary
-                    ),
-                    tint: Color(red: 1.0, green: 0.87, blue: 0.56),
+                    palette: .coral,
+                    tint: .white,
                     size: isCompact ? 40 : 44
                 ) {
                     appState.showSettingsSheet = true
@@ -897,7 +878,7 @@ struct HomeView: View {
                     handicap: selectedColor == .black ? selectedHandicap : 0,
                     ruleSet: selectedRuleSet,
                     timeControl: selectedTimeControl,
-                    scoringRule: appState.settings.scoringRule,
+                    scoringRule: appState.settings.effectiveScoringRule,
                     coachingStyle: selectedCoachingStyle
                 )
             } label: {
@@ -939,7 +920,7 @@ struct HomeView: View {
                     palette: .sky,
                     cornerRadius: 40,
                     rimHeight: 8,
-                    whiteBorderWidth: 4,
+                    whiteBorderWidth: 2.5,
                     showStripeSheen: true,
                     playTapSound: false,
                     pressStyle: .homeEntrance
@@ -1231,7 +1212,7 @@ struct HomeView: View {
                     palette: .sun,
                     cornerRadius: 40,
                     rimHeight: 8,
-                    whiteBorderWidth: 4,
+                    whiteBorderWidth: 2.5,
                     showStripeSheen: true,
                     playTapSound: false,
                     pressStyle: .homeEntrance
@@ -1408,9 +1389,14 @@ struct HomeView: View {
                         SoundAndHapticsManager.shared.playUITap()
                         showHandicapScale = true
                     } label: {
-                        Label(
-                            l10n.localized(zh: "⚖️ 水平天平让子对战", en: "⚖️ Rank Balance Scale", ja: "⚖️ ハンデ天秤対局", ko: "⚖️ 실력 천칭 접바둑", zhHant: "⚖️ 水平天平讓子對戰"),
-                            systemImage: "scalemass.fill"
+                        Text(
+                            l10n.localized(
+                                zh: "水平天平让子对战",
+                                en: "Rank Balance Scale",
+                                ja: "ハンデ天秤対局",
+                                ko: "실력 천칭 접바둑",
+                                zhHant: "水平天平讓子對戰"
+                            )
                         )
                     }
                 }
@@ -1531,8 +1517,8 @@ struct HomeView: View {
         .padding(.horizontal, isCompact ? 10 : 13)
         .padding(.vertical, 9)
         .background(
-            SnowCapsuleSurface(rimHeight: 3)
-                .shadow(color: Color.black.opacity(0.10), radius: 6, y: 3)
+            SnowCapsuleSurface(rimHeight: 2.5)
+                .shadow(color: Color.black.opacity(0.055), radius: 4, y: 2)
         )
         .contentShape(Capsule())
     }

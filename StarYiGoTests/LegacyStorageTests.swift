@@ -3,6 +3,29 @@ import Testing
 @testable import StarYiGo
 
 struct LegacyStorageTests {
+    #if DEBUG
+    @Test @MainActor func parentalGateBypassRequiresDebugModeAndPersists() throws {
+        let suite = "StarYiGoTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let storage = StorageService(defaults: defaults)
+        let app = AppState(storage: storage)
+        #expect(!app.shouldBypassParentalVerification)
+        app.setDebugSkipParentalVerification(true)
+        #expect(!app.shouldBypassParentalVerification)
+        app.setDebugModeEnabled(true)
+        #expect(app.shouldBypassParentalVerification)
+        let reopened = AppState(storage: storage)
+        #expect(reopened.shouldBypassParentalVerification)
+        reopened.setDebugModeEnabled(false)
+        #expect(!reopened.shouldBypassParentalVerification)
+        reopened.setDebugModeEnabled(true)
+        reopened.setDebugSkipParentalVerification(false)
+        #expect(!reopened.shouldBypassParentalVerification)
+        #expect(!storage.loadDebugSkipParentalVerification())
+    }
+    #endif
+
     @Test @MainActor func firstPlacementBelongsToTheSamePlayerAfterRelaunch() throws {
         let suite = "StarYiGoTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: suite))

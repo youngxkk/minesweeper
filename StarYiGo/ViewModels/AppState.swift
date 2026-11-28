@@ -68,6 +68,11 @@ final class AppState: ObservableObject {
 
     #if DEBUG
     @Published var isDebugModeEnabled: Bool = false
+    @Published private(set) var debugSkipParentalVerification: Bool = false
+
+    var shouldBypassParentalVerification: Bool {
+        isDebugModeEnabled && debugSkipParentalVerification
+    }
     #endif
 
     private let storage: StorageService
@@ -207,6 +212,7 @@ final class AppState: ObservableObject {
         self.pausedAIMatch = loadedPausedMatch
         #if DEBUG
         self.isDebugModeEnabled = storage.loadDebugModeEnabled()
+        self.debugSkipParentalVerification = storage.loadDebugSkipParentalVerification()
         #endif
 
         if self.puzzleProgress.refreshGauntletHearts() {
@@ -531,7 +537,7 @@ final class AppState: ObservableObject {
         examTier: Int? = nil
     ) {
         let tc = timeControl ?? settings.preferredTimeControl
-        let sr = scoringRule ?? settings.scoringRule
+        let sr = scoringRule ?? settings.effectiveScoringRule
         let cs = coachingStyle ?? settings.preferredCoachingStyle
 
         if examTier == nil {
@@ -595,7 +601,7 @@ final class AppState: ObservableObject {
             handicap: 0,
             ruleSet: .standard,
             timeControl: spec.timeControl,
-            scoringRule: settings.scoringRule,
+            scoringRule: settings.effectiveScoringRule,
             coachingStyle: .standard,
             examTier: spec.tier
         )
@@ -610,6 +616,7 @@ final class AppState: ObservableObject {
             boardSize: boardSize,
             mode: .vsAI(difficulty: difficulty, playerColor: .black),
             ruleSet: .captureRace(target: target),
+            scoringRule: settings.effectiveScoringRule,
             handicap: 0,
             bossIslandId: nil,
             appState: self
@@ -624,7 +631,7 @@ final class AppState: ObservableObject {
             boardSize: boss.boardSize,
             mode: .vsAI(difficulty: boss.difficulty, playerColor: .black),
             ruleSet: boss.ruleSet,
-            scoringRule: settings.scoringRule,
+            scoringRule: settings.effectiveScoringRule,
             timeControl: boss.timeControl,
             coachingStyle: boss.coachingStyle,
             handicap: 0,
@@ -647,7 +654,7 @@ final class AppState: ObservableObject {
             boardSize: scenario.boardSize,
             mode: .vsAI(difficulty: scenario.opponentDifficulty, playerColor: scenario.playerColor),
             ruleSet: ruleSet,
-            scoringRule: .chinese,
+            scoringRule: settings.effectiveScoringRule,
             timeControl: .unlimited,
             coachingStyle: scenario.coachingStyle,
             handicap: 0,
@@ -667,6 +674,7 @@ final class AppState: ObservableObject {
             boardSize: .nine,
             mode: .vsAI(difficulty: island.bossDifficulty, playerColor: .black),
             ruleSet: .standard,
+            scoringRule: settings.effectiveScoringRule,
             handicap: 0,
             bossIslandId: island.id,
             appState: self
@@ -684,6 +692,7 @@ final class AppState: ObservableObject {
                 boardSize: .nine,
                 mode: .vsAI(difficulty: difficulty, playerColor: .black),
                 ruleSet: .standard,
+                scoringRule: settings.effectiveScoringRule,
                 handicap: 0,
                 appState: self
             )
@@ -697,7 +706,7 @@ final class AppState: ObservableObject {
             boardSize: boardSize,
             mode: .twoPlayer,
             ruleSet: ruleSet,
-            scoringRule: settings.scoringRule,
+            scoringRule: settings.effectiveScoringRule,
             timeControl: settings.preferredTimeControl,
             handicap: ruleSet.isCaptureRace ? 0 : handicap,
             aiEngine: CoreMLGoAIEngine.shared,
@@ -1246,6 +1255,11 @@ final class AppState: ObservableObject {
     func setDebugModeEnabled(_ enabled: Bool) {
         isDebugModeEnabled = enabled
         storage.saveDebugModeEnabled(enabled)
+    }
+
+    func setDebugSkipParentalVerification(_ enabled: Bool) {
+        debugSkipParentalVerification = enabled
+        storage.saveDebugSkipParentalVerification(enabled)
     }
 
     func debugSetPhotoJudgeLabelVisible(_ visible: Bool) {

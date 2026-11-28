@@ -145,7 +145,7 @@ struct PhotoBoardJudgeView: View {
         .onAppear {
             guard !hasInitialized else { return }
             hasInitialized = true
-            scoringRule = .chinese
+            scoringRule = appState.settings.effectiveScoringRule
             let savedRaw = UserDefaults.standard.integer(forKey: "photoJudgePreferredBoardSize")
             selectedSize = BoardSize(rawValue: savedRaw) ?? .nineteen
             autoDetectBoardSize = UserDefaults.standard.bool(forKey: "photoJudgeAutoDetectBoardSize")
@@ -680,7 +680,7 @@ struct PhotoBoardJudgeView: View {
             if isCompact {
                 VStack(spacing: 8) {
                     boardSizeRuleGroup(isCompact: true)
-                    scoringRuleGroup(isCompact: true)
+                    scoringRuleBadge(isCompact: true)
                 }
             } else {
                 HStack(spacing: 16) {
@@ -690,7 +690,7 @@ struct PhotoBoardJudgeView: View {
                         .fill(Color.white.opacity(0.32))
                         .frame(width: 1.5, height: 26)
 
-                    scoringRuleGroup(isCompact: false)
+                    scoringRuleBadge(isCompact: false)
                 }
             }
         }
@@ -773,36 +773,31 @@ struct PhotoBoardJudgeView: View {
         }
     }
 
-    private func scoringRuleGroup(isCompact: Bool) -> some View {
+    private func scoringRuleBadge(isCompact: Bool) -> some View {
         HStack(spacing: isCompact ? 6 : 8) {
-            Text(l10n.localized(zh: "计分规则", en: "Rules", ja: "ルール", ko: "규칙", zhHant: "計分規則"))
+            Text(l10n.localized(zh: "计分", en: "Scoring", ja: "計算", ko: "계가", zhHant: "計分"))
                 .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                 .foregroundColor(.white.opacity(0.9))
                 .fixedSize()
 
-            ForEach(ScoringRule.allCases) { rule in
-                let isSelected = scoringRule == rule
-                Button {
-                    SoundAndHapticsManager.shared.playUITap()
-                    scoringRule = rule
-                    komi = rule.defaultKomi(for: selectedSize)
-                } label: {
-                    Text(ruleLabel(rule))
-                        .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
-                        .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
-                        .padding(.horizontal, isCompact ? 10 : 13)
-                        .padding(.vertical, 6)
-                }
-                .buttonStyle(
-                    GlossyCapsuleButtonStyle(
-                        palette: isSelected ? .grape : .snow,
-                        cornerRadius: 12,
-                        rimHeight: 2,
-                        whiteBorderWidth: 2
-                    )
-                )
-            }
+            Text(ruleLabel(scoringRule))
+                .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
+                .foregroundColor(.white)
+                .padding(.horizontal, isCompact ? 10 : 13)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.white.opacity(0.16)))
+                .fixedSize()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            l10n.localized(
+                zh: "计分规则：\(ruleLabel(scoringRule))，跟随设置。",
+                en: "Scoring: \(ruleLabel(scoringRule)), follows Settings.",
+                ja: "計算：\(ruleLabel(scoringRule))。設定に従います。",
+                ko: "계가: \(ruleLabel(scoringRule)). 설정을 따릅니다.",
+                zhHant: "計分規則：\(ruleLabel(scoringRule))，跟隨設定。"
+            )
+        )
     }
 
     // MARK: - Stage 2: Calibrate 4 Corners & Grid Margin
@@ -1081,6 +1076,15 @@ struct PhotoBoardJudgeView: View {
                     ko: "+\(String(format: "%.1f", result.margin))",
                     zhHant: zi
                 )
+            } else if scoringRule == .aga {
+                let m = String(format: "%.1f", result.margin)
+                return l10n.localized(
+                    zh: "\(m) 点",
+                    en: "+\(m)",
+                    ja: "\(m)点",
+                    ko: "\(m)점",
+                    zhHant: "\(m) 點"
+                )
             } else {
                 let m = String(format: "%.1f", result.margin)
                 return l10n.localized(
@@ -1095,13 +1099,19 @@ struct PhotoBoardJudgeView: View {
 
         let blackAreaTotal = result.blackStones + result.blackTerritory
         let whiteAreaTotal = result.whiteStones + result.whiteTerritory
-        let blackPrimaryNum = scoringRule == .chinese ? "\(blackAreaTotal)" : "\(result.blackTerritory)"
-        let whitePrimaryNum = scoringRule == .chinese ? "\(whiteAreaTotal)" : "\(result.whiteTerritory)"
-        let areaUnit = scoringRule == .chinese
-            ? l10n.localized(zh: "子", en: "pts", ja: "子", ko: "점", zhHant: "子")
-            : l10n.localized(zh: "目", en: "pts", ja: "目", ko: "집", zhHant: "目")
+        let blackPrimaryNum = scoringRule.isAreaScoring ? "\(blackAreaTotal)" : "\(result.blackTerritory)"
+        let whitePrimaryNum = scoringRule.isAreaScoring ? "\(whiteAreaTotal)" : "\(result.whiteTerritory)"
+        let areaUnit: String = {
+            if scoringRule == .aga {
+                return l10n.localized(zh: "点", en: "pts", ja: "点", ko: "점", zhHant: "點")
+            }
+            if scoringRule == .chinese {
+                return l10n.localized(zh: "子", en: "pts", ja: "子", ko: "점", zhHant: "子")
+            }
+            return l10n.localized(zh: "目", en: "pts", ja: "目", ko: "집", zhHant: "目")
+        }()
 
-        let detail = scoringRule == .chinese
+        let detail = scoringRule.isAreaScoring
             ? result.chineseRuleSummary(isChinese: l10n.language.isChinese)
             : result.japaneseRuleSummary(isChinese: l10n.language.isChinese)
 
@@ -1393,24 +1403,16 @@ struct PhotoBoardJudgeView: View {
     private var rulesAndOverlayCard: some View {
         VStack(spacing: 8) {
             HStack(spacing: 6) {
-                ForEach(ScoringRule.allCases) { rule in
-                    let active = scoringRule == rule
-                    Button {
-                        SoundAndHapticsManager.shared.playUITap()
-                        scoringRule = rule
-                        komi = rule.defaultKomi(for: selectedSize)
-                        boardState.komi = komi
-                        refreshEvaluation()
-                    } label: {
-                        Text(ruleLabel(rule))
-                            .font(AppFont.rounded(size: 11.5, weight: .black))
-                            .foregroundColor(active ? .white : AppTheme.inkPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(active ? AppTheme.grapeBottom : Color.white))
-                    }
-                }
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundColor(AppTheme.skyBottom)
+                Text(l10n.localized(zh: "计分规则", en: "Scoring", ja: "計算", ko: "계가", zhHant: "計分規則"))
+                    .foregroundColor(AppTheme.inkSecondary)
+                Spacer()
+                Text(ruleLabel(scoringRule))
+                    .foregroundColor(AppTheme.inkPrimary)
             }
+            .font(AppFont.rounded(size: 12, weight: .black))
+            .padding(.vertical, 4)
 
             HStack {
                 Text(l10n.localized(zh: "贴目 (Komi)", en: "Komi", ja: "コミ", ko: "덤 (Komi)", zhHant: "貼目 (Komi)"))
@@ -1511,7 +1513,9 @@ struct PhotoBoardJudgeView: View {
         case .chinese:
             return l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국식", zhHant: "中國數子法")
         case .japanese:
-            return l10n.localized(zh: "日韩数目法", en: "Japanese", ja: "日本ルール", ko: "한국·일본식", zhHant: "日韓數目法")
+            return l10n.localized(zh: "日韩数目法", en: "JP/KR Territory", ja: "日韓ルール", ko: "한국·일본식", zhHant: "日韓數目法")
+        case .aga:
+            return l10n.localized(zh: "AGA面积法", en: "AGA Area", ja: "AGA面積", ko: "AGA 면적", zhHant: "AGA面積法")
         }
     }
 
@@ -1519,6 +1523,7 @@ struct PhotoBoardJudgeView: View {
         liveGridDetectTask?.cancel()
         activeVisionTask?.cancel()
         isProcessing = true
+        scoringRule = appState.settings.effectiveScoringRule
         activeRecordId = nil
         activeRecordDate = nil
         loadedWarpedImage = nil

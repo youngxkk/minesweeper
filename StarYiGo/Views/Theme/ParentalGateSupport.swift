@@ -8,6 +8,10 @@ import UIKit
 import Combine
 
 enum AppLegalLinks {
+    static let contactEmail = "invisilab@gmail.com"
+    static let contactEmailURL = URL(string: "mailto:" + contactEmail)!
+    static let contactXURL = URL(string: "https://x.com/invisilab_x")!
+
     private static func localePrefix(for language: AppLanguage) -> String {
         switch language.resolvedCode {
         case "zh-Hans": return "/zh-cn"
@@ -81,6 +85,11 @@ struct ParentalGateOverlay: View {
     var onCancel: (() -> Void)? = nil
     let onSuccess: () -> Void
 
+    #if DEBUG
+    @EnvironmentObject private var appState: AppState
+    @State private var didBypassVerification = false
+    #endif
+
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @State private var challenge: ParentalGateChallenge = .random()
     @State private var answerText: String = ""
@@ -111,6 +120,24 @@ struct ParentalGateOverlay: View {
     }
 
     var body: some View {
+        #if DEBUG
+        if appState.shouldBypassParentalVerification {
+            Color.clear
+                .allowsHitTesting(false)
+                .task {
+                    guard !didBypassVerification else { return }
+                    didBypassVerification = true
+                    onSuccess()
+                }
+        } else {
+            verificationContent
+        }
+        #else
+        verificationContent
+        #endif
+    }
+
+    private var verificationContent: some View {
         ZStack {
             Color(red: 0.05, green: 0.11, blue: 0.22)
                 .opacity(0.62)

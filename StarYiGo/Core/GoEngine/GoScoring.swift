@@ -411,14 +411,14 @@ enum GoScoring {
 
                 if touchesBlack && !touchesWhite {
                     // Under Japanese rules, eyes inside Seki do NOT count as territory points!
-                    if rule == .japanese {
+                    if !rule.isAreaScoring {
                         let nonSekiEyes = region.filter { !seki.sekiEyeIndices.contains($0) }.count
                         blackTerritory += nonSekiEyes
                     } else {
                         blackTerritory += region.count
                     }
                 } else if touchesWhite && !touchesBlack {
-                    if rule == .japanese {
+                    if !rule.isAreaScoring {
                         let nonSekiEyes = region.filter { !seki.sekiEyeIndices.contains($0) }.count
                         whiteTerritory += nonSekiEyes
                     } else {
@@ -438,8 +438,8 @@ enum GoScoring {
         let whiteTotal: Double
 
         switch rule {
-        case .chinese:
-            // Chinese Area Scoring: living stones + enclosed territory + equal half-share of any open dame
+        case .chinese, .aga:
+            // Area scoring: living stones + enclosed territory + equal half-share of any open dame
             let halfDame = Double(dameCount) * 0.5
             blackTotal = Double(blackStones + blackTerritory) + halfDame
             whiteTotal = Double(whiteStones + whiteTerritory) + halfDame + scoringState.komi

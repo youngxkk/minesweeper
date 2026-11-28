@@ -253,8 +253,13 @@ struct MistakeBookView: View {
                     }
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 3)
         }
+        // Keep the glossy chips' soft contact shadows from being sliced off by the
+        // scroll container's tight bounds (same treatment as the Home hero cards).
+        .scrollClipDisabled()
+        .scrollBounceBehavior(.basedOnSize)
     }
 
     private func filterChip(title: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -313,7 +318,7 @@ struct MistakeBookView: View {
                     expressiveStones: false,
                     isInteractive: false
                 )
-                .frame(width: 108, height: 108)
+                .frame(width: 116, height: 116)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -323,28 +328,28 @@ struct MistakeBookView: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 6) {
-                        Text("#\(number)")
-                            .font(AppFont.rounded(size: 11.5, weight: .black))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(isDue ? Color(red: 0.94, green: 0.50, blue: 0.24) : AppTheme.mintBottom))
-
-                        Text(puzzle.rankBadge)
-                            .font(AppFont.rounded(size: 11.5, weight: .black))
-                            .foregroundColor(AppTheme.skyBottom)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(AppTheme.skyTop.opacity(0.14)))
-
-                        Spacer(minLength: 0)
-                    }
-
                     Text(puzzle.title(l10n))
                         .font(AppFont.rounded(size: 15.5, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        Text("#\(number)")
+                            .font(AppFont.rounded(size: 10.5, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2.5)
+                            .background(Capsule().fill(isDue ? Color(red: 0.94, green: 0.50, blue: 0.24) : AppTheme.mintBottom))
+
+                        Text(puzzle.rankBadge)
+                            .font(AppFont.rounded(size: 10.5, weight: .black))
+                            .foregroundColor(AppTheme.skyBottom)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2.5)
+                            .background(Capsule().fill(AppTheme.skyTop.opacity(0.14)))
+
+                        Spacer(minLength: 0)
+                    }
 
                     Text(puzzle.prompt(l10n))
                         .font(AppFont.rounded(size: 12, weight: .semibold))
@@ -370,20 +375,16 @@ struct MistakeBookView: View {
                                 zhHant: "鞏固 \(streak)/3"
                             ))
                             .font(AppFont.rounded(size: 11, weight: .black))
-                            .foregroundColor(AppTheme.mintBottom)
+                            .foregroundColor(AppTheme.inkSecondary(for: colorSchemeContrast))
                         }
 
                         Spacer(minLength: 0)
-
-                        Image(systemName: "chevron.right.circle.fill")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(AppTheme.skyBottom)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(12)
-            .frame(minHeight: 132)
+            .padding(14)
+            .frame(minHeight: 144)
             .warmCard(cornerRadius: 22, padding: 0)
         }
         .buttonStyle(.plain)

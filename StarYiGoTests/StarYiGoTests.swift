@@ -482,11 +482,17 @@ struct StarYiGoEngineTests {
 
         let cn = GoScoring.score(state: board, rule: .chinese)
         let jp = GoScoring.score(state: board, rule: .japanese)
+        let aga = GoScoring.score(state: board, rule: .aga)
         #expect(cn.dameCount == 5)
         #expect(cn.blackScore == 12.5)
         #expect(cn.whiteScore == 15.0)
         #expect(jp.blackScore == 5.0)
         #expect(jp.whiteScore == 7.5)
+        #expect(aga.blackScore == cn.blackScore, "AGA uses area scoring like Chinese rules")
+        #expect(aga.whiteScore == cn.whiteScore)
+        #expect(ScoringRulePreference.chinese.resolvedRule == .chinese)
+        #expect(ScoringRulePreference.japanese.resolvedRule == .japanese)
+        #expect(ScoringRulePreference.aga.resolvedRule == .aga)
 
         // 2. Unsealed boundary warning detection
         let readiness = GoScoring.analyzeEndgameReadiness(state: board)

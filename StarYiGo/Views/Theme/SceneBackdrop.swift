@@ -767,7 +767,29 @@ private extension SceneBackdrop {
             }
 
         case .paperSettings:
-            EmptyView()
+            // Workshop tabletop: engraved intersections and star points, quieter under cards.
+            Canvas { context, size in
+                let step: CGFloat = 44
+                var grid = Path()
+                for x in stride(from: CGFloat(22), to: size.width, by: step) {
+                    grid.move(to: CGPoint(x: x, y: 0))
+                    grid.addLine(to: CGPoint(x: x, y: size.height))
+                }
+                for y in stride(from: CGFloat(22), to: size.height, by: step) {
+                    grid.move(to: CGPoint(x: 0, y: y))
+                    grid.addLine(to: CGPoint(x: size.width, y: y))
+                }
+                var highlight = context
+                highlight.translateBy(x: 0, y: 1)
+                highlight.stroke(grid, with: .color(.white.opacity(0.65)), lineWidth: 1)
+                context.stroke(grid, with: .color(AppTheme.skyBottom.opacity(0.13)), lineWidth: 0.8)
+                for x in stride(from: CGFloat(66), to: size.width, by: step * 4) {
+                    for y in stride(from: CGFloat(66), to: size.height, by: step * 4) {
+                        context.fill(Path(ellipseIn: CGRect(x: x - 2, y: y - 2, width: 4, height: 4)), with: .color(AppTheme.skyBottom.opacity(0.22)))
+                    }
+                }
+            }
+            .mask(edgeBreathingMask(centerOpacity: 0.30, edgeOpacity: 1.0))
 
         case .mistakeNotebook:
             // 错题本：温润手账横格 + 细微坐标网格 + 柔和折角书签水印

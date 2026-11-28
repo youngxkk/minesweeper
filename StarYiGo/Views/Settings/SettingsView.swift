@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject var appState: AppState
@@ -16,9 +17,11 @@ struct SettingsView: View {
     @State private var newKidAvatar = "🐼"
     @State private var unlockMessage: String? = nil
     @State private var pendingExternalURL: URL? = nil
+    @State private var contactToastID: UUID? = nil
     @State private var profilePendingDeletion: UserProfile? = nil
     @FocusState private var isNewKidNameFocused: Bool
     #if DEBUG
+    @ObservedObject private var reviewPolicy = ReviewPromptPolicy.shared
     @State private var showDebugResetConfirm = false
     @State private var debugStatusMessage: String? = nil
     #endif
@@ -142,9 +145,38 @@ struct SettingsView: View {
                         withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
                             pendingExternalURL = nil
                         }
-                        openURL(targetURL)
+                        openExternalDestination(targetURL)
                     }
                 )
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if contactToastID != nil {
+                Label(
+                    l10n.localized(
+                        zh: "邮箱已复制：\(AppLegalLinks.contactEmail)",
+                        en: "Email copied: \(AppLegalLinks.contactEmail)",
+                        ja: "メールアドレスをコピーしました：\(AppLegalLinks.contactEmail)",
+                        ko: "이메일 주소 복사됨: \(AppLegalLinks.contactEmail)",
+                        zhHant: "信箱已複製：\(AppLegalLinks.contactEmail)"
+                    ),
+                    systemImage: "checkmark.circle.fill"
+                )
+                .font(AppFont.rounded(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 13)
+                .background(RoundedRectangle(cornerRadius: 18).fill(AppTheme.inkPrimary))
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
+                .allowsHitTesting(false)
+                .accessibilityIdentifier("SettingsContactEmailCopiedToast")
+                .task(id: contactToastID) {
+                    do {
+                        try await Task.sleep(for: .seconds(3))
+                        contactToastID = nil
+                    } catch { }
+                }
             }
         }
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: showAddKidSheet)
@@ -444,8 +476,42 @@ struct SettingsView: View {
                                 Capsule().fill(
                                     isActive
                                     ? AnyShapeStyle(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom))
-                                    : AnyShapeStyle(AppTheme.canvasBackground)
+                                    : AnyShapeStyle(LinearGradient(
+                                        colors: [.white, Color(red: 0.925, green: 0.958, blue: 0.985)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ))
                                 )
+                            )
+                            .overlay(
+                                Capsule().strokeBorder(
+                                    isActive
+                                    ? AnyShapeStyle(LinearGradient(
+                                        stops: [
+                                            .init(color: .white.opacity(0.52), location: 0),
+                                            .init(color: .clear, location: 0.55),
+                                            .init(color: AppTheme.skyRim.opacity(0.55), location: 1)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ))
+                                    : AnyShapeStyle(LinearGradient(
+                                        stops: [
+                                            .init(color: .white.opacity(0.95), location: 0),
+                                            .init(color: Color(red: 0.66, green: 0.79, blue: 0.90).opacity(0.55), location: 1)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )),
+                                    lineWidth: 1
+                                )
+                            )
+                            .shadow(
+                                color: isActive
+                                    ? AppTheme.skyBottom.opacity(0.22)
+                                    : Color(red: 0.24, green: 0.38, blue: 0.46).opacity(0.06),
+                                radius: isActive ? 2.5 : 2,
+                                y: 2
                             )
                         }
                         .buttonStyle(.plain)
@@ -496,6 +562,9 @@ struct SettingsView: View {
                     }
                     .tactileButton(scale: 0.94)
                 }
+                // Room for the chip lift shadow before the context menu appears;
+                // without this the horizontal ScrollView clips it top and bottom.
+                .padding(.vertical, 8)
             }
 
             HStack {
@@ -518,7 +587,33 @@ struct SettingsView: View {
                 .foregroundColor(AppTheme.skyBottom)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(AppTheme.canvasBackground))
+                .background(
+                    Capsule().fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.965, green: 0.98, blue: 0.992),
+                                Color(red: 0.925, green: 0.955, blue: 0.98)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.95), location: 0),
+                                .init(color: Color(red: 0.74, green: 0.84, blue: 0.91).opacity(0.35), location: 0.55),
+                                .init(color: Color(red: 0.63, green: 0.76, blue: 0.86).opacity(0.48), location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1.2
+                    )
+                    .allowsHitTesting(false)
+                )
                 .frame(maxWidth: 260)
             }
 
@@ -544,7 +639,7 @@ struct SettingsView: View {
                 .padding(.vertical, 4)
             }
         }
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private var languageCard: some View {
@@ -560,7 +655,7 @@ struct SettingsView: View {
                 languageOption(.ko, label: "한국어")
             }
         }
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private func languageOption(_ lang: AppLanguage, label: String) -> some View {
@@ -574,11 +669,12 @@ struct SettingsView: View {
         } label: {
             Text(label)
                 .font(AppFont.rounded(size: 12.5, weight: .heavy, languageCode: lang.resolvedCode))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
+        .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.grapeBottom))
     }
 
     private var boardThemeCard: some View {
@@ -595,7 +691,6 @@ struct SettingsView: View {
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
                 ForEach(BoardTheme.allCases) { theme in
-                    let palette = AppTheme.palette(for: theme)
                     let unlocked = appState.isThemeUnlocked(theme)
                     let selected = appState.settings.boardTheme == theme
 
@@ -611,14 +706,20 @@ struct SettingsView: View {
                     } label: {
                         VStack(spacing: 6) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(LinearGradient(colors: [palette.boardBase, palette.boardGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(height: 50)
+                                WorkshopBoardPreview(theme: theme, stoneStyle: appState.settings.stoneStyle)
+                                    .frame(height: 76)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .strokeBorder(selected ? AppTheme.skyTop : Color.white, lineWidth: selected ? 3.5 : 2)
+                                            .strokeBorder(selected ? AppTheme.skyBottom : .white, lineWidth: selected ? 3 : 2)
                                     )
-                                    .shadow(color: selected ? AppTheme.skyTop.opacity(0.35) : Color.black.opacity(0.08), radius: 6, y: 3)
+                                    .overlay(alignment: .topTrailing) {
+                                        if selected {
+                                            WorkshopSelectionStone(selected: true)
+                                                .padding(5)
+                                        }
+                                    }
+                                    .shadow(color: AppTheme.inkPrimary.opacity(0.12), radius: 4, y: 3)
 
                                 if !unlocked {
                                     HStack(spacing: 3) {
@@ -651,13 +752,13 @@ struct SettingsView: View {
                 .font(AppFont.rounded(size: 12.5, weight: .heavy))
                 .foregroundColor(AppTheme.inkSecondary)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 8)], spacing: 8) {
                 ForEach(StoneStyle.allCases, id: \.self) { style in
                     stoneStyleButton(style)
                 }
             }
         }
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private func stoneStyleButton(_ style: StoneStyle) -> some View {
@@ -675,13 +776,18 @@ struct SettingsView: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Text(style.badgeEmoji)
-                    .font(AppFont.rounded(size: 15, weight: .regular))
+                HStack(spacing: -7) {
+                    WorkshopStone(style: style, isBlack: true)
+                    WorkshopStone(style: style, isBlack: false)
+                }
+                .frame(width: 37, height: 24)
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(style.displayName(l10n))
                         .font(AppFont.rounded(size: 11.5, weight: .black))
                         .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     if !unlocked {
                         HStack(spacing: 3) {
                             StarCoinBadgeView(size: 11)
@@ -693,14 +799,15 @@ struct SettingsView: View {
                 }
                 Spacer(minLength: 0)
             }
+            .frame(minHeight: 38)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 16, rimHeight: 2, whiteBorderWidth: 2))
+        .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.skyBottom))
     }
 
     private var scoringRuleCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionHeader(
                 l10n.localized(
                     zh: "终局计分规则",
@@ -713,27 +820,105 @@ struct SettingsView: View {
                 color: AppTheme.skyBottom
             )
 
-            HStack(spacing: 8) {
-                ForEach(ScoringRule.allCases) { rule in
-                    let selected = appState.settings.scoringRule == rule
+            HStack(spacing: 6) {
+                ForEach(ScoringRulePreference.allCases) { preference in
+                    let selected = appState.settings.scoringRule == preference
                     Button {
-                        appState.updateSettings { $0.scoringRule = rule }
+                        appState.updateSettings { $0.scoringRule = preference }
                     } label: {
-                        Text(
-                            rule == .chinese
-                            ? l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국식 계가", zhHant: "中國數子法")
-                            : l10n.localized(zh: "日韩数目法", en: "Japanese Terr.", ja: "日韓ルール", ko: "한일식 계가", zhHant: "日韓數目法")
-                        )
-                            .font(AppFont.rounded(size: 12.5, weight: .black))
+                        Text(scoringPreferenceTitle(preference))
+                            .font(AppFont.rounded(size: 11.5, weight: .black))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
+                            .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2))
+                    .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.skyBottom))
                 }
             }
+
+            Text(scoringRuleExplanation)
+                .font(AppFont.rounded(size: 11.5, weight: .semibold))
+                .foregroundColor(AppTheme.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
+    }
+
+    private var scoringRuleExplanation: String {
+        let preference = appState.settings.scoringRule
+        if preference == .automatic {
+            let active = scoringRuleName(appState.settings.effectiveScoringRule)
+            return l10n.localized(
+                zh: "按系统地区自动选择，当前：\(active)。",
+                en: "Picks by region. Active: \(active).",
+                ja: "地域に合わせて自動選択。現在：\(active)。",
+                ko: "지역에 맞춰 자동 선택. 현재: \(active).",
+                zhHant: "依系統地區自動選擇，目前：\(active)。"
+            )
+        }
+        return scoringPreferenceDetail(preference)
+    }
+
+    private func scoringPreferenceTitle(_ preference: ScoringRulePreference) -> String {
+        switch preference {
+        case .automatic:
+            return l10n.localized(zh: "自动", en: "Auto", ja: "自動", ko: "자동", zhHant: "自動")
+        case .chinese:
+            return l10n.localized(zh: "中国数子", en: "Chinese Area", ja: "中国数子", ko: "중국 수자", zhHant: "中國數子")
+        case .japanese:
+            return l10n.localized(zh: "日韩数目", en: "JP/KR Territory", ja: "日韓数目", ko: "한일 수목", zhHant: "日韓數目")
+        case .aga:
+            return l10n.localized(zh: "AGA 面积", en: "AGA Area", ja: "AGA 面積", ko: "AGA 면적", zhHant: "AGA 面積")
+        }
+    }
+
+    private func scoringPreferenceDetail(_ preference: ScoringRulePreference) -> String {
+        switch preference {
+        case .automatic:
+            return l10n.localized(
+                zh: "按系统地区自动选择，可随时改。",
+                en: "Picks by region; you can change it anytime.",
+                ja: "地域に合わせて自動選択。いつでも変更できます。",
+                ko: "지역에 맞춰 자동 선택하며 언제든 바꿀 수 있어요.",
+                zhHant: "依系統地區自動選擇，可隨時手動修改。"
+            )
+        case .chinese:
+            return l10n.localized(
+                zh: "活棋和围空都算分，适合中国、港澳台。",
+                en: "Stones + territory; good for Chinese-speaking regions.",
+                ja: "石と地を数える中国式。中国・港澳台向け。",
+                ko: "돌과 집을 함께 계산. 중국·홍콩·마카오·대만 추천.",
+                zhHant: "活棋和圍空都算分，適合中國、港澳台。"
+            )
+        case .japanese:
+            return l10n.localized(
+                zh: "围空加提子算分，适合日本、韩国及欧洲多数比赛。",
+                en: "Territory + captures; good for Japan, Korea and most of Europe.",
+                ja: "地と取り石を数える日韓式。日本・韓国・欧州向け。",
+                ko: "집과 잡은 돌을 계산. 일본·한국·유럽 추천.",
+                zhHant: "圍空加提子算分，適合日本、韓國及歐洲多數比賽。"
+            )
+        case .aga:
+            return l10n.localized(
+                zh: "面积计分，适合美国、加拿大、英国。",
+                en: "Area scoring; good for the US, Canada and the UK.",
+                ja: "面積計算。アメリカ・カナダ・イギリス向け。",
+                ko: "면적 계산. 미국·캐나다·영국 추천.",
+                zhHant: "面積計分，適合美國、加拿大、英國。"
+            )
+        }
+    }
+
+    private func scoringRuleName(_ rule: ScoringRule) -> String {
+        switch rule {
+        case .chinese:
+            return l10n.localized(zh: "中国数子", en: "Chinese Area", ja: "中国数子", ko: "중국 수자", zhHant: "中國數子")
+        case .japanese:
+            return l10n.localized(zh: "日韩数目", en: "JP/KR Territory", ja: "日韓数目", ko: "한일 수목", zhHant: "日韓數目")
+        case .aga:
+            return l10n.localized(zh: "AGA 面积", en: "AGA Area", ja: "AGA 面積", ko: "AGA 면적", zhHant: "AGA 面積")
+        }
     }
 
     private var assistsCard: some View {
@@ -760,8 +945,6 @@ struct SettingsView: View {
                 }
             }
 
-            Divider()
-
             gameToggleRow(l10n.t("settings.assist.expressiveStones"), isOn: Binding(
                 get: { appState.settings.expressiveStones },
                 set: { v in appState.updateSettings { $0.expressiveStones = v; $0.assistPreset = .custom } }
@@ -770,6 +953,17 @@ struct SettingsView: View {
                 get: { appState.settings.showLiveLiberties },
                 set: { v in appState.updateSettings { $0.showLiveLiberties = v; $0.assistPreset = .custom } }
             ))
+            gameToggleRow(l10n.t("settings.assist.atari"), isOn: Binding(
+                get: { appState.settings.highlightAtari },
+                set: { v in appState.updateSettings { $0.highlightAtari = v; $0.assistPreset = .custom } }
+            ))
+            gameToggleRow(l10n.t("settings.assist.zenMode"), isOn: Binding(
+                get: { appState.settings.zenDojoMode },
+                set: { v in appState.updateSettings { $0.zenDojoMode = v; $0.assistPreset = .custom } }
+            ))
+
+            Divider()
+
             gameToggleRow(l10n.t("settings.assist.confirmMove"), isOn: Binding(
                 get: { appState.settings.stonePlacementMode == .confirmButton },
                 set: { v in appState.updateSettings {
@@ -785,10 +979,6 @@ struct SettingsView: View {
                 get: { appState.settings.showMoveNumbers },
                 set: { v in appState.updateSettings { $0.showMoveNumbers = v } }
             ))
-            gameToggleRow(l10n.t("settings.assist.atari"), isOn: Binding(
-                get: { appState.settings.highlightAtari },
-                set: { v in appState.updateSettings { $0.highlightAtari = v; $0.assistPreset = .custom } }
-            ))
             gameToggleRow(
                 l10n.localized(
                     zh: "做题自动随机旋转/黑白互换",
@@ -802,12 +992,8 @@ struct SettingsView: View {
                     set: { v in appState.updateSettings { $0.autoTransformPuzzles = v } }
                 )
             )
-            gameToggleRow(l10n.t("settings.assist.zenMode"), isOn: Binding(
-                get: { appState.settings.zenDojoMode },
-                set: { v in appState.updateSettings { $0.zenDojoMode = v; $0.assistPreset = .custom } }
-            ))
         }
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private var aiModelCard: some View {
@@ -840,10 +1026,9 @@ struct SettingsView: View {
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
+                    .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.grapeBottom))
                     .accessibilityIdentifier("SettingsAIModel_\(preset.rawValue)")
                 }
             }
@@ -909,7 +1094,7 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private var aiThinkingPaceCard: some View {
@@ -940,10 +1125,9 @@ struct SettingsView: View {
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
+                    .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.skyBottom))
                     .accessibilityIdentifier("SettingsAIPace_\(pace.rawValue)")
                 }
             }
@@ -954,7 +1138,7 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private func assistPresetChip(_ preset: AssistPreset, label: String) -> some View {
@@ -965,10 +1149,9 @@ struct SettingsView: View {
             Text(label)
                 .font(AppFont.rounded(size: 11.5, weight: .black))
                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .mint : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
+        .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.mintBottom))
     }
 
     private var audioAndEyeCareCard: some View {
@@ -1012,14 +1195,13 @@ struct SettingsView: View {
                         Text(mins == 0 ? l10n.t("settings.eyecare.off") : l10n.t("settings.eyecare.minutes", mins))
                             .font(AppFont.rounded(size: 12, weight: .heavy))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                            .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
+                    .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.skyBottom))
                 }
             }
         }
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
     }
 
     private var aboutFooterCard: some View {
@@ -1047,7 +1229,22 @@ struct SettingsView: View {
 
             Divider()
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+            HStack(spacing: 8) {
+                legalLinkButton(
+                    title: l10n.localized(zh: "联系我们", en: "Contact Us", ja: "お問い合わせ", ko: "문의하기", zhHant: "聯絡我們"),
+                    icon: "envelope.fill",
+                    url: AppLegalLinks.contactEmailURL
+                )
+                legalLinkButton(
+                    title: "X (Twitter)",
+                    icon: "at",
+                    url: AppLegalLinks.contactXURL
+                )
+                .accessibilityLabel("X (Twitter), @invisilab_x")
+                .accessibilityIdentifier("SettingsContactXButton")
+            }
+
+            HStack(spacing: 8) {
                 legalLinkButton(
                     title: l10n.localized(zh: "隐私政策", en: "Privacy Policy", ja: "プライバシーポリシー", ko: "개인정보 처리방침", zhHant: "隱私政策"),
                     icon: "hand.raised.fill",
@@ -1063,35 +1260,48 @@ struct SettingsView: View {
                     icon: "checkmark.shield.fill",
                     url: AppLegalLinks.termsOfUseURL(for: appState.settings.language)
                 )
-                legalLinkButton(
-                    title: l10n.localized(zh: "技术支持", en: "Support", ja: "サポート", ko: "고객 지원", zhHant: "技術支援"),
-                    icon: "lifepreserver.fill",
-                    url: AppLegalLinks.supportURL(for: appState.settings.language)
-                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
+    }
+
+    private func openExternalDestination(_ url: URL) {
+        guard url == AppLegalLinks.contactEmailURL else {
+            openURL(url)
+            return
+        }
+        openURL(url) { accepted in
+            guard !accepted else { return }
+            UIPasteboard.general.string = AppLegalLinks.contactEmail
+            contactToastID = UUID()
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: l10n.localized(
+                    zh: "邮箱已复制：\(AppLegalLinks.contactEmail)",
+                    en: "Email copied: \(AppLegalLinks.contactEmail)",
+                    ja: "メールアドレスをコピーしました：\(AppLegalLinks.contactEmail)",
+                    ko: "이메일 주소 복사됨: \(AppLegalLinks.contactEmail)",
+                    zhHant: "信箱已複製：\(AppLegalLinks.contactEmail)"
+                )
+            )
+        }
     }
 
     private func legalLinkButton(title: String, icon: String, url: URL) -> some View {
         Button {
-            SoundAndHapticsManager.shared.playUITap(weight: .light)
             withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
                 pendingExternalURL = url
             }
         } label: {
             Label(title, systemImage: icon)
                 .font(AppFont.rounded(size: 11.5, weight: .heavy))
-                .foregroundColor(AppTheme.skyBottom)
+                .foregroundColor(AppTheme.inkPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Capsule().fill(AppTheme.skyTop.opacity(0.12)))
         }
-        .tactileButton(scale: 0.95, sound: false)
+        .buttonStyle(WorkshopChoiceStyle(selected: false, accent: AppTheme.skyBottom, showsSelectionStone: false))
     }
 
     private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
@@ -1101,7 +1311,12 @@ struct SettingsView: View {
                 .foregroundColor(AppTheme.inkPrimary)
         } icon: {
             Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(color)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(color.opacity(0.10)))
+                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                .shadow(color: color.opacity(0.12), radius: 2, y: 2)
         }
     }
 
@@ -1132,13 +1347,31 @@ struct SettingsView: View {
                 "启用本地调试工具",
                 isOn: Binding(
                     get: { appState.isDebugModeEnabled },
-                    set: { appState.setDebugModeEnabled($0) }
+                    set: { enabled in
+                        appState.setDebugModeEnabled(enabled)
+                        if !enabled { reviewPolicy.debugBypassLimits = false }
+                    }
                 )
             )
             .accessibilityIdentifier("SettingsDebugModeToggle")
 
             if appState.isDebugModeEnabled {
                 Divider()
+
+                gameToggleRow("评分弹窗测试（跳过频率限制）", isOn: $reviewPolicy.debugBypassLimits)
+                    .accessibilityIdentifier("SettingsDebugReviewPromptToggle")
+                Text("开启后，每局结束 1 秒后请求系统评分弹窗，不受 30 天和版本限制，也不消耗正常邀请次数。关闭调试工具或重启 App 后恢复正常策略。")
+                    .font(AppFont.rounded(size: 11.5, weight: .bold))
+                    .foregroundColor(AppTheme.inkSecondary)
+
+                gameToggleRow(
+                    "跳过家长验证",
+                    isOn: Binding(
+                        get: { appState.debugSkipParentalVerification },
+                        set: { appState.setDebugSkipParentalVerification($0) }
+                    )
+                )
+                .accessibilityIdentifier("SettingsDebugSkipParentalVerificationToggle")
 
                 gameToggleRow(
                     "专业模型本地直连（关掉走 Apple ODR）",
@@ -1153,20 +1386,6 @@ struct SettingsView: View {
                     )
                 )
                 .accessibilityIdentifier("SettingsDebugBypassProModelODRToggle")
-
-                gameToggleRow(
-                    "首页「拍照判胜负」显示文字",
-                    isOn: Binding(
-                        get: { !appState.hasTappedPhotoJudge },
-                        set: { showLabel in
-                            appState.debugSetPhotoJudgeLabelVisible(showLabel)
-                            debugStatusMessage = showLabel
-                                ? "首页「拍照判胜负」已恢复显示文字"
-                                : "首页「拍照判胜负」已切换为仅图标"
-                        }
-                    )
-                )
-                .accessibilityIdentifier("SettingsDebugShowPhotoJudgeLabelToggle")
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("段位 \(appState.profile.rankString) · 金币 \(appState.profile.starCoins) · 体力 \(appState.currentGauntletHearts)/\(PuzzleProgressStore.maxGauntletHearts) · 已解锁海域 \(appState.puzzleProgress.unlockedSeaIds.count)/\(StarYiCampaign.allSeas.count)")
@@ -1224,10 +1443,9 @@ struct SettingsView: View {
                                 Text(choice.label)
                                     .font(AppFont.rounded(size: 11, weight: .black))
                                     .foregroundColor(selected ? .white : AppTheme.inkPrimary)
-                                    .frame(maxWidth: .infinity)
                                     .padding(.vertical, 7)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
+                            .buttonStyle(WorkshopChoiceStyle(selected: selected, accent: AppTheme.grapeBottom))
                         }
                     }
                 }
@@ -1246,7 +1464,7 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .warmCard(cornerRadius: 24, padding: 18)
+        .modifier(WorkshopCardStyle())
         .accessibilityIdentifier("SettingsDebugCard")
     }
 
@@ -1311,10 +1529,15 @@ private struct GameSwitchToggleStyle: ToggleStyle {
                                 )
                         )
 
-                    Circle()
-                        .fill(Color.white)
+                    WorkshopStone(style: .classicSlateShell, isBlack: false)
                         .frame(width: 25, height: 25)
-                        .shadow(color: Color.black.opacity(0.22), radius: 2.5, x: 0, y: 1.5)
+                        .overlay {
+                            if configuration.isOn {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundColor(AppTheme.mintRim)
+                            }
+                        }
                         .offset(x: configuration.isOn ? 10.5 : -10.5)
                 }
             }
@@ -1322,5 +1545,198 @@ private struct GameSwitchToggleStyle: ToggleStyle {
             .accessibilityAddTraits(.isButton)
             .accessibilityValue(Text(configuration.isOn ? "1" : "0"))
         }
+    }
+}
+
+// MARK: - Go workshop materials and controls (settings only)
+
+private struct WorkshopCardStyle: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        content
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ZStack(alignment: .topTrailing) {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(LinearGradient(colors: [.white, Color(red: 0.98, green: 0.978, blue: 0.96)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    if !reduceTransparency {
+                        Canvas { context, size in
+                            // Fine paper fibres stay behind the content at very low contrast.
+                            var fibres = Path()
+                            for row in stride(from: CGFloat(5), to: size.height, by: 6) {
+                                fibres.move(to: CGPoint(x: 0, y: row))
+                                fibres.addLine(to: CGPoint(x: size.width, y: row + 0.5))
+                            }
+                            context.stroke(fibres, with: .color(Color.brown.opacity(0.025)), lineWidth: 0.5)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                    }
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(.white.opacity(0.95), lineWidth: 2))
+            .shadow(color: Color(red: 0.22, green: 0.36, blue: 0.43).opacity(0.10), radius: 12, y: 5)
+    }
+}
+
+private struct WorkshopStone: View {
+    var style: StoneStyle = .classicSlateShell
+    var isBlack: Bool
+
+    var body: some View {
+        let palette = AppTheme.stonePalette(for: style)
+        Circle()
+            .fill(RadialGradient(colors: isBlack ? palette.blackColors : palette.whiteColors, center: .topLeading, startRadius: 0, endRadius: 26))
+            .overlay(Circle().strokeBorder(isBlack ? .white.opacity(0.20) : .black.opacity(0.13), lineWidth: 0.7))
+            .overlay(alignment: .topLeading) {
+                Ellipse().fill(.white.opacity(isBlack ? 0.24 : 0.70))
+                    .frame(width: 7, height: 3)
+                    .rotationEffect(.degrees(-35))
+                    .padding(4)
+            }
+            .shadow(color: .black.opacity(0.19), radius: 1.5, y: 2)
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct WorkshopSelectionStone: View {
+    let selected: Bool
+
+    var body: some View {
+        WorkshopStone(isBlack: selected)
+            .frame(width: 18, height: 18)
+            .overlay {
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundColor(.white)
+                }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
+private struct WorkshopChoiceStyle: ButtonStyle {
+    let selected: Bool
+    let accent: Color
+    var showsSelectionStone = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        let increasedContrast = colorSchemeContrast == .increased
+        let shape = RoundedRectangle(cornerRadius: 15, style: .continuous)
+
+        // Settings choices are lit from above: the upper rim fades into the face,
+        // while the lower rim carries a soft grounded shadow. This keeps the
+        // controls feeling raised instead of looking carved into the white card.
+        let faceColors: [Color] = selected
+            ? [accent.opacity(0.82), accent]
+            : [.white, Color(red: 0.945, green: 0.963, blue: 0.975)]
+        let topRim = selected
+            ? Color.white.opacity(increasedContrast ? 0.55 : 0.40)
+            : Color(red: 0.90, green: 0.95, blue: 0.98).opacity(increasedContrast ? 0.95 : 0.72)
+        let middleRim = selected
+            ? accent.opacity(0.35)
+            : Color(red: 0.64, green: 0.74, blue: 0.80).opacity(increasedContrast ? 0.55 : 0.28)
+        let bottomRim = selected
+            ? accent.opacity(0.72)
+            : Color(red: 0.59, green: 0.70, blue: 0.77).opacity(increasedContrast ? 0.70 : 0.46)
+
+        HStack(spacing: 8) {
+            if showsSelectionStone {
+                WorkshopSelectionStone(selected: selected)
+            }
+            configuration.label
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 9)
+        .frame(minHeight: 44)
+        .background {
+            shape
+                .fill(LinearGradient(colors: faceColors, startPoint: .top, endPoint: .bottom))
+                .overlay {
+                    if !increasedContrast {
+                        shape.fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(pressed ? 0.12 : (selected ? 0.14 : 0.30)), location: 0),
+                                    .init(color: .clear, location: 0.55)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    }
+                }
+        }
+        .overlay {
+            shape.strokeBorder(
+                LinearGradient(
+                    stops: [
+                        .init(color: topRim, location: 0),
+                        .init(color: middleRim, location: 0.55),
+                        .init(color: bottomRim, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                lineWidth: increasedContrast ? 1.5 : 1
+            )
+        }
+        .shadow(
+            color: (selected ? accent : Color(red: 0.24, green: 0.38, blue: 0.46))
+                .opacity(pressed ? 0.02 : (selected ? 0.16 : 0.07)),
+            radius: pressed ? 1 : 2.5,
+            y: pressed ? 0 : 2
+        )
+        .scaleEffect(pressed && !reduceMotion ? 0.97 : 1)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .onChange(of: configuration.isPressed) { _, pressed in
+            if pressed { SoundAndHapticsManager.shared.playUITap(weight: .light) }
+        }
+    }
+}
+
+private struct WorkshopBoardPreview: View {
+    let theme: BoardTheme
+    let stoneStyle: StoneStyle
+
+    var body: some View {
+        let palette = AppTheme.palette(for: theme)
+        GeometryReader { geometry in
+            let step = min((geometry.size.width - 20) / 4, (geometry.size.height - 14) / 4)
+            let origin = CGPoint(x: (geometry.size.width - step * 4) / 2, y: (geometry.size.height - step * 4) / 2)
+            ZStack {
+                LinearGradient(colors: [palette.boardBase, palette.boardGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Canvas { context, _ in
+                    var grid = Path()
+                    for index in 0...4 {
+                        let offset = CGFloat(index) * step
+                        grid.move(to: CGPoint(x: origin.x + offset, y: origin.y))
+                        grid.addLine(to: CGPoint(x: origin.x + offset, y: origin.y + step * 4))
+                        grid.move(to: CGPoint(x: origin.x, y: origin.y + offset))
+                        grid.addLine(to: CGPoint(x: origin.x + step * 4, y: origin.y + offset))
+                    }
+                    context.stroke(grid, with: .color(palette.gridLine.opacity(0.65)), lineWidth: 0.7)
+                    context.fill(Path(ellipseIn: CGRect(x: origin.x + step * 2 - 1.8, y: origin.y + step * 2 - 1.8, width: 3.6, height: 3.6)), with: .color(palette.starPoint))
+                }
+                WorkshopStone(style: stoneStyle, isBlack: true)
+                    .frame(width: step * 0.88, height: step * 0.88)
+                    .position(x: origin.x + step, y: origin.y + step * 2)
+                WorkshopStone(style: stoneStyle, isBlack: false)
+                    .frame(width: step * 0.88, height: step * 0.88)
+                    .position(x: origin.x + step * 2, y: origin.y + step)
+                WorkshopStone(style: stoneStyle, isBlack: true)
+                    .frame(width: step * 0.88, height: step * 0.88)
+                    .position(x: origin.x + step * 3, y: origin.y + step * 3)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

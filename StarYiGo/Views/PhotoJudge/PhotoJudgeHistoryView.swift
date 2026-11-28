@@ -150,11 +150,17 @@ struct PhotoJudgeHistoryView: View {
     private func historyCard(_ record: PhotoJudgeRecord) -> some View {
         let isBlackWin = record.winner == .black
         let verdictPalette: GlossyPalette = isBlackWin ? .sky : .sun
-        let blackArea = record.scoringRule == .chinese ? (record.blackStones + record.blackTerritory) : record.blackTerritory
-        let whiteArea = record.scoringRule == .chinese ? (record.whiteStones + record.whiteTerritory) : record.whiteTerritory
-        let unit = record.scoringRule == .chinese
-            ? l10n.localized(zh: "子", en: "pts", ja: "子", ko: "점", zhHant: "子")
-            : l10n.localized(zh: "目", en: "pts", ja: "目", ko: "집", zhHant: "目")
+        let blackArea = record.scoringRule.isAreaScoring ? (record.blackStones + record.blackTerritory) : record.blackTerritory
+        let whiteArea = record.scoringRule.isAreaScoring ? (record.whiteStones + record.whiteTerritory) : record.whiteTerritory
+        let unit: String = {
+            if record.scoringRule == .aga {
+                return l10n.localized(zh: "点", en: "pts", ja: "点", ko: "점", zhHant: "點")
+            }
+            if record.scoringRule == .chinese {
+                return l10n.localized(zh: "子", en: "pts", ja: "子", ko: "점", zhHant: "子")
+            }
+            return l10n.localized(zh: "目", en: "pts", ja: "目", ko: "집", zhHant: "目")
+        }()
 
         return Button {
             SoundAndHapticsManager.shared.playUITap()
@@ -320,9 +326,14 @@ struct PhotoJudgeHistoryView: View {
 
     private func verdictHeadline(for record: PhotoJudgeRecord) -> String {
         let isBlackWin = record.winner == .black
-        if record.scoringRule == .chinese {
-            let zi = GameResult.formatChineseZi(record.chineseZiMargin)
+        if record.scoringRule.isAreaScoring {
             let m = String(format: "%.1f", record.margin)
+            if record.scoringRule == .aga {
+                return isBlackWin
+                    ? l10n.localized(zh: "黑胜 \(m) 点", en: "Black +\(m)", ja: "黒 +\(m)", ko: "흑 +\(m)", zhHant: "黑勝 \(m) 點")
+                    : l10n.localized(zh: "白胜 \(m) 点", en: "White +\(m)", ja: "白 +\(m)", ko: "백 +\(m)", zhHant: "白勝 \(m) 點")
+            }
+            let zi = GameResult.formatChineseZi(record.chineseZiMargin)
             return isBlackWin
                 ? l10n.localized(zh: "黑胜 \(zi)", en: "Black +\(m)", ja: "黒 +\(m)", ko: "흑 +\(m)", zhHant: "黑勝 \(zi)")
                 : l10n.localized(zh: "白胜 \(zi)", en: "White +\(m)", ja: "白 +\(m)", ko: "백 +\(m)", zhHant: "白勝 \(zi)")
@@ -339,7 +350,9 @@ struct PhotoJudgeHistoryView: View {
         case .chinese:
             return l10n.localized(zh: "中国数子", en: "Chinese", ja: "中国", ko: "중국식", zhHant: "中國數子")
         case .japanese:
-            return l10n.localized(zh: "日韩数目", en: "Japanese", ja: "日本", ko: "한·일식", zhHant: "日韓數目")
+            return l10n.localized(zh: "日韩数目", en: "JP/KR Territory", ja: "日韓数目", ko: "한·일 수목", zhHant: "日韓數目")
+        case .aga:
+            return l10n.localized(zh: "AGA面积", en: "AGA Area", ja: "AGA面積", ko: "AGA 면적", zhHant: "AGA面積")
         }
     }
 

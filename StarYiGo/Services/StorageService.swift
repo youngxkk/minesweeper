@@ -558,12 +558,13 @@ struct AppSettings: Codable, Equatable, Sendable {
     var language: AppLanguage = .system
     var boardTheme: BoardTheme = .kayaWood
     var stoneStyle: StoneStyle = .classicSlateShell
-    var scoringRule: ScoringRule = AppSettings.regionalDefaultScoringRule
+    /// The single global scoring choice used by every scoring surface.
+    var scoringRule: ScoringRulePreference = .automatic
 
-    static var regionalDefaultScoringRule: ScoringRule {
-        let preferred = Locale.preferredLanguages.first ?? "en"
-        return preferred.hasPrefix("zh") ? .chinese : .japanese
+    var effectiveScoringRule: ScoringRule {
+        scoringRule.resolvedRule
     }
+
     var assistPreset: AssistPreset = .starter
     var confirmBeforePlace: Bool = true
     var stonePlacementMode: StonePlacementMode = .doubleTap
@@ -598,7 +599,7 @@ struct AppSettings: Codable, Equatable, Sendable {
         language = try c.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system
         boardTheme = try c.decodeIfPresent(BoardTheme.self, forKey: .boardTheme) ?? .kayaWood
         stoneStyle = try c.decodeIfPresent(StoneStyle.self, forKey: .stoneStyle) ?? .classicSlateShell
-        scoringRule = try c.decodeIfPresent(ScoringRule.self, forKey: .scoringRule) ?? .chinese
+        scoringRule = try c.decodeIfPresent(ScoringRulePreference.self, forKey: .scoringRule) ?? .automatic
         assistPreset = try c.decodeIfPresent(AssistPreset.self, forKey: .assistPreset) ?? .starter
         confirmBeforePlace = try c.decodeIfPresent(Bool.self, forKey: .confirmBeforePlace) ?? true
         stonePlacementMode = try c.decodeIfPresent(StonePlacementMode.self, forKey: .stonePlacementMode) ?? .doubleTap
@@ -872,6 +873,20 @@ final class StorageService {
     }
 
     #if DEBUG
+    private static let debugSkipParentalVerificationKey = "starpoint.debug.skipParentalVerification.v1"
+
+    func loadDebugSkipParentalVerification() -> Bool {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        return defaults.bool(forKey: Self.debugSkipParentalVerificationKey)
+    }
+
+    func saveDebugSkipParentalVerification(_ enabled: Bool) {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        defaults.set(enabled, forKey: Self.debugSkipParentalVerificationKey)
+    }
+
     private static let debugModeEnabledKey = "starpoint.debug.modeEnabled.v1"
 
     func loadDebugModeEnabled() -> Bool {
