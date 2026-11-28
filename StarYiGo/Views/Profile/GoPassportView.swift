@@ -41,6 +41,7 @@ struct GoPassportView: View {
     @State private var renderedShareImage: UIImage? = nil
     @State private var showShareParentalGate = false
     @State private var showShareSheet = false
+    @State private var pendingDeleteGameRecord: SavedGameRecord? = nil
 
     private var l10n: L10n { appState.l10n }
     private var radarAxes: [GoRadarCalculator.AxisScore] {
@@ -49,7 +50,7 @@ struct GoPassportView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.playerPassport
 
             VStack(spacing: 0) {
                 topBar
@@ -97,13 +98,38 @@ struct GoPassportView: View {
                 ActivityShareSheet(activityItems: [shareImage])
             }
         }
+        .gameDialog(
+            isPresented: Binding(
+                get: { pendingDeleteGameRecord != nil },
+                set: { if !$0 { pendingDeleteGameRecord = nil } }
+            ),
+            title: l10n.localized(
+                zh: "删除这局棋谱？",
+                en: "Delete Saved Game?",
+                ja: "この棋譜を削除しますか？",
+                ko: "저장된 기보를 삭제할까요?",
+                zhHant: "刪除這局棋譜？"
+            ),
+            message: l10n.localized(
+                zh: "删除后将无法恢复这局对弈记录。",
+                en: "This saved match record will be permanently removed.",
+                ja: "削除するとこの対局記録は元に戻せません。",
+                ko: "삭제하면 이 대국 기록은 복구할 수 없습니다.",
+                zhHant: "刪除後將無法恢復這局對弈記錄。"
+            ),
+            icon: "trash.fill",
+            accentPalette: .coral,
+            actions: [
+                .secondary(l10n.t("common.cancel")),
+                .destructive(l10n.localized(zh: "删除", en: "Delete", ja: "削除", ko: "삭제", zhHant: "刪除")) {
+                    if let target = pendingDeleteGameRecord {
+                        appState.deleteSavedGame(id: target.id)
+                    }
+                    pendingDeleteGameRecord = nil
+                }
+            ]
+        )
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear {
-            renderShareableSnapshot()
-            // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-            // gameCenter.authenticateIfNeeded()
-            // gameCenter.syncAllProgress(profile: appState.profile, puzzleProgress: appState.puzzleProgress)
-        }
     }
 
     // MARK: - Top Bar
@@ -135,27 +161,24 @@ struct GoPassportView: View {
 
             Spacer()
 
-            if renderedShareImage != nil {
-                Button {
-                    SoundAndHapticsManager.shared.playUITap()
-                    withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
-                        showShareParentalGate = true
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 13, weight: .black))
-                        Text(l10n.localized(zh: "分享护照", en: "Share", ja: "シェア", ko: "공유", zhHant: "分享護照"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
+            Button {
+                SoundAndHapticsManager.shared.playUITap()
+                renderShareableSnapshot()
+                withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                    showShareParentalGate = true
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-            } else {
-                Color.clear.frame(width: 84, height: 36)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                    Text(l10n.localized(zh: "分享护照", en: "Share", ja: "シェア", ko: "공유", zhHant: "分享護照"))
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
             }
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
         }
     }
 
@@ -172,7 +195,7 @@ struct GoPassportView: View {
                 .shadow(color: AppTheme.sunBottom.opacity(0.32), radius: 10, y: 4)
 
                 Text("Lv.\(appState.profile.adventureLevel)")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 11, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -183,10 +206,10 @@ struct GoPassportView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(appState.profile.nickname)
-                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 22, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text(appState.settings.stoneStyle.badgeEmoji)
-                        .font(.system(size: 16))
+                        .font(AppFont.rounded(size: 16, weight: .regular))
                 }
 
                 HStack(spacing: 12) {
@@ -221,10 +244,10 @@ struct GoPassportView: View {
 
                     VStack(spacing: 0) {
                         Text(l10n.localized(zh: "认证", en: "RANK", ja: "認定", ko: "인증", zhHant: "認證"))
-                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 9, weight: .black))
                             .foregroundColor(Color(red: 1.0, green: 0.92, blue: 0.68))
                         Text(appState.profile.rankString)
-                            .font(.system(size: 20, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 20, weight: .black))
                             .foregroundColor(.white)
                     }
                 }
@@ -241,9 +264,9 @@ struct GoPassportView: View {
 
     private func statChip(_ emoji: String, _ value: String) -> some View {
         HStack(spacing: 3) {
-            Text(emoji).font(.system(size: 12))
+            Text(emoji).font(AppFont.rounded(size: 12, weight: .regular))
             Text(value)
-                .font(.system(size: 13, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
         }
         .padding(.horizontal, 9)
@@ -258,27 +281,42 @@ struct GoPassportView: View {
             HStack {
                 Label {
                     Text("\(l10n.t("archive.tab.myGames")) (\(appState.savedGames.count))")
-                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 16, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                 } icon: {
                     Image(systemName: "clock.arrow.circlepath")
                         .foregroundColor(AppTheme.grapeBottom)
                 }
                 Spacer()
-                Text(l10n.localized(
-                    zh: "AI 复盘与战绩记录",
-                    en: "AI Review & Replays",
-                    ja: "AI復習＆対局記録",
-                    ko: "AI 복기 및 대국 기록",
-                    zhHant: "AI 復盤與戰績記錄"
-                ))
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundColor(AppTheme.inkSecondary)
+                Button {
+                    SoundAndHapticsManager.shared.playUITap()
+                    appState.navigationPath.append(.savedGames)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(l10n.localized(
+                            zh: "全部对局",
+                            en: "All Matches",
+                            ja: "すべての対局",
+                            ko: "전체 대국",
+                            zhHant: "全部對局"
+                        ))
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                    }
+                    .foregroundColor(AppTheme.grapeBottom)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(AppTheme.grapeTop.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .tactileButton(scale: 0.94)
+                .accessibilityIdentifier("PassportAllGamesButton")
             }
 
             if appState.savedGames.isEmpty {
                 HStack(spacing: 10) {
-                    Text("📜").font(.system(size: 26))
+                    Text("📜").font(AppFont.rounded(size: 26, weight: .regular))
                     Text(l10n.localized(
                         zh: "完成任意对局后会自动保存在这里，随时可以回看复盘！",
                         en: "Finished matches are saved right here for replay and AI review!",
@@ -286,7 +324,7 @@ struct GoPassportView: View {
                         ko: "대국을 마치면 자동으로 여기에 저장되어 언제든 복기할 수 있어요!",
                         zhHant: "完成任意對局後會自動保存在這裡，隨時可以回看復盤！"
                     ))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                 }
                 .padding(12)
@@ -294,64 +332,17 @@ struct GoPassportView: View {
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AppTheme.canvasBackground))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(appState.savedGames.prefix(20)) { record in
-                        HStack(spacing: 10) {
-                            Button {
+                    ForEach(appState.savedGames.prefix(5)) { record in
+                        SavedGameRecordRow(
+                            record: record,
+                            l10n: l10n,
+                            onReview: {
                                 appState.navigationPath.append(.reviewGame(recordId: record.id))
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Text("\(record.boardSize)×\(record.boardSize)")
-                                        .font(.system(size: 11, weight: .black, design: .rounded))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(AppTheme.skyBottom))
-
-                                    Text(record.resultString)
-                                        .font(.system(size: 11, weight: .black, design: .rounded))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(AppTheme.sunBottom))
-
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("\(record.blackName) vs \(record.whiteName)")
-                                            .font(.system(size: 13, weight: .heavy, design: .rounded))
-                                            .foregroundColor(AppTheme.inkPrimary)
-                                            .lineLimit(1)
-                                        Text("\(l10n.t("game.moveCount", record.moveCount)) · \(record.date.formatted(date: .abbreviated, time: .shortened))")
-                                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                            .foregroundColor(AppTheme.inkSecondary)
-                                    }
-
-                                    Spacer()
-
-                                    Image(systemName: "play.circle.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(AppTheme.grapeBottom)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color.white.opacity(0.95))
-                                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(AppTheme.subtleBorder, lineWidth: 1.5))
-                                )
+                            },
+                            onRequestDelete: {
+                                pendingDeleteGameRecord = record
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("ArchiveGameRecord")
-
-                            Button(role: .destructive) {
-                                appState.deleteSavedGame(id: record.id)
-                            } label: {
-                                Image(systemName: "trash.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(AppTheme.coralBottom)
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(AppTheme.coralTop.opacity(0.12)))
-                            }
-                            .tactileButton(scale: 0.9)
-                        }
+                        )
                     }
                 }
             }
@@ -372,7 +363,7 @@ struct GoPassportView: View {
                         ko: "바둑 6대 능력 레이더 차트",
                         zhHant: "圍棋六維棋力雷達"
                     ))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 } icon: {
                     Image(systemName: "hexagon.fill")
@@ -380,7 +371,7 @@ struct GoPassportView: View {
                 }
                 Spacer()
                 Text(CoreMLGoAIEngine.shared.activeEngineBadge(l10n))
-                    .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 10.5, weight: .heavy))
                     .foregroundColor(AppTheme.skyBottom)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
@@ -395,12 +386,12 @@ struct GoPassportView: View {
                     ForEach(radarAxes) { axis in
                         HStack(spacing: 8) {
                             Text(axis.category.localizedTitle(l10n))
-                                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                                .font(AppFont.rounded(size: 12.5, weight: .heavy))
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .lineLimit(1)
                             Spacer()
                             Text("\(Int(round(axis.value * 100)))%")
-                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .font(AppFont.rounded(size: 12, weight: .black))
                                 .foregroundColor(AppTheme.skyBottom)
                         }
                         GeometryReader { barGeo in
@@ -433,7 +424,7 @@ struct GoPassportView: View {
                         ko: "수집용 바둑돌 스킨 (해역 보스 격파 보상)",
                         zhHant: "收藏級棋子皮膚（擊敗海域 Boss 解鎖）"
                     ))
-                    .font(.system(size: 15.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 15.5, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 } icon: {
                     Image(systemName: "sparkles")
@@ -442,7 +433,7 @@ struct GoPassportView: View {
                 Spacer()
                 if let msg = stoneFeedbackMessage {
                     Text(msg)
-                        .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .heavy))
                         .foregroundColor(AppTheme.coralBottom)
                 }
             }
@@ -471,7 +462,7 @@ struct GoPassportView: View {
                             .padding(.top, 4)
 
                             Text("\(style.badgeEmoji) \(style.displayName(l10n))")
-                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 13, weight: .black))
                                 .foregroundColor(equipped ? AppTheme.skyBottom : AppTheme.inkPrimary)
                                 .lineLimit(1)
 
@@ -482,7 +473,7 @@ struct GoPassportView: View {
                                    ? l10n.localized(zh: "点击切换", en: "Tap to Equip", ja: "タップで変更", ko: "탭하여 장착", zhHant: "點擊切換")
                                    : style.unlockHint(l10n))
                             )
-                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 10.5, weight: .bold))
                             .foregroundColor(equipped ? AppTheme.mintBottom : AppTheme.inkSecondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -506,26 +497,8 @@ struct GoPassportView: View {
     }
 
     private func stonePreviewOrb(style: StoneStyle, isBlack: Bool) -> some View {
-        let colors: [Color] = {
-            switch (style, isBlack) {
-            case (.classicSlateShell, true):
-                return [Color(white: 0.34), Color(white: 0.08)]
-            case (.classicSlateShell, false):
-                return [.white, Color(red: 0.85, green: 0.87, blue: 0.90)]
-            case (.coralPearl, true):
-                return [Color(red: 0.14, green: 0.32, blue: 0.44), Color(red: 0.04, green: 0.11, blue: 0.19)]
-            case (.coralPearl, false):
-                return [.white, Color(red: 0.86, green: 0.87, blue: 0.90)]
-            case (.kyotoLacquer, true):
-                return [Color(red: 0.25, green: 0.20, blue: 0.15), Color(red: 0.05, green: 0.04, blue: 0.03)]
-            case (.kyotoLacquer, false):
-                return [Color(red: 1.0, green: 0.97, blue: 0.88), Color(red: 0.91, green: 0.82, blue: 0.62)]
-            case (.starlightJade, true):
-                return [Color(red: 0.26, green: 0.22, blue: 0.56), Color(red: 0.06, green: 0.06, blue: 0.20)]
-            case (.starlightJade, false):
-                return [Color(red: 0.92, green: 1.0, blue: 0.96), Color(red: 0.68, green: 0.92, blue: 0.82)]
-            }
-        }()
+        let palette = AppTheme.stonePalette(for: style)
+        let colors = isBlack ? palette.blackColors : palette.whiteColors
         return Circle()
             .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: 28, height: 28)
@@ -547,7 +520,7 @@ struct GoPassportView: View {
                     ko: "\(seaCount)대 해역 · \(islandCount)개 섬 항해 스탬프북",
                     zhHant: "\(seaCount) 大海域 · \(islandCount) 島航海集章冊"
                 ))
-                .font(.system(size: 16, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 16, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
             } icon: {
                 Image(systemName: "seal.fill")
@@ -558,11 +531,11 @@ struct GoPassportView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("\(sea.emoji) \(sea.localizedName(l10n))")
-                            .font(.system(size: 13.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 13.5, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                         Spacer()
                         Text(sea.rankRange)
-                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(AppTheme.skyBottom)
                     }
 
@@ -604,13 +577,13 @@ struct GoPassportView: View {
 
                 if bossBeaten {
                     Text("👑")
-                        .font(.system(size: 13))
+                        .font(AppFont.rounded(size: 13, weight: .regular))
                         .offset(x: 4, y: -4)
                 }
             }
 
             Text(island.localizedName(l10n))
-                .font(.system(size: 9.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 9.5, weight: .heavy))
                 .foregroundColor(stamped ? AppTheme.inkPrimary : AppTheme.inkSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -624,21 +597,21 @@ struct GoPassportView: View {
             HStack {
                 HStack(spacing: 8) {
                     Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 16, weight: .black))
+                        .font(.system(size: 16, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Game Center")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 15, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                         Text(
                             gameCenter.isAuthenticated
                             ? (gameCenter.playerDisplayName ?? l10n.localized(zh: "已连接 Apple Game Center", en: "Connected to Apple Game Center", ja: "Game Center 接続済み", ko: "Game Center 연결됨", zhHant: "已連接 Apple Game Center"))
                             : l10n.localized(zh: "登录同步全球排行、成就与好友回合对战", en: "Sign in for Leaderboards, Achievements & Friend Matches", ja: "サインインしてランキング・実績・フレンド対局を利用", ko: "로그인하여 글로벌 랭킹·업적·친구 대국 이용", zhHant: "登入同步全球排行、成就與好友回合對戰")
                         )
-                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .semibold))
                         .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
@@ -649,7 +622,7 @@ struct GoPassportView: View {
                         gameCenter.authenticateIfNeeded(presentLoginIfNeeded: true)
                     } label: {
                         Text(l10n.localized(zh: "登录", en: "Sign In", ja: "サインイン", ko: "로그인", zhHant: "登入"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
@@ -657,7 +630,7 @@ struct GoPassportView: View {
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
                 } else {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 20, design: .rounded))
                         .foregroundColor(AppTheme.mintBottom)
                         .accessibilityLabel(l10n.localized(zh: "已登录 Game Center", en: "Signed in to Game Center", ja: "Game Center サインイン済み", ko: "Game Center 로그인됨", zhHant: "已登入 Game Center"))
                 }
@@ -672,7 +645,7 @@ struct GoPassportView: View {
                         l10n.localized(zh: "全球排行", en: "Leaderboards", ja: "ランキング", ko: "랭킹", zhHant: "全球排行"),
                         systemImage: "trophy.fill"
                     )
-                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
@@ -687,7 +660,7 @@ struct GoPassportView: View {
                         l10n.localized(zh: "成就勋章", en: "Achievements", ja: "実績バッジ", ko: "업적 배지", zhHant: "成就勳章"),
                         systemImage: "rosette"
                     )
-                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
@@ -703,7 +676,7 @@ struct GoPassportView: View {
                             l10n.localized(zh: "好友对战", en: "Friends", ja: "フレンド", ko: "친구 대국", zhHant: "好友對戰"),
                             systemImage: "person.2.fill"
                         )
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -786,7 +759,7 @@ private struct GoRadarChartCanvas: View {
 
                 let labelPt = point(index: i, radius: maxR + 22)
                 let labelText = Text(axis.category.localizedTitle(l10n))
-                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 10, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 ctx.draw(labelText, at: labelPt, anchor: .center)
             }

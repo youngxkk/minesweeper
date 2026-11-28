@@ -15,8 +15,19 @@ struct GauntletHeartsBadge: View {
     private var l10n: L10n { appState.l10n }
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0)) { context in
-            let now = context.date
+        let needsTick = overrideHearts == nil
+            && appState.puzzleProgress.gauntletHearts < PuzzleProgressStore.maxGauntletHearts
+        if needsTick {
+            TimelineView(.periodic(from: .now, by: 1.0)) { context in
+                badgeBody(now: context.date)
+            }
+        } else {
+            badgeBody(now: Date())
+        }
+    }
+
+    @ViewBuilder
+    private func badgeBody(now: Date) -> some View {
             let maxHearts = PuzzleProgressStore.maxGauntletHearts
             let displayHearts = overrideHearts ?? appState.puzzleProgress.effectiveGauntletHearts(now: now)
             let secondsLeft = overrideHearts == nil ? appState.secondsUntilNextGauntletHeart(now: now) : nil
@@ -25,13 +36,13 @@ struct GauntletHeartsBadge: View {
                 HStack(spacing: 3.5) {
                     ForEach(0..<maxHearts, id: \.self) { i in
                         Image(systemName: i < displayHearts ? "heart.fill" : "heart")
-                            .font(.system(size: 15, weight: .black))
+                            .font(.system(size: 15, weight: .black, design: .rounded))
                             .foregroundColor(i < displayHearts ? AppTheme.coralBottom : AppTheme.subtleBorder)
                     }
                 }
                 if let sec = secondsLeft {
                     Text(Self.formatCountdown(sec))
-                        .font(.system(size: 11.5, weight: .black, design: .monospaced))
+                        .font(AppFont.rounded(size: 11.5, weight: .black))
                         .foregroundColor(displayHearts == 0 ? AppTheme.coralBottom : AppTheme.inkSecondary)
                 }
             }
@@ -65,7 +76,6 @@ struct GauntletHeartsBadge: View {
                 content
                     .accessibilityIdentifier("GauntletHeartsBadge")
             }
-        }
     }
 
     static func formatCountdown(_ totalSeconds: Int) -> String {
@@ -130,10 +140,10 @@ struct MistakeReviewRecoverySheet: View {
             AppTheme.brightArenaBackground
 
             GeometryReader { geo in
-                let isCompact = geo.size.width < 700
-                let pad: CGFloat = isCompact ? 14 : 22
+                let isCompact = geo.size.width < 600
+                let pad: CGFloat = isCompact ? 14 : 20
 
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     sheetTopBar
 
                     if phase == .completed {
@@ -142,23 +152,42 @@ struct MistakeReviewRecoverySheet: View {
                             .frame(maxWidth: 460)
                         Spacer()
                     } else if isCompact {
-                        let side = min(geo.size.width - pad * 2, geo.size.height * 0.42)
-                        reviewBoard.frame(width: side, height: side)
-                        ScrollView(showsIndicators: false) { reviewSidePanel }
+                        let side = max(180, min(geo.size.width - pad * 2, geo.size.height * 0.36))
+                        reviewBoard
+                            .frame(width: side, height: side)
+                        ScrollView(showsIndicators: false) {
+                            reviewInfoContent
+                                .padding(.horizontal, 2)
+                                .padding(.vertical, 2)
+                        }
+                        .frame(maxHeight: .infinity)
+                        reviewActionButtons
+                            .padding(.top, 2)
+                            .padding(.bottom, 6)
                     } else {
-                        let sideW = min(380, max(310, geo.size.width * 0.36))
-                        let side = max(240, min(geo.size.width - sideW - pad * 3, geo.size.height - 96))
-                        HStack(spacing: pad) {
+                        let sideW = min(360, max(270, geo.size.width * 0.42))
+                        let side = max(220, min(geo.size.width - sideW - pad * 3, geo.size.height - 92))
+                        HStack(alignment: .top, spacing: pad) {
                             reviewBoard
                                 .frame(width: side, height: side)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            ScrollView(showsIndicators: false) { reviewSidePanel }
-                                .frame(width: sideW)
+                            VStack(spacing: 10) {
+                                ScrollView(showsIndicators: false) {
+                                    reviewInfoContent
+                                        .padding(.horizontal, 2)
+                                        .padding(.vertical, 2)
+                                }
+                                .frame(maxHeight: .infinity)
+                                reviewActionButtons
+                                    .padding(.bottom, 6)
+                            }
+                            .frame(width: sideW)
                         }
                     }
                 }
                 .padding(.horizontal, pad)
-                .padding(.vertical, 14)
+                .padding(.top, 14)
+                .padding(.bottom, 16)
             }
         }
         .onAppear {
@@ -171,22 +200,7 @@ struct MistakeReviewRecoverySheet: View {
     }
 
     private var sheetTopBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                SoundAndHapticsManager.shared.playUITap()
-                dismiss()
-            } label: {
-                Label(l10n.t("common.close"), systemImage: "xmark")
-                    .font(.system(size: 13.5, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.inkPrimary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.white).shadow(color: Color.black.opacity(0.08), radius: 6, y: 3))
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
+        ZStack {
             VStack(spacing: 2) {
                 Text(l10n.localized(
                     zh: "❤️ 错题复盘 · 满血恢复",
@@ -195,24 +209,39 @@ struct MistakeReviewRecoverySheet: View {
                     ko: "❤️ 오답 복습 · 하트 전체 회복",
                     zhHant: "❤️ 錯題復盤 · 滿血恢復"
                 ))
-                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 17, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 if let note = headerNote {
                     Text(note)
-                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .bold))
                         .foregroundColor(AppTheme.coralBottom)
                         .lineLimit(1)
                 }
             }
 
-            Spacer()
+            HStack(spacing: 10) {
+                Button {
+                    SoundAndHapticsManager.shared.playUITap()
+                    dismiss()
+                } label: {
+                    Label(l10n.t("common.close"), systemImage: "xmark")
+                        .font(AppFont.rounded(size: 13.5, weight: .black))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(Color.white).shadow(color: Color.black.opacity(0.08), radius: 6, y: 3))
+                }
+                .buttonStyle(.plain)
 
-            Text("\(min(currentIdx + 1, max(1, reviewPuzzles.count)))/\(max(1, reviewPuzzles.count))")
-                .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(AppTheme.coralBottom))
+                Spacer()
+
+                Text("\(min(currentIdx + 1, max(1, reviewPuzzles.count)))/\(max(1, reviewPuzzles.count))")
+                    .font(AppFont.rounded(size: 13, weight: .black))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Capsule().fill(AppTheme.coralBottom))
+            }
         }
     }
 
@@ -240,20 +269,20 @@ struct MistakeReviewRecoverySheet: View {
         )
     }
 
-    private var reviewSidePanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var reviewInfoContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(phase == .study
                      ? l10n.localized(zh: "第 1 步 · 看懂正解", en: "Step 1 · Study Solution", ja: "ステップ1 · 正解を確認", ko: "1단계 · 정답 이해", zhHant: "第 1 步 · 看懂正解")
                      : l10n.localized(zh: "第 2 步 · 换向检验", en: "Step 2 · Rotated Check", ja: "ステップ2 · 回転テスト", ko: "2단계 · 회전 검증", zhHant: "第 2 步 · 換向檢驗"))
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(phase == .study ? AppTheme.skyBottom : AppTheme.mintBottom))
 
                 Text(currentPuzzle.rankBadge)
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(AppTheme.grapeBottom)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
@@ -262,23 +291,23 @@ struct MistakeReviewRecoverySheet: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(currentPuzzle.title(l10n))
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 if phase == .study {
                     Text(currentPuzzle.prompt(l10n, activeColor: effectivePlayerColor))
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Divider()
 
                     Text(l10n.localized(zh: "💡 小老师要点", en: "💡 Key Idea", ja: "💡 先生のポイント", ko: "💡 핵심 포인트", zhHant: "💡 小老師要點"))
-                        .font(.system(size: 12.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
                         .foregroundColor(AppTheme.sunBottom)
 
                     Text(currentPuzzle.hint(l10n))
-                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
@@ -289,28 +318,32 @@ struct MistakeReviewRecoverySheet: View {
                         ko: "바둑판을 회전/반전했어요! 힌트 없이 방금 배운 묘수를 직접 두어보세요:",
                         zhHant: "棋盤已旋轉/鏡像！現在不看提示，自己走出剛才學會的妙手吧："
                     ))
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .warmCard(cornerRadius: 22, padding: 16)
+            .warmCard(cornerRadius: 22, padding: 14)
 
             if let msg = feedbackText {
                 HStack(spacing: 10) {
                     Image(systemName: isFeedbackError ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
-                        .font(.system(size: 18, weight: .black))
+                        .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundColor(isFeedbackError ? AppTheme.coralBottom : AppTheme.mintBottom)
                     Text(msg)
-                        .font(.system(size: 13.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .black))
                         .foregroundColor(isFeedbackError ? AppTheme.coralBottom : AppTheme.mintBottom)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .warmCard(cornerRadius: 18, padding: 12)
             }
+        }
+    }
 
+    private var reviewActionButtons: some View {
+        VStack(spacing: 10) {
             if phase == .study {
                 Button {
                     replaySolutionDemo()
@@ -319,7 +352,7 @@ struct MistakeReviewRecoverySheet: View {
                         l10n.localized(zh: "重播正解演示", en: "Replay Solution", ja: "正解をもう一度再生", ko: "정답 다시 보기", zhHant: "重播正解演示"),
                         systemImage: "play.circle.fill"
                     )
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -344,10 +377,10 @@ struct MistakeReviewRecoverySheet: View {
                             ko: "이해했어요, 검증 시작 →",
                             zhHant: "我學會了，開始檢驗 →"
                          ))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .padding(.vertical, 13)
                 }
                 .buttonStyle(GlossyCapsuleButtonStyle(palette: studyCooldown > 0 ? .locked : .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                 .disabled(studyCooldown > 0)
@@ -359,7 +392,7 @@ struct MistakeReviewRecoverySheet: View {
                         l10n.localized(zh: "再看一遍正解演示", en: "Watch Demo Again", ja: "もう一度手本を見る", ko: "정답 설명 다시 보기", zhHant: "再看一遍正解演示"),
                         systemImage: "arrow.uturn.backward.circle.fill"
                     )
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -371,7 +404,7 @@ struct MistakeReviewRecoverySheet: View {
 
     private var completedCard: some View {
         VStack(spacing: 16) {
-            Text("❤️❤️❤️").font(.system(size: 46))
+            Text("❤️❤️❤️").font(AppFont.rounded(size: 46, weight: .regular))
             Text(l10n.localized(
                 zh: "复盘通关！体力已满血恢复！",
                 en: "Review Complete — Hearts Refilled!",
@@ -379,7 +412,7 @@ struct MistakeReviewRecoverySheet: View {
                 ko: "복습 완료! 하트가 모두 회복되었어요!",
                 zhHant: "復盤通關！體力已滿血恢復！"
             ))
-                .font(.system(size: 22, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 22, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
             Text(l10n.localized(
@@ -389,7 +422,7 @@ struct MistakeReviewRecoverySheet: View {
                 ko: "방금 틀렸던 문제를 완벽히 익혔어요! 스테이지로 돌아가 돌파해 보세요!",
                 zhHant: "你已經真正掌握了剛才的錯題，快回關卡拿下勝利吧！"
             ))
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 14, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
 
@@ -398,7 +431,7 @@ struct MistakeReviewRecoverySheet: View {
                 dismiss()
             } label: {
                 Text(l10n.localized(zh: "继续闯关", en: "Back to Challenge", ja: "挑戦に戻る", ko: "도전 계속하기", zhHant: "繼續闖關"))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -546,7 +579,11 @@ struct MistakeReviewRecoverySheet: View {
                             handleVerifyWrong()
                         } else if c.contains("CORRECT") {
                             handleVerifySolved()
+                        } else if opp.children.isEmpty {
+                            handleVerifyWrong()
                         }
+                    } else if opp.children.isEmpty {
+                        handleVerifyWrong()
                     }
                 }
             }
@@ -609,6 +646,8 @@ struct PuzzleGauntletView: View {
     let campaignNodeId: String?
     let masteryTier: StageMasteryTier
     let isGhostBuster: Bool
+    var sectionIndex: Int = 0
+    var totalSections: Int = 1
 
     /// Queue of remaining puzzles in the current run. Missed puzzles are re-queued to the back with rotated/mirrored views.
     @State private var runQueue: [GoPuzzle] = []
@@ -637,6 +676,7 @@ struct PuzzleGauntletView: View {
     @State private var illegalFlash: BoardPoint? = nil
     @State private var illegalEventID: UUID = UUID()
     @State private var replyTask: Task<Void, Never>?
+    @State private var hasStartedRun: Bool = false
 
     enum RunOutcome: Equatable {
         case playing
@@ -751,8 +791,11 @@ struct PuzzleGauntletView: View {
                 }
             )
             .environmentObject(appState)
+            .presentationSizing(.page)
         }
         .onAppear {
+            guard !hasStartedRun else { return }
+            hasStartedRun = true
             let hasPriorMistakes = puzzles.contains { appState.puzzleProgress.pendingReviewPuzzleIds.contains($0.id) }
             restartWholeRun(shuffle: hasPriorMistakes)
         }
@@ -767,11 +810,7 @@ struct PuzzleGauntletView: View {
     // MARK: - Header & Progress Ribbon
 
     private var topBar: some View {
-        HStack(spacing: 10) {
-            GameBackButton(title: l10n.t("common.back")) {
-                appState.popRoute()
-            }
-            Spacer()
+        ZStack {
             GameTitleCrest(
                 title: l10n.localized(zh: titleZh, en: titleEn),
                 subtitle: isGhostBuster
@@ -782,28 +821,42 @@ struct PuzzleGauntletView: View {
                         ko: "👻 오답 고스트 퇴치전 · 별코인 2배",
                         zhHant: "👻 錯題幽靈剿滅戰 · 雙倍星幣"
                     )
-                    : localizedMasteryBadge(masteryTier)
+                    : (totalSections > 1
+                        ? l10n.localized(
+                            zh: "第 \(sectionIndex + 1)/\(totalSections) 节 · \(localizedMasteryBadge(masteryTier))",
+                            en: "Set \(sectionIndex + 1)/\(totalSections) · \(localizedMasteryBadge(masteryTier))",
+                            ja: "第 \(sectionIndex + 1)/\(totalSections) 節 · \(localizedMasteryBadge(masteryTier))",
+                            ko: "\(sectionIndex + 1)/\(totalSections)세트 · \(localizedMasteryBadge(masteryTier))",
+                            zhHant: "第 \(sectionIndex + 1)/\(totalSections) 節 · \(localizedMasteryBadge(masteryTier))"
+                        )
+                        : localizedMasteryBadge(masteryTier))
             )
-            Spacer()
-            HStack(spacing: 8) {
-                GauntletHeartsBadge(
-                    overrideHearts: isGhostBuster ? ghostHearts : nil,
-                    onTapWhenNotFull: isGhostBuster ? nil : {
-                        showMistakeReviewSheet = true
-                    }
-                )
 
-                if runState == .playing && !isExam {
-                    GameCircleButton(
-                        icon: showHintText ? "lightbulb.fill" : "lightbulb",
-                        palette: showHintText ? .sun : .snow,
-                        tint: showHintText ? .white : AppTheme.inkPrimary,
-                        size: 42
-                    ) {
-                        toggleHintOverlay()
+            HStack(spacing: 10) {
+                GameBackButton(title: l10n.t("common.back")) {
+                    appState.popRoute()
+                }
+                Spacer()
+                HStack(spacing: 8) {
+                    GauntletHeartsBadge(
+                        overrideHearts: isGhostBuster ? ghostHearts : nil,
+                        onTapWhenNotFull: isGhostBuster ? nil : {
+                            showMistakeReviewSheet = true
+                        }
+                    )
+
+                    if runState == .playing && !isExam {
+                        GameCircleButton(
+                            icon: showHintText ? "lightbulb.fill" : "lightbulb",
+                            palette: showHintText ? .sun : .snow,
+                            tint: showHintText ? .white : AppTheme.inkPrimary,
+                            size: 42
+                        ) {
+                            toggleHintOverlay()
+                        }
+                        .accessibilityLabel(l10n.t("puzzle.play.hint"))
+                        .accessibilityIdentifier("GauntletTopRightHintButton")
                     }
-                    .accessibilityLabel(l10n.t("puzzle.play.hint"))
-                    .accessibilityIdentifier("GauntletTopRightHintButton")
                 }
             }
         }
@@ -821,7 +874,7 @@ struct PuzzleGauntletView: View {
             }
             if combo >= 2 {
                 Text("🔥 \(combo)x")
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 3)
@@ -927,14 +980,14 @@ struct PuzzleGauntletView: View {
                         ko: "제 \(min(solvedCount + 1, puzzles.count))/\(puzzles.count)문제",
                         zhHant: "第 \(min(solvedCount + 1, puzzles.count))/\(puzzles.count) 題"
                     ))
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(AppTheme.skyBottom))
 
                     Text(currentPuzzle.rankBadge)
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(AppTheme.grapeBottom)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
@@ -942,7 +995,7 @@ struct PuzzleGauntletView: View {
 
                     if !activeTransform.isIdentity && masteryTier == .normal {
                         Text(l10n.localized(zh: "🔄 换向重考", en: "🔄 Rotated", ja: "🔄 回転出題", ko: "🔄 회전 출제", zhHant: "🔄 換向重考"))
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(AppTheme.skyBottom)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -954,16 +1007,16 @@ struct PuzzleGauntletView: View {
                     Text(effectivePlayerColor == .black
                          ? l10n.localized(zh: "⚫️ 黑先", en: "⚫️ Black", ja: "⚫️ 黒番", ko: "⚫️ 흑선", zhHant: "⚫️ 黑先")
                          : l10n.localized(zh: "⚪️ 白先", en: "⚪️ White", ja: "⚪️ 白番", ko: "⚪️ 백선", zhHant: "⚪️ 白先"))
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                 }
 
                 Text(showHintText ? currentPuzzle.title(l10n) : currentPuzzle.category.localizedTitle(l10n))
-                    .font(.system(size: 19, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 19, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Text(showHintText ? currentPuzzle.prompt(l10n, activeColor: effectivePlayerColor) : neutralObjectiveText)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -972,10 +1025,10 @@ struct PuzzleGauntletView: View {
             if let msg = feedbackBanner {
                 HStack(spacing: 10) {
                     Image(systemName: isFeedbackError ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
-                        .font(.system(size: 20, weight: .black))
+                        .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundColor(isFeedbackError ? AppTheme.coralBottom : AppTheme.mintBottom)
                     Text(msg)
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(isFeedbackError ? AppTheme.coralBottom : AppTheme.mintBottom)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -986,10 +1039,10 @@ struct PuzzleGauntletView: View {
             if showHintText {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(l10n.localized(zh: "💡 小老师锦囊", en: "💡 Coach Hint", ja: "💡 先生のヒント", ko: "💡 선생님 힌트", zhHant: "💡 小老師錦囊"))
-                        .font(.system(size: 12.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
                         .foregroundColor(AppTheme.sunBottom)
                     Text(currentPuzzle.hint(l10n))
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1001,7 +1054,7 @@ struct PuzzleGauntletView: View {
                 resetCurrentPuzzle()
             } label: {
                 Label(l10n.t("puzzle.play.reset"), systemImage: "arrow.counterclockwise")
-                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -1016,17 +1069,17 @@ struct PuzzleGauntletView: View {
         VStack(spacing: 16) {
             if runState == .victory {
                 Text(masteryTier == .examCrown ? "👑" : (isGhostBuster ? "👻✨" : "🏆"))
-                    .font(.system(size: 54))
+                    .font(AppFont.rounded(size: 54, weight: .regular))
                 Text(isGhostBuster
                      ? l10n.localized(zh: "错题幽灵全部消灭！", en: "All Mistake Ghosts Cleared!", ja: "間違いゴーストをすべて退治！", ko: "오답 고스트 모두 퇴치!", zhHant: "錯題幽靈全部消滅！")
                      : l10n.localized(zh: "连闯大成功！", en: "Gauntlet Cleared!", ja: "連続挑戦クリア！", ko: "연속 도전 클리어!", zhHant: "連闖大成功！"))
-                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 24, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 HStack(spacing: 8) {
                     ForEach(1...3, id: \.self) { i in
                         Image(systemName: i <= earnedStars ? "star.fill" : "star")
-                            .font(.system(size: 32, weight: .black))
+                            .font(.system(size: 32, weight: .black, design: .rounded))
                             .foregroundStyle(
                                 i <= earnedStars
                                     ? AnyShapeStyle(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
@@ -1035,17 +1088,25 @@ struct PuzzleGauntletView: View {
                     }
                 }
 
-                Text(l10n.localized(
-                    zh: "共完成 \(puzzles.count) 道题 · 失误 \(mistakesInRun) 次 · \(localizedMasteryTitle(masteryTier))",
-                    en: "\(puzzles.count) puzzles cleared · \(mistakesInRun) mistake(s) · \(localizedMasteryTitle(masteryTier))",
-                    ja: "\(puzzles.count) 問クリア · ミス \(mistakesInRun) 回 · \(localizedMasteryTitle(masteryTier))",
-                    ko: "\(puzzles.count)문제 완료 · 실수 \(mistakesInRun)회 · \(localizedMasteryTitle(masteryTier))",
-                    zhHant: "共完成 \(puzzles.count) 道題 · 失誤 \(mistakesInRun) 次 · \(localizedMasteryTitle(masteryTier))"
-                ))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                Text(totalSections > 1
+                    ? l10n.localized(
+                        zh: "第 \(sectionIndex + 1)/\(totalSections) 节通关 · 本节 \(puzzles.count) 题 · 失误 \(mistakesInRun) 次",
+                        en: "Set \(sectionIndex + 1)/\(totalSections) cleared · \(puzzles.count) puzzles · \(mistakesInRun) mistake(s)",
+                        ja: "第 \(sectionIndex + 1)/\(totalSections) 節クリア · \(puzzles.count) 問 · ミス \(mistakesInRun) 回",
+                        ko: "\(sectionIndex + 1)/\(totalSections)세트 완료 · \(puzzles.count)문제 · 실수 \(mistakesInRun)회",
+                        zhHant: "第 \(sectionIndex + 1)/\(totalSections) 節通關 · 本節 \(puzzles.count) 題 · 失誤 \(mistakesInRun) 次"
+                    )
+                    : l10n.localized(
+                        zh: "共完成 \(puzzles.count) 道题 · 失误 \(mistakesInRun) 次 · \(localizedMasteryTitle(masteryTier))",
+                        en: "\(puzzles.count) puzzles cleared · \(mistakesInRun) mistake(s) · \(localizedMasteryTitle(masteryTier))",
+                        ja: "\(puzzles.count) 問クリア · ミス \(mistakesInRun) 回 · \(localizedMasteryTitle(masteryTier))",
+                        ko: "\(puzzles.count)문제 완료 · 실수 \(mistakesInRun)회 · \(localizedMasteryTitle(masteryTier))",
+                        zhHant: "共完成 \(puzzles.count) 道題 · 失誤 \(mistakesInRun) 次 · \(localizedMasteryTitle(masteryTier))"
+                    ))
+                    .font(AppFont.rounded(size: 14, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
 
-                if campaignNodeId != nil, masteryTier < .examCrown {
+                if campaignNodeId != nil, sectionIndex + 1 >= totalSections, masteryTier < .examCrown {
                     let nextTier: StageMasteryTier = masteryTier == .normal ? .transformed : .examCrown
                     Text(l10n.localized(
                         zh: "下一档「\(localizedMasteryTitle(nextTier))」：\(localizedMasteryDescription(nextTier))",
@@ -1054,7 +1115,7 @@ struct PuzzleGauntletView: View {
                         ko: "다음 단계 「\(localizedMasteryTitle(nextTier))」: \(localizedMasteryDescription(nextTier))",
                         zhHant: "下一檔「\(localizedMasteryTitle(nextTier))」：\(localizedMasteryDescription(nextTier))"
                     ))
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .bold))
                         .foregroundColor(AppTheme.grapeBottom)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
@@ -1062,36 +1123,71 @@ struct PuzzleGauntletView: View {
                         .background(Capsule().fill(AppTheme.grapeTop.opacity(0.12)))
                 }
 
-                HStack(spacing: 12) {
-                    if let nodeId = campaignNodeId, masteryTier < .examCrown {
-                        let nextTier: StageMasteryTier = masteryTier == .normal ? .transformed : .examCrown
-                        Button {
-                            appState.navigationPath.removeLast()
-                            appState.navigationPath.append(.puzzleGauntlet(nodeId: nodeId, masteryTier: nextTier))
-                        } label: {
-                            Text(l10n.localized(
-                                zh: "挑战 \(localizedMasteryBadge(nextTier))",
-                                en: "Try \(localizedMasteryBadge(nextTier))",
-                                ja: "\(localizedMasteryBadge(nextTier)) に挑戦",
-                                ko: "\(localizedMasteryBadge(nextTier)) 도전",
-                                zhHant: "挑戰 \(localizedMasteryBadge(nextTier))"
-                            ))
-                                .font(.system(size: 15, weight: .black, design: .rounded))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                        }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                if let nodeId = campaignNodeId, sectionIndex + 1 < totalSections {
+                    let nextSec = sectionIndex + 1
+                    Button {
+                        appState.navigationPath.removeLast()
+                        appState.navigationPath.append(.puzzleGauntlet(nodeId: nodeId, masteryTier: masteryTier, sectionIndex: nextSec))
+                    } label: {
+                        Text(l10n.localized(
+                            zh: "继续下一小节（\(nextSec + 1)/\(totalSections)）▶",
+                            en: "Continue to Next Set (\(nextSec + 1)/\(totalSections)) ▶",
+                            ja: "次の節へ進む（\(nextSec + 1)/\(totalSections)）▶",
+                            ko: "다음 세트로 계속 (\(nextSec + 1)/\(totalSections)) ▶",
+                            zhHant: "繼續下一小節（\(nextSec + 1)/\(totalSections)）▶"
+                        ))
+                            .font(AppFont.rounded(size: 16, weight: .black))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
                     }
-
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                } else if let nodeId = campaignNodeId, let nextNode = StarYiCampaign.nextNode(after: nodeId) {
+                    Button {
+                        appState.navigateToCampaignNode(nextNode, replaceTopRoute: true, masteryTier: masteryTier)
+                    } label: {
+                        Text(l10n.localized(
+                            zh: "进入下一关 · \(nextNode.title(isChinese: true)) ▶",
+                            en: "Next Stage · \(nextNode.title(isChinese: false)) ▶",
+                            ja: "次のステージへ · \(nextNode.title(isChinese: false)) ▶",
+                            ko: "다음 스테이지 · \(nextNode.title(isChinese: false)) ▶",
+                            zhHant: "進入下一關 · \(nextNode.title(isChinese: true)) ▶"
+                        ))
+                            .font(AppFont.rounded(size: 16, weight: .black))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                } else if let nodeId = campaignNodeId, let island = StarYiCampaign.island(containingNodeId: nodeId) {
+                    Button {
+                        if !appState.navigationPath.isEmpty {
+                            appState.navigationPath.removeLast()
+                        }
+                        appState.startCampaignBossMatch(island: island)
+                    } label: {
+                        Text(l10n.localized(
+                            zh: "挑战守岛 Boss · \(island.boss.title(isChinese: true)) ▶",
+                            en: "Challenge Island Boss · \(island.boss.title(isChinese: false)) ▶",
+                            ja: "島のボスに挑戦 ▶",
+                            ko: "섬 보스 도전 ▶",
+                            zhHant: "挑戰守島 Boss · \(island.boss.title(isChinese: true)) ▶"
+                        ))
+                            .font(AppFont.rounded(size: 16, weight: .black))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 15)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                } else {
                     Button {
                         appState.popRoute()
                     } label: {
                         Text(l10n.localized(zh: "返回岛屿", en: "Back to Island", ja: "島へ戻る", ko: "섬으로 돌아가기", zhHant: "返回島嶼"))
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 15)
                     }
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                 }
@@ -1110,11 +1206,11 @@ struct PuzzleGauntletView: View {
             let secondsLeft = isGhostBuster ? nil : appState.secondsUntilNextGauntletHeart(now: now)
 
             VStack(spacing: 14) {
-                Text(heartsNow > 0 ? "❤️" : "💔").font(.system(size: 52))
+                Text(heartsNow > 0 ? "❤️" : "💔").font(AppFont.rounded(size: 52, weight: .regular))
                 Text(heartsNow > 0
                      ? l10n.localized(zh: "体力已恢复，可以继续闯关！", en: "Heart Restored — Ready to Go!", ja: "ハート回復！再挑戦できるよ！", ko: "하트가 회복되었어요! 다시 도전하세요!", zhHant: "體力已恢復，可以繼續闖關！")
                      : l10n.localized(zh: "体力耗尽啦！先复盘错题再战", en: "Out of Hearts — Review to Refill", ja: "ハートが0に！間違いを復習して回復しよう", ko: "하트가 모두 소진됐어요! 오답을 복습해 회복하세요", zhHant: "體力耗盡啦！先復盤錯題再戰"))
-                    .font(.system(size: 21, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 21, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
 
@@ -1125,14 +1221,14 @@ struct PuzzleGauntletView: View {
                     ko: "\(solvedCount)/\(puzzles.count)문제 해결. 오답을 이해하고 검증에 통과하면 바로 하트 3개가 회복돼요!",
                     zhHant: "本輪已解出 \(solvedCount)/\(puzzles.count) 題。把錯題看懂並檢驗通過，立刻恢復 3 顆 ❤️！"
                 ))
-                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 13.5, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
 
                 if let sec = secondsLeft, heartsNow == 0 {
                     HStack(spacing: 6) {
                         Image(systemName: "clock.fill")
-                            .font(.system(size: 13, weight: .black))
+                            .font(.system(size: 13, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.coralBottom)
                         Text(l10n.localized(
                             zh: "或等待 \(GauntletHeartsBadge.formatCountdown(sec)) 后自动恢复 1 颗 ❤️",
@@ -1141,7 +1237,7 @@ struct PuzzleGauntletView: View {
                             ko: "또는 \(GauntletHeartsBadge.formatCountdown(sec)) 후 하트 1개 자동 회복",
                             zhHant: "或等待 \(GauntletHeartsBadge.formatCountdown(sec)) 後自動恢復 1 顆 ❤️"
                         ))
-                            .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .heavy))
                             .foregroundColor(AppTheme.coralBottom)
                     }
                     .padding(.horizontal, 14)
@@ -1165,7 +1261,7 @@ struct PuzzleGauntletView: View {
                                 ),
                                 systemImage: "book.pages.fill"
                             )
-                                .font(.system(size: 15.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15.5, weight: .black))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -1182,24 +1278,13 @@ struct PuzzleGauntletView: View {
                             restartWholeRun(shuffle: true)
                         } label: {
                             Text(l10n.localized(zh: "继续挑战", en: "Continue Challenge", ja: "再挑戦する", ko: "도전 계속하기", zhHant: "繼續挑戰"))
-                                .font(.system(size: 15.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15.5, weight: .black))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
                         .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                     }
-
-                    Button {
-                        appState.popRoute()
-                    } label: {
-                        Text(l10n.localized(zh: "先回岛屿", en: "Back to Island", ja: "島へ戻る", ko: "섬으로 돌아가기", zhHant: "先回島嶼"))
-                            .font(.system(size: 14.5, weight: .black, design: .rounded))
-                            .foregroundColor(AppTheme.inkPrimary)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
                 }
             }
         }
@@ -1364,7 +1449,11 @@ struct PuzzleGauntletView: View {
                             handleWrongMove()
                         } else if c.contains("CORRECT") {
                             handlePuzzleSolved()
+                        } else if opp.children.isEmpty {
+                            handleWrongMove()
                         }
+                    } else if opp.children.isEmpty {
+                        handleWrongMove()
                     }
                 }
             }
@@ -1483,7 +1572,12 @@ struct PuzzleGauntletView: View {
         if let nodeId = campaignNodeId {
             // Exam Crown requires 0 mistakes to officially crown; otherwise credits transformed/normal
             let effectiveTier: StageMasteryTier = (masteryTier == .examCrown && mistakesInRun > 0) ? .transformed : masteryTier
-            appState.recordCampaignNodeCleared(nodeId: nodeId, stars: stars, masteryTier: effectiveTier)
+            appState.recordCampaignSectionCleared(
+                nodeId: nodeId,
+                sectionIndex: sectionIndex,
+                stars: stars,
+                masteryTier: effectiveTier
+            )
         }
         if isGhostBuster && appState.currentGauntletHearts < PuzzleProgressStore.maxGauntletHearts {
             // Clearing SRS Mistake Ghosts also rewards full hearts!

@@ -47,7 +47,7 @@ struct DailyDojoView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.morningDojo
 
             GeometryReader { geo in
                 let isCompact = geo.size.width < 760
@@ -55,11 +55,7 @@ struct DailyDojoView: View {
 
                 VStack(spacing: 14) {
                     // Top Bar
-                    HStack {
-                        GameBackButton(title: l10n.t("common.back")) {
-                            appState.popRoute()
-                        }
-                        Spacer()
+                    ZStack {
                         GameTitleCrest(
                             title: l10n.localized(
                                 zh: "每日道场",
@@ -70,34 +66,40 @@ struct DailyDojoView: View {
                             ),
                             subtitle: plan.weekdayThemeLabel(l10n)
                         )
-                        Spacer()
-                        // Streak & Total Stamps pill
-                        HStack(spacing: 8) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "flame.fill")
-                                    .font(.system(size: 13, weight: .black))
-                                    .foregroundColor(AppTheme.coralBottom)
-                                Text("\(appState.profile.dailyStreak)")
-                                    .font(.system(size: 14, weight: .black, design: .rounded))
-                                    .foregroundColor(AppTheme.inkPrimary)
+
+                        HStack {
+                            GameBackButton(title: l10n.t("common.back")) {
+                                appState.popRoute()
                             }
-                            Divider().frame(height: 16)
-                            HStack(spacing: 4) {
-                                Image(systemName: "seal.fill")
-                                    .font(.system(size: 13, weight: .black))
-                                    .foregroundColor(AppTheme.sunBottom)
-                                Text("\(appState.profile.dailyDojoStampDates.count)")
-                                    .font(.system(size: 14, weight: .black, design: .rounded))
-                                    .foregroundColor(AppTheme.inkPrimary)
+                            Spacer()
+                            // Streak & Total Stamps pill
+                            HStack(spacing: 8) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "flame.fill")
+                                        .font(.system(size: 13, weight: .black, design: .rounded))
+                                        .foregroundColor(AppTheme.coralBottom)
+                                    Text("\(appState.profile.dailyStreak)")
+                                        .font(AppFont.rounded(size: 14, weight: .black))
+                                        .foregroundColor(AppTheme.inkPrimary)
+                                }
+                                Divider().frame(height: 16)
+                                HStack(spacing: 4) {
+                                    Image(systemName: "seal.fill")
+                                        .font(.system(size: 13, weight: .black, design: .rounded))
+                                        .foregroundColor(AppTheme.sunBottom)
+                                    Text("\(appState.profile.dailyDojoStampDates.count)")
+                                        .font(AppFont.rounded(size: 14, weight: .black))
+                                        .foregroundColor(AppTheme.inkPrimary)
+                                }
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.95))
+                                    .shadow(color: AppTheme.inkPrimary.opacity(0.10), radius: 5, y: 2)
+                            )
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(0.95))
-                                .shadow(color: AppTheme.inkPrimary.opacity(0.10), radius: 5, y: 2)
-                        )
                     }
                     .frame(height: 58)
 
@@ -188,11 +190,11 @@ struct DailyDojoView: View {
                     .frame(width: 62, height: 62)
                 if isStampedToday {
                     Image(systemName: "crown.fill")
-                        .font(.system(size: 24, weight: .black))
+                        .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.sunTop)
                 } else {
                     Text("\(stationsDone)/3")
-                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 18, weight: .black))
                         .foregroundColor(.white)
                 }
             }
@@ -206,7 +208,7 @@ struct DailyDojoView: View {
                         ko: "오늘의 주제 · \(plan.themeCodex.term(l10n))",
                         zhHant: "今日主題 · \(plan.themeCodex.term(l10n))"
                     ))
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -218,7 +220,7 @@ struct DailyDojoView: View {
                         }
                     } label: {
                         Image(systemName: "info.circle.fill")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundColor(.white.opacity(0.9))
                     }
                     .buttonStyle(.plain)
@@ -239,7 +241,7 @@ struct DailyDojoView: View {
                         ko: "힌트 없는 수련 · 3단계 모두 완료하고 오늘의 도장과 보물상자를 열어요!",
                         zhHant: "無提示獨立思考 · 完成 3 站修行即可蓋下今日印章，領星幣寶箱！"
                      ))
-                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .bold))
                     .foregroundColor(.white.opacity(0.94))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -284,7 +286,7 @@ struct DailyDojoView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "seal.fill")
-                    .font(.system(size: 24, weight: .black))
+                    .font(.system(size: 24, weight: .black, design: .rounded))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(l10n.localized(
                         zh: "盖下今日道场印章！",
@@ -293,7 +295,7 @@ struct DailyDojoView: View {
                         ko: "오늘의 도장 찍기!",
                         zhHant: "蓋下今日道場印章！"
                     ))
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     Text(l10n.localized(
                         zh: "开启今日宝箱：+40 星币 · +50 XP",
                         en: "Open Daily Chest: +40 Star Coins · +50 XP",
@@ -301,12 +303,12 @@ struct DailyDojoView: View {
                         ko: "오늘의 보물상자: +40 별코인 · +50 XP",
                         zhHant: "開啟今日寶箱：+40 星幣 · +50 XP"
                     ))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .opacity(0.95)
                 }
                 Spacer()
                 Image(systemName: "sparkles")
-                    .font(.system(size: 22, weight: .black))
+                    .font(.system(size: 22, weight: .black, design: .rounded))
             }
             .foregroundColor(.white)
             .padding(.horizontal, 20)
@@ -330,7 +332,7 @@ struct DailyDojoView: View {
                         ko: "1단계 · 워밍업 미니 훈련",
                         zhHant: "第一站 · 熱身棋感小遊戲"
                     ))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                     Text(l10n.localized(
@@ -340,11 +342,16 @@ struct DailyDojoView: View {
                         ko: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount)문제 (약 1분)",
                         zhHant: "\(plan.warmupKind.localizedTitle(l10n)) · \(plan.warmupCount) 題（約 1 分鐘）"
                     ))
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
                 Spacer()
-                Button {
+                stationActionButton(
+                    done: isWarmupDone,
+                    activeTitle: l10n.localized(zh: "开始热身", en: "Warm Up", ja: "スタート", ko: "시작", zhHant: "開始熱身"),
+                    activePalette: .mint,
+                    accessibilityId: "DailyDojoWarmupButton"
+                ) {
                     appState.navigationPath.append(
                         .miniDrill(
                             kind: plan.warmupKind,
@@ -354,17 +361,7 @@ struct DailyDojoView: View {
                             isDailyDojoWarmup: true
                         )
                     )
-                } label: {
-                    Text(isWarmupDone
-                         ? l10n.localized(zh: "再热身", en: "Replay", ja: "もう一度", ko: "다시 하기", zhHant: "再熱身")
-                         : l10n.localized(zh: "开始热身", en: "Warm Up", ja: "スタート", ko: "시작", zhHant: "開始熱身"))
-                        .font(.system(size: 13.5, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: isWarmupDone ? .sky : .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                .accessibilityIdentifier("DailyDojoWarmupButton")
             }
         }
         .warmCard(cornerRadius: 24, padding: 16)
@@ -388,11 +385,11 @@ struct DailyDojoView: View {
                             ko: "2단계 · 힌트 없는 3연전",
                             zhHant: "第二站 · 無提示主題三連戰"
                         ))
-                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 16, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
 
                         Text("\(coreSolvedCount)/3")
-                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .black))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 2)
@@ -406,11 +403,18 @@ struct DailyDojoView: View {
                         ko: "힌트·정답 보기 없음! 스스로 생각하고 도전해 클리어하세요!",
                         zhHant: "全程禁止提示和看答案！靠自己反覆試錯通關，贏「一擊必殺」或「百折不撓」榮譽！"
                     ))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                 }
                 Spacer(minLength: 8)
-                Button {
+                stationActionButton(
+                    done: isCoreDone,
+                    activeTitle: coreSolvedCount == 0
+                        ? l10n.localized(zh: "开始挑战", en: "Start", ja: "スタート", ko: "시작", zhHant: "開始挑戰")
+                        : l10n.localized(zh: "继续第 \(coreSolvedCount + 1) 关", en: "Stage \(coreSolvedCount + 1)", ja: "第\(coreSolvedCount + 1)問へ", ko: "\(coreSolvedCount + 1)단계", zhHant: "繼續第 \(coreSolvedCount + 1) 關"),
+                    activePalette: .sky,
+                    accessibilityId: "DailyDojoStartCoreButton"
+                ) {
                     appState.navigationPath.append(
                         .puzzlePlay(
                             puzzleId: firstUnsolvedSlot.puzzle.id,
@@ -420,21 +424,7 @@ struct DailyDojoView: View {
                             dailyDojoQueueIds: queueIds
                         )
                     )
-                } label: {
-                    Text(isCoreDone
-                         ? l10n.localized(zh: "再挑战", en: "Replay", ja: "もう一度", ko: "다시 하기", zhHant: "再挑戰")
-                         : (coreSolvedCount == 0
-                            ? l10n.localized(zh: "开始挑战", en: "Start", ja: "スタート", ko: "시작", zhHant: "開始挑戰")
-                            : l10n.localized(zh: "继续第 \(coreSolvedCount + 1) 关", en: "Stage \(coreSolvedCount + 1)", ja: "第\(coreSolvedCount + 1)問へ", ko: "\(coreSolvedCount + 1)단계", zhHant: "繼續第 \(coreSolvedCount + 1) 關")))
-                        .font(.system(size: 13.5, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                .fixedSize(horizontal: true, vertical: false)
-                .accessibilityIdentifier("DailyDojoStartCoreButton")
             }
 
             HStack(spacing: 10) {
@@ -469,17 +459,17 @@ struct DailyDojoView: View {
                                     .frame(width: 44, height: 44)
                                 if solved {
                                     Image(systemName: firstTry ? "crown.fill" : "flame.fill")
-                                        .font(.system(size: 19, weight: .black))
+                                        .font(.system(size: 19, weight: .black, design: .rounded))
                                         .foregroundColor(.white)
                                 } else {
                                     Text("\(slot.stage.rawValue + 1)")
-                                        .font(.system(size: 18, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 18, weight: .black))
                                         .foregroundColor(AppTheme.inkPrimary)
                                 }
                             }
 
                             Text(slot.stage.badge(l10n, isRevenge: slot.isRevenge))
-                                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 11.5, weight: .black))
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
@@ -489,7 +479,7 @@ struct DailyDojoView: View {
                                     ? l10n.localized(zh: "一击必杀", en: "1-Shot", ja: "一撃", ko: "원샷", zhHant: "一擊必殺")
                                     : l10n.localized(zh: "百折不挠", en: "Grit", ja: "不屈", ko: "불굴", zhHant: "百折不撓"))
                                  : slot.puzzle.rankBadge)
-                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 10.5, weight: .bold))
                                 .foregroundColor(solved ? (firstTry ? AppTheme.sunBottom : AppTheme.coralBottom) : AppTheme.inkSecondary)
                         }
                         .frame(maxWidth: .infinity)
@@ -526,37 +516,66 @@ struct DailyDojoView: View {
                         ko: "3단계 · 오늘의 바둑 지식 퀴즈",
                         zhHant: "第三站 · 今日棋道一問（漲知識）"
                     ))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                     Text("\(plan.knowledgeEntry.hall.title(l10n)) · \(plan.knowledgeEntry.title(l10n))")
-                        .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .lineLimit(1)
                 }
                 Spacer()
-                Button {
+                stationActionButton(
+                    done: isKnowledgeDone,
+                    activeTitle: l10n.localized(zh: "去猜一猜", en: "Take Quiz", ja: "挑戦する", ko: "퀴즈 풀기", zhHant: "去猜一猜"),
+                    activePalette: .grape,
+                    accessibilityId: "DailyDojoKnowledgeButton"
+                ) {
                     appState.navigationPath.append(.dailyKnowledge)
-                } label: {
-                    Text(isKnowledgeDone
-                         ? l10n.localized(zh: "再回味", en: "Review", ja: "復習する", ko: "다시 보기", zhHant: "再回味")
-                         : l10n.localized(zh: "去猜一猜", en: "Take Quiz", ja: "挑戦する", ko: "퀴즈 풀기", zhHant: "去猜一猜"))
-                        .font(.system(size: 13.5, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 9)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: isKnowledgeDone ? .sky : .grape, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                .accessibilityIdentifier("DailyDojoKnowledgeButton")
             }
         }
         .warmCard(cornerRadius: 24, padding: 16)
     }
 
+    private func stationActionButton(
+        done: Bool,
+        activeTitle: String,
+        activePalette: GlossyPalette,
+        accessibilityId: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                if done {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                }
+                Text(done
+                     ? l10n.localized(zh: "已完成", en: "Completed", ja: "完了済み", ko: "완료됨", zhHant: "已完成")
+                     : activeTitle)
+                    .font(AppFont.rounded(size: 13.5, weight: .black))
+                    .lineLimit(1)
+            }
+            .foregroundColor(done ? AppTheme.mintBottom : .white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+        }
+        .buttonStyle(GlossyCapsuleButtonStyle(
+            palette: done ? .snow : activePalette,
+            cornerRadius: 999,
+            rimHeight: 4,
+            whiteBorderWidth: 2.5
+        ))
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityIdentifier(accessibilityId)
+    }
+
     // MARK: - Monthly Stamp Calendar & Milestone Track
 
     private var stampCalendarCard: some View {
-        let cal = Calendar.current
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .autoupdatingCurrent
         let now = Date()
         let comps = cal.dateComponents([.year, .month], from: now)
         let firstOfMonth = cal.date(from: comps) ?? now
@@ -579,7 +598,7 @@ struct DailyDojoView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "calendar.badge.checkmark")
-                    .font(.system(size: 18, weight: .black))
+                    .font(.system(size: 18, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.sunBottom)
                 Text(l10n.localized(
                     zh: "\(year)年\(month)月 · 道场印章册",
@@ -588,7 +607,7 @@ struct DailyDojoView: View {
                     ko: "\(year)년 \(month)월 · 도장 달력",
                     zhHant: "\(year)年\(month)月 · 道場印章冊"
                 ))
-                .font(.system(size: 16, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 16, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
                 Text(l10n.localized(
@@ -598,7 +617,7 @@ struct DailyDojoView: View {
                     ko: "\(totalStamps)개",
                     zhHant: "\(totalStamps) 枚"
                 ))
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(AppTheme.sunBottom)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -609,7 +628,7 @@ struct DailyDojoView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
                 ForEach(0..<7, id: \.self) { idx in
                     Text(weekdayHeaders[idx])
-                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .black))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
 
@@ -618,7 +637,7 @@ struct DailyDojoView: View {
                 }
 
                 ForEach(1...daysInMonth, id: \.self) { day in
-                    let stampKey = String(format: "%04d-%02d-%02d", year, month, day)
+                    let stampKey = String(format: "%04d-%02d-%02d", locale: Locale(identifier: "en_US_POSIX"), year, month, day)
                     let isStamped = appState.profile.dailyDojoStampDates.contains(stampKey)
                     let isToday = (day == todayDay)
 
@@ -634,12 +653,12 @@ struct DailyDojoView: View {
                             )
                         if isStamped {
                             Image(systemName: "seal.fill")
-                                .font(.system(size: 16, weight: .black))
+                                .font(.system(size: 16, weight: .black, design: .rounded))
                                 .foregroundStyle(LinearGradient(colors: [AppTheme.coralTop, AppTheme.coralBottom], startPoint: .top, endPoint: .bottom))
                                 .scaleEffect(isToday ? stampPopScale : 1.0)
                         } else {
                             Text("\(day)")
-                                .font(.system(size: 12, weight: isToday ? .black : .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: isToday ? .black : .bold))
                                 .foregroundColor(isToday ? AppTheme.skyBottom : AppTheme.inkSecondary)
                         }
                     }
@@ -658,7 +677,7 @@ struct DailyDojoView: View {
                     ko: "누적 도장 보상",
                     zhHant: "累計印章獎勵"
                 ))
-                .font(.system(size: 13, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
 
                 HStack(spacing: 8) {
@@ -666,7 +685,7 @@ struct DailyDojoView: View {
                         let reached = totalStamps >= milestone.requiredStamps
                         VStack(spacing: 4) {
                             Image(systemName: reached ? "checkmark.seal.fill" : "gift.fill")
-                                .font(.system(size: 17, weight: .black))
+                                .font(.system(size: 17, weight: .black, design: .rounded))
                                 .foregroundColor(reached ? AppTheme.mintBottom : AppTheme.sunBottom)
                             Text(l10n.localized(
                                 zh: "\(milestone.requiredStamps)天",
@@ -675,10 +694,10 @@ struct DailyDojoView: View {
                                 ko: "\(milestone.requiredStamps)일",
                                 zhHant: "\(milestone.requiredStamps)天"
                             ))
-                                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 11.5, weight: .black))
                                 .foregroundColor(AppTheme.inkPrimary)
                             Text("+\(milestone.coinReward)")
-                                .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                                .font(AppFont.rounded(size: 10.5, weight: .heavy))
                                 .foregroundColor(AppTheme.sunBottom)
                         }
                         .frame(maxWidth: .infinity)
@@ -711,11 +730,11 @@ struct DailyDojoView: View {
                 .frame(width: 40, height: 40)
             if done {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 18, weight: .black))
+                    .font(.system(size: 18, weight: .black, design: .rounded))
                     .foregroundColor(.white)
             } else {
                 Text(number)
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     .foregroundColor(.white)
             }
         }
@@ -731,7 +750,7 @@ struct DailyDojoView: View {
 
             VStack(spacing: 14) {
                 Image(systemName: "seal.fill")
-                    .font(.system(size: 56, weight: .black))
+                    .font(.system(size: 56, weight: .black, design: .rounded))
                     .foregroundStyle(LinearGradient(colors: [AppTheme.coralTop, AppTheme.coralBottom], startPoint: .top, endPoint: .bottom))
 
                 Text(l10n.localized(
@@ -741,7 +760,7 @@ struct DailyDojoView: View {
                     ko: "꾹! 오늘의 도장 완료!",
                     zhHant: "咚！今日印章已蓋好！"
                 ))
-                .font(.system(size: 22, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 22, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
 
                 Text(l10n.localized(
@@ -751,7 +770,7 @@ struct DailyDojoView: View {
                     ko: "+\(lastClaimedCoins) 별코인 · +50 XP 획득! 매일 생각하는 습관이 실력을 키워요!",
                     zhHant: "獲得 +\(lastClaimedCoins) 星幣 · +50 XP！每天堅持思考，棋力天天漲！"
                 ))
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 14, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
 
@@ -767,7 +786,7 @@ struct DailyDojoView: View {
                                 ko: "마일스톤 달성: \(m.title(l10n))",
                                 zhHant: "達成里程碑：\(m.title(l10n))（+\(m.coinReward) 星幣）"
                             ))
-                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .black))
                             .foregroundColor(AppTheme.sunBottom)
                         }
                         .padding(.horizontal, 12)
@@ -780,7 +799,7 @@ struct DailyDojoView: View {
                     withAnimation { showStampCelebration = false }
                 } label: {
                     Text(l10n.localized(zh: "太棒了！", en: "Awesome!", ja: "やったね！", ko: "최고예요!", zhHant: "太棒了！"))
-                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 16, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
@@ -832,7 +851,7 @@ struct DailyKnowledgeQuizView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.morningDojo
 
             GeometryReader { geo in
                 let isCompact = geo.size.width < 720
@@ -923,7 +942,7 @@ struct DailyKnowledgeQuizView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(entry.eraOrTag(l10n))
-                        .font(.system(size: 11.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -931,26 +950,26 @@ struct DailyKnowledgeQuizView: View {
                     Spacer()
                     if targetPoint != nil && !solved {
                         Text(l10n.t("puzzle.play.attempts", attempts))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .bold))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
 
                 if let quiz = entry.quizStep, targetPoint != nil {
                     Text(quiz.prompt(l10n))
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text(entry.hook(l10n))
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if let feedback = feedbackMessage {
                     Text(feedback)
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .bold))
                         .foregroundColor(solved ? AppTheme.mintBottom : AppTheme.coralBottom)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -962,7 +981,7 @@ struct DailyKnowledgeQuizView: View {
 
                 if solved && !targetComment.isEmpty {
                     Text(targetComment)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .semibold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -982,7 +1001,7 @@ struct DailyKnowledgeQuizView: View {
                                 : l10n.localized(zh: "对比「贪心错着」反面教材", en: "Compare vs Greedy Mistake", ja: "失敗図と比較する", ko: "실수 변화도와 비교", zhHant: "對比「貪心錯著」反面教材"),
                             systemImage: showingCounterExample ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
                         )
-                        .font(.system(size: 12.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
@@ -991,7 +1010,7 @@ struct DailyKnowledgeQuizView: View {
 
                     if showingCounterExample, let c = counterComments[min(counterStep, max(0, counterComments.count - 1))], !c.isEmpty {
                         Text(c)
-                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .bold))
                             .foregroundColor(AppTheme.coralBottom)
                     }
                 }
@@ -1002,7 +1021,7 @@ struct DailyKnowledgeQuizView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: plan.themeCodex.symbolName)
-                        .font(.system(size: 15, weight: .black))
+                        .font(.system(size: 15, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.skyBottom)
                     Text(l10n.localized(
                         zh: "今日招法小百科：\(plan.themeCodex.term(l10n))",
@@ -1011,16 +1030,16 @@ struct DailyKnowledgeQuizView: View {
                         ko: "오늘의 바둑 용어: \(plan.themeCodex.term(l10n))",
                         zhHant: "今日招法小百科：\(plan.themeCodex.term(l10n))"
                     ))
-                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 }
 
                 Text(plan.themeCodex.metaphor(l10n))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .bold))
                     .foregroundColor(AppTheme.skyBottom)
 
                 Text(plan.themeCodex.explanation(l10n))
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1036,7 +1055,7 @@ struct DailyKnowledgeQuizView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 18, weight: .black))
+                            .font(.system(size: 18, weight: .black, design: .rounded))
                         Text(l10n.localized(
                             zh: "学会啦！返回每日道场",
                             en: "Got It! Back to Daily Dojo",
@@ -1044,7 +1063,7 @@ struct DailyKnowledgeQuizView: View {
                             ko: "배웠어요! 도장으로 돌아가기",
                             zhHant: "學會啦！返回每日道場"
                         ))
-                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 16, weight: .black))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

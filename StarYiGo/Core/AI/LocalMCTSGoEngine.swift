@@ -22,6 +22,20 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         await selectMove(for: state, color: color, level: level, ruleSet: .standard, coachingStyle: .standard)
     }
 
+    private func runCancellableBackground<T: Sendable>(
+        priority: TaskPriority = .userInitiated,
+        _ operation: @escaping @Sendable () -> T
+    ) async -> T {
+        let child = Task.detached(priority: priority) {
+            operation()
+        }
+        return await withTaskCancellationHandler {
+            await child.value
+        } onCancel: {
+            child.cancel()
+        }
+    }
+
     func selectMove(
         for state: GoBoardState,
         color: StoneColor,
@@ -29,10 +43,10 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         ruleSet: GameRuleSet,
         coachingStyle: AICoachingStyle = .standard
     ) async -> MoveAction {
-        await Task.detached(priority: .userInitiated) {
+        await runCancellableBackground { [self] in
             var random = SystemRandomNumberGenerator()
             return self.computeMoveSync(for: state, color: color, level: level, ruleSet: ruleSet, coachingStyle: coachingStyle, random: &random)
-        }.value
+        }
     }
 
     func suggestMoves(
@@ -40,12 +54,12 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         color: StoneColor,
         count: Int = 2
     ) async -> [MoveSuggestion] {
-        await Task.detached(priority: .userInitiated) {
+        await runCancellableBackground { [self] in
             let analysis = self.analyzePositionSync(for: state, color: color, maxVariations: max(2, count), iterations: state.size <= 9 ? 140 : 80)
             return analysis.topVariations.prefix(count).map { v in
                 MoveSuggestion(point: v.firstMove, score: v.winrateForMover, reason: v.reason, pvMoves: v.pvMoves)
             }
-        }.value
+        }
     }
 
     func analyzePosition(
@@ -53,18 +67,18 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         color: StoneColor,
         maxVariations: Int = 3
     ) async -> PositionAnalysis {
-        await Task.detached(priority: .userInitiated) {
+        await runCancellableBackground { [self] in
             self.analyzePositionSync(for: state, color: color, maxVariations: maxVariations, iterations: state.size <= 9 ? 160 : 90)
-        }.value
+        }
     }
 
     func analyzeGame(
         initialState: GoBoardState,
         moves: [GoMove]
     ) async -> GameReviewReport {
-        await Task.detached(priority: .userInitiated) {
+        await runCancellableBackground { [self] in
             self.analyzeGameSync(initialState: initialState, moves: moves)
-        }.value
+        }
     }
 
     /// Fast local tactical refutation used in Puzzle mode when a child plays an unscripted wrong move,

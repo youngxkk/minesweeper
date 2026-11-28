@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import os
 import UIKit
 
 struct UserProfile: Identifiable, Codable, Equatable, Sendable {
@@ -190,10 +191,12 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
     var defeatedBossIslandIds: Set<String> = []
     /// Starter 5x5 Bootcamp lesson completion stars
     var starterBootcampStars: [String: Int] = [:]
-    /// Campaign nodeId -> best star count (1...3) across all 4 Seas / 20 Islands / 100 Nodes
+    /// Campaign nodeId -> best star count (1...3) across all 5 Seas / 25 Islands / 125 Nodes
     var campaignNodeStars: [String: Int] = [:]
     /// Campaign nodeId -> highest mastery tier achieved (1 = Normal, 2 = Rotated/Flip, 3 = Exam Crown)
     var campaignNodeMasteryTier: [String: Int] = [:]
+    /// Campaign nodeId -> set of cleared 5-puzzle section indices (0..<node.sectionCount)
+    var campaignNodeClearedSections: [String: Set<Int>] = [:]
     /// Sea IDs unlocked via Placement Onboarding or Sea Skip Gate (e.g., "sea-2", "sea-3", "sea-4")
     var unlockedSeaIds: Set<String> = []
     /// Whether player has completed or dismissed initial placement onboarding
@@ -261,14 +264,19 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         if clamped >= Self.maxGauntletHearts {
             gauntletHeartLastRegenDate = nil
         } else if let lastDate = gauntletHeartLastRegenDate {
-            let elapsed = max(0, now.timeIntervalSince(lastDate))
-            let recovered = Int(elapsed / Self.heartRegenIntervalSeconds)
-            if recovered > 0 {
-                gauntletHearts = min(Self.maxGauntletHearts, clamped + recovered)
-                if gauntletHearts >= Self.maxGauntletHearts {
-                    gauntletHeartLastRegenDate = nil
-                } else {
-                    gauntletHeartLastRegenDate = lastDate.addingTimeInterval(Double(recovered) * Self.heartRegenIntervalSeconds)
+            // If device clock moved backward, clamp lastDate to `now` so regeneration doesn't freeze indefinitely.
+            if lastDate > now {
+                gauntletHeartLastRegenDate = now
+            } else {
+                let elapsed = now.timeIntervalSince(lastDate)
+                let recovered = Int(elapsed / Self.heartRegenIntervalSeconds)
+                if recovered > 0 {
+                    gauntletHearts = min(Self.maxGauntletHearts, clamped + recovered)
+                    if gauntletHearts >= Self.maxGauntletHearts {
+                        gauntletHeartLastRegenDate = nil
+                    } else {
+                        gauntletHeartLastRegenDate = lastDate.addingTimeInterval(Double(recovered) * Self.heartRegenIntervalSeconds)
+                    }
                 }
             }
         } else {
@@ -316,6 +324,7 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         starterBootcampStars: [String: Int] = [:],
         campaignNodeStars: [String: Int] = [:],
         campaignNodeMasteryTier: [String: Int] = [:],
+        campaignNodeClearedSections: [String: Set<Int>] = [:],
         unlockedSeaIds: Set<String> = [],
         didCompletePlacement: Bool = false,
         bestPuzzleRushScore: Int = 0,
@@ -334,6 +343,7 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         self.starterBootcampStars = starterBootcampStars
         self.campaignNodeStars = campaignNodeStars
         self.campaignNodeMasteryTier = campaignNodeMasteryTier
+        self.campaignNodeClearedSections = campaignNodeClearedSections
         self.unlockedSeaIds = unlockedSeaIds
         self.didCompletePlacement = didCompletePlacement
         self.bestPuzzleRushScore = bestPuzzleRushScore
@@ -356,6 +366,7 @@ struct PuzzleProgressStore: Codable, Equatable, Sendable {
         starterBootcampStars = try c.decodeIfPresent([String: Int].self, forKey: .starterBootcampStars) ?? [:]
         campaignNodeStars = try c.decodeIfPresent([String: Int].self, forKey: .campaignNodeStars) ?? [:]
         campaignNodeMasteryTier = try c.decodeIfPresent([String: Int].self, forKey: .campaignNodeMasteryTier) ?? [:]
+        campaignNodeClearedSections = try c.decodeIfPresent([String: Set<Int>].self, forKey: .campaignNodeClearedSections) ?? [:]
         unlockedSeaIds = try c.decodeIfPresent(Set<String>.self, forKey: .unlockedSeaIds) ?? []
         didCompletePlacement = try c.decodeIfPresent(Bool.self, forKey: .didCompletePlacement) ?? false
         bestPuzzleRushScore = try c.decodeIfPresent(Int.self, forKey: .bestPuzzleRushScore) ?? 0
@@ -633,11 +644,28 @@ struct PausedAIMatchSnapshot: Codable, Equatable, Sendable {
     let savedAt: Date
 }
 
+private struct StorageEnvelope<Payload: Codable>: Codable {
+    let schemaVersion: Int
+    let payload: Payload
+}
+
 final class StorageService {
     static let shared = StorageService()
 
+    private static let logger = Logger(subsystem: "super.ai.storm.staryigo", category: "StorageService")
+    private static let currentSchemaVersion = 1
+    private static let posixDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     private let defaults: UserDefaults
     private let photoHistoryDirectory: URL
+    private let dataDirectory: URL?
+    private let ioLock = NSLock()
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -651,16 +679,29 @@ final class StorageService {
         static let settings = "starpoint.appSettings.v1"
     }
 
-    init(defaults: UserDefaults = .standard, photoHistoryDirectory: URL? = nil) {
+    init(
+        defaults: UserDefaults = .standard,
+        photoHistoryDirectory: URL? = nil,
+        dataDirectory: URL? = nil
+    ) {
         self.defaults = defaults
+        let appSupportRoot = (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory)
+            .appendingPathComponent("StarYiGo", isDirectory: true)
         if let photoHistoryDirectory {
             self.photoHistoryDirectory = photoHistoryDirectory
         } else {
-            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? FileManager.default.temporaryDirectory
-            self.photoHistoryDirectory = base
-                .appendingPathComponent("StarYiGo", isDirectory: true)
+            self.photoHistoryDirectory = appSupportRoot
                 .appendingPathComponent("PhotoJudgeHistory", isDirectory: true)
+        }
+        if let dataDirectory {
+            self.dataDirectory = dataDirectory
+        } else if defaults === UserDefaults.standard {
+            self.dataDirectory = appSupportRoot
+                .appendingPathComponent("Data", isDirectory: true)
+        } else {
+            // Isolated test suites using custom UserDefaults stay self-contained in their suite.
+            self.dataDirectory = nil
         }
     }
 
@@ -670,15 +711,12 @@ final class StorageService {
             return profile
         }
         var profile: UserProfile
-        if let familyMember = load([UserProfile].self, forKey: Keys.familyProfiles)?.first {
+        if let familyMember = loadHeavy([UserProfile].self, forKey: Keys.familyProfiles)?.first {
             profile = familyMember
         } else {
             profile = defaultStarterProfile()
             // Older first launches could save placement before saving the player's identity.
-            let prefix = Keys.puzzles + "."
-            let owners = defaults.dictionaryRepresentation().keys.compactMap { key in
-                key.hasPrefix(prefix) ? UUID(uuidString: String(key.dropFirst(prefix.count))) : nil
-            }
+            let owners = scopedPuzzleOwnerIds()
             if owners.count == 1 { profile.id = owners[0] }
         }
         normalizeDailyCounters(&profile)
@@ -688,73 +726,76 @@ final class StorageService {
 
     func saveProfile(_ profile: UserProfile) {
         save(profile, forKey: Keys.profile)
-        var family = load([UserProfile].self, forKey: Keys.familyProfiles) ?? []
+        var family = loadHeavy([UserProfile].self, forKey: Keys.familyProfiles) ?? []
         if let idx = family.firstIndex(where: { $0.id == profile.id }) {
             family[idx] = profile
         } else {
             family.insert(profile, at: 0)
         }
-        save(family, forKey: Keys.familyProfiles)
+        saveHeavy(family, forKey: Keys.familyProfiles)
     }
 
     func loadFamilyProfiles() -> [UserProfile] {
-        if let list = load([UserProfile].self, forKey: Keys.familyProfiles), !list.isEmpty { return list }
+        if let list = loadHeavy([UserProfile].self, forKey: Keys.familyProfiles), !list.isEmpty { return list }
         return [loadProfile()]
     }
 
     func saveFamilyProfiles(_ profiles: [UserProfile]) {
-        save(profiles, forKey: Keys.familyProfiles)
+        saveHeavy(profiles, forKey: Keys.familyProfiles)
     }
 
     func loadPausedAIMatch(for profileId: UUID) -> PausedAIMatchSnapshot? {
-        load(PausedAIMatchSnapshot.self, forKey: "\(Keys.pausedAIMatch).\(profileId.uuidString)")
+        loadHeavy(PausedAIMatchSnapshot.self, forKey: "\(Keys.pausedAIMatch).\(profileId.uuidString)")
     }
 
     func savePausedAIMatch(_ snapshot: PausedAIMatchSnapshot?, for profileId: UUID) {
         let key = "\(Keys.pausedAIMatch).\(profileId.uuidString)"
         if let snapshot {
-            save(snapshot, forKey: key)
+            saveHeavy(snapshot, forKey: key)
         } else {
-            defaults.removeObject(forKey: key)
+            removeHeavy(forKey: key)
         }
     }
 
     func loadPuzzleProgress(for profileId: UUID) -> PuzzleProgressStore {
         let key = "\(Keys.puzzles).\(profileId.uuidString)"
-        if let progress = load(PuzzleProgressStore.self, forKey: key) {
+        if let progress = loadHeavy(PuzzleProgressStore.self, forKey: key) {
             return progress
         }
 
         // The unscoped legacy store belongs to the profile active during migration.
-        let hasScopedProgress = defaults.dictionaryRepresentation().keys.contains {
-            $0.hasPrefix("\(Keys.puzzles).")
-        }
+        let hasScopedProgress = hasAnyScopedPuzzleStore()
         guard !hasScopedProgress,
               let legacy = load(PuzzleProgressStore.self, forKey: Keys.puzzles) else {
             return PuzzleProgressStore()
         }
-        save(legacy, forKey: key)
+        saveHeavy(legacy, forKey: key)
         return legacy
     }
 
     func savePuzzleProgress(_ store: PuzzleProgressStore, for profileId: UUID) {
-        save(store, forKey: "\(Keys.puzzles).\(profileId.uuidString)")
+        saveHeavy(store, forKey: "\(Keys.puzzles).\(profileId.uuidString)")
+    }
+
+    func deleteProfileData(for profileId: UUID) {
+        removeHeavy(forKey: "\(Keys.puzzles).\(profileId.uuidString)")
+        removeHeavy(forKey: "\(Keys.pausedAIMatch).\(profileId.uuidString)")
     }
 
     func loadSavedGames() -> [SavedGameRecord] {
-        load([SavedGameRecord].self, forKey: Keys.archive) ?? []
+        loadHeavy([SavedGameRecord].self, forKey: Keys.archive) ?? []
     }
 
     func saveSavedGames(_ games: [SavedGameRecord]) {
-        save(games, forKey: Keys.archive)
+        saveHeavy(games, forKey: Keys.archive)
     }
 
     func loadPhotoJudgeHistory() -> [PhotoJudgeRecord] {
-        load([PhotoJudgeRecord].self, forKey: Keys.photoJudgeHistory) ?? []
+        loadHeavy([PhotoJudgeRecord].self, forKey: Keys.photoJudgeHistory) ?? []
     }
 
     func savePhotoJudgeHistory(_ records: [PhotoJudgeRecord]) {
-        save(records, forKey: Keys.photoJudgeHistory)
+        saveHeavy(records, forKey: Keys.photoJudgeHistory)
     }
 
     func savePhotoJudgeImage(_ image: UIImage, for recordId: UUID) -> String? {
@@ -817,6 +858,22 @@ final class StorageService {
         save(settings, forKey: Keys.settings)
     }
 
+    #if DEBUG
+    private static let debugModeEnabledKey = "starpoint.debug.modeEnabled.v1"
+
+    func loadDebugModeEnabled() -> Bool {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        return defaults.bool(forKey: Self.debugModeEnabledKey)
+    }
+
+    func saveDebugModeEnabled(_ enabled: Bool) {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        defaults.set(enabled, forKey: Self.debugModeEnabledKey)
+    }
+    #endif
+
     func defaultStarterProfile() -> UserProfile {
         let preferred = Locale.preferredLanguages.first ?? "en"
         let name: String
@@ -827,18 +884,21 @@ final class StorageService {
         } else if preferred.hasPrefix("ja") {
             name = "StarYiチャレンジャー"
         } else if preferred.hasPrefix("ko") {
-            name = "화점 도전자"
+            name = "별이 도전자"
         } else {
             name = "Star Player"
         }
         return UserProfile(nickname: name)
     }
 
-    private func normalizeDailyCounters(_ profile: inout UserProfile) {
+    @discardableResult
+    func normalizeDailyCounters(_ profile: inout UserProfile) -> Bool {
         let today = Self.todayStamp()
+        var changed = false
         if profile.dailyDateStamp != today {
             profile.dailyDateStamp = today
             profile.dailyCompletedCount = 0
+            changed = true
         }
         if profile.dailyDojoDateStamp != today {
             profile.dailyDojoDateStamp = today
@@ -847,28 +907,153 @@ final class StorageService {
             profile.dailyDojoCoreFirstTryIds = []
             profile.dailyDojoKnowledgeDone = false
             profile.dailyDojoStampClaimedToday = profile.dailyDojoStampDates.contains(today)
+            changed = true
         }
+        return changed
     }
 
     static func todayStamp(date: Date = Date()) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .autoupdatingCurrent
+        let comps = cal.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            comps.year ?? 2026,
+            comps.month ?? 1,
+            comps.day ?? 1
+        )
     }
 
     static func yesterdayStamp(date: Date = Date()) -> String {
-        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .autoupdatingCurrent
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: date) ?? date
         return todayStamp(date: yesterday)
     }
 
+    private func fileURL(forKey key: String) -> URL? {
+        dataDirectory?.appendingPathComponent("\(key).json")
+    }
+
+    private func scopedPuzzleOwnerIds() -> [UUID] {
+        let prefix = Keys.puzzles + "."
+        var ids = Set<UUID>()
+        for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(prefix) {
+            if let uuid = UUID(uuidString: String(key.dropFirst(prefix.count))) {
+                ids.insert(uuid)
+            }
+        }
+        if let dir = dataDirectory,
+           let files = try? FileManager.default.contentsOfDirectory(atPath: dir.path) {
+            for file in files where file.hasPrefix(prefix) && file.hasSuffix(".json") {
+                let raw = String(file.dropFirst(prefix.count).dropLast(5))
+                if let uuid = UUID(uuidString: raw) {
+                    ids.insert(uuid)
+                }
+            }
+        }
+        return Array(ids)
+    }
+
+    private func hasAnyScopedPuzzleStore() -> Bool {
+        !scopedPuzzleOwnerIds().isEmpty
+    }
+
+    private func loadHeavy<T: Codable>(_ type: T.Type, forKey key: String) -> T? {
+        guard let url = fileURL(forKey: key) else {
+            return load(type, forKey: key)
+        }
+        ioLock.lock()
+        defer { ioLock.unlock() }
+
+        let fm = FileManager.default
+        if fm.fileExists(atPath: url.path) {
+            do {
+                let data = try Data(contentsOf: url)
+                if let envelope = try? decoder.decode(StorageEnvelope<T>.self, from: data) {
+                    return envelope.payload
+                }
+                return try decoder.decode(type, from: data)
+            } catch {
+                Self.logger.error("Failed to decode storage file \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                let backup = url.appendingPathExtension("corrupt.\(Int(Date().timeIntervalSince1970))")
+                try? fm.moveItem(at: url, to: backup)
+                return nil
+            }
+        }
+
+        // One-time transparent migration from legacy UserDefaults blob to atomic file.
+        if let legacyData = defaults.data(forKey: key) {
+            do {
+                let decoded = try decoder.decode(type, from: legacyData)
+                if writeAtomicEnvelopeUnlocked(decoded, to: url) {
+                    defaults.removeObject(forKey: key)
+                }
+                return decoded
+            } catch {
+                Self.logger.error("Failed to migrate legacy UserDefaults key \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        return nil
+    }
+
+    private func saveHeavy<T: Codable>(_ value: T, forKey key: String) {
+        guard let url = fileURL(forKey: key) else {
+            save(value, forKey: key)
+            return
+        }
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        if writeAtomicEnvelopeUnlocked(value, to: url), defaults.object(forKey: key) != nil {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func removeHeavy(forKey key: String) {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        if let url = fileURL(forKey: key) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        defaults.removeObject(forKey: key)
+    }
+
+    @discardableResult
+    private func writeAtomicEnvelopeUnlocked<T: Codable>(_ value: T, to url: URL) -> Bool {
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let envelope = StorageEnvelope(schemaVersion: Self.currentSchemaVersion, payload: value)
+            let data = try encoder.encode(envelope)
+            try data.write(to: url, options: [.atomic])
+            return true
+        } catch {
+            Self.logger.error("Failed to write atomic storage file \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     private func load<T: Decodable>(_ type: T.Type, forKey key: String) -> T? {
+        ioLock.lock()
+        defer { ioLock.unlock() }
         guard let data = defaults.data(forKey: key) else { return nil }
-        return try? decoder.decode(type, from: data)
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            Self.logger.error("Failed to decode UserDefaults key \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     private func save<T: Encodable>(_ value: T, forKey key: String) {
-        if let data = try? encoder.encode(value) {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        do {
+            let data = try encoder.encode(value)
             defaults.set(data, forKey: key)
+        } catch {
+            Self.logger.error("Failed to encode UserDefaults key \(key, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 }

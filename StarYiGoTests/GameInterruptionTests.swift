@@ -422,6 +422,76 @@ struct GameInterruptionTests {
         resumed.setSuspended(true)
     }
 
+    @Test func startingNewAIMatchHidesAndClearsResumeLastMatchOnceHumanMoves() async throws {
+        let suite = "StarYiGoTests.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let app = AppState(storage: StorageService(defaults: defaults))
+
+        // First match: play a move and save as paused AI match
+        let previous = GameViewModel(
+            boardSize: .nine,
+            mode: .vsAI(difficulty: .fox, playerColor: .black),
+            aiEngine: DelayedReply(),
+            appState: app
+        )
+        let firstMove = BoardPoint(row: 4, col: 4)
+        previous.handleBoardTap(at: firstMove)
+        previous.handleBoardTap(at: firstMove)
+        let prevReply = try #require(previous.aiTask)
+        await prevReply.value
+        let snapshot = try #require(previous.makePausedAIMatchSnapshot())
+        app.savePausedAIMatch(snapshot)
+        previous.setSuspended(true)
+
+        // Enter a fresh AI match as Black: resume button should be offered before any move
+        let freshBlack = GameViewModel(
+            boardSize: .nine,
+            mode: .vsAI(difficulty: .fox, playerColor: .black),
+            aiEngine: DelayedReply(),
+            appState: app
+        )
+        #expect(app.pausedAIMatch != nil)
+        #expect(freshBlack.canOfferResumePausedAIMatch)
+
+        // First tap in double-tap mode is only a preview — resume button should still be offered
+        let newMove = BoardPoint(row: 3, col: 3)
+        freshBlack.handleBoardTap(at: newMove)
+        #expect(freshBlack.canOfferResumePausedAIMatch)
+        #expect(app.pausedAIMatch != nil)
+
+        // Second tap confirms placement — resume button is hidden and stale paused match is cleared
+        freshBlack.handleBoardTap(at: newMove)
+        #expect(!freshBlack.canOfferResumePausedAIMatch)
+        #expect(app.pausedAIMatch == nil)
+        freshBlack.setSuspended(true)
+
+        // Also verify playing as White: AI's opening black move alone must not hide resume button
+        app.savePausedAIMatch(snapshot)
+        let freshWhite = GameViewModel(
+            boardSize: .nine,
+            mode: .vsAI(difficulty: .fox, playerColor: .white),
+            aiEngine: DelayedReply(),
+            appState: app
+        )
+        let aiOpening = try #require(freshWhite.aiTask)
+        await aiOpening.value
+        #expect(freshWhite.moves.count == 1)
+        #expect(!freshWhite.hasHumanMoved)
+        #expect(freshWhite.canOfferResumePausedAIMatch)
+        #expect(app.pausedAIMatch != nil)
+
+        // Once White plays a move, resume button is hidden and paused match is cleared
+        let whiteMove = BoardPoint(row: 5, col: 5)
+        freshWhite.handleBoardTap(at: whiteMove)
+        freshWhite.handleBoardTap(at: whiteMove)
+        #expect(freshWhite.hasHumanMoved)
+        #expect(!freshWhite.canOfferResumePausedAIMatch)
+        #expect(app.pausedAIMatch == nil)
+        freshWhite.setSuspended(true)
+    }
+
     private func makeMatch() -> GameViewModel {
         GameViewModel(
             boardSize: .nine,

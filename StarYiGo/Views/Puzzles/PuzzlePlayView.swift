@@ -40,7 +40,11 @@ struct PuzzlePlayView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            if viewModel.isDailyChallenge {
+                SceneBackdrop.morningDojo
+            } else {
+                AppTheme.brightArenaBackground
+            }
 
             GeometryReader { geo in
                 let w = geo.size.width
@@ -219,14 +223,14 @@ struct PuzzlePlayView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(viewModel.puzzle.rankBadge)
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
                         .background(Capsule().fill(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)))
 
                     Text(l10n.t(viewModel.effectivePlayerColor == .black ? "puzzle.play.blackToPlay" : "puzzle.play.whiteToPlay"))
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -234,14 +238,14 @@ struct PuzzlePlayView: View {
 
                     if viewModel.isDailyChallenge {
                         Text(l10n.localized(zh: "无提示修行", en: "No-Hint Dojo", ja: "ヒントなし", ko: "힌트 없음", zhHant: "無提示修行"))
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Capsule().fill(AppTheme.coralBottom))
                     } else if viewModel.isExamMode {
                         Text(l10n.localized(zh: "考场模式", en: "Exam", ja: "試験モード", ko: "시험 모드", zhHant: "考場模式"))
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(.white)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -251,14 +255,14 @@ struct PuzzlePlayView: View {
                     Spacer()
 
                     Text(l10n.t("puzzle.play.attempts", viewModel.attempts))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
 
                 Text(viewModel.isStarterBootcamp || viewModel.showHintText || isSolved
                      ? viewModel.puzzle.title(l10n)
                      : viewModel.puzzle.category.displayTitle(isChinese: l10n.language.isChinese))
-                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 22, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Text(viewModel.isStarterBootcamp || viewModel.showHintText || isSolved
@@ -288,7 +292,7 @@ struct PuzzlePlayView: View {
                             ko: viewModel.effectivePlayerColor == .black ? "흑선: 최선의 한 수를 찾아보세요 (막힐 때만 우측 상단 💡 탭)." : "백선: 최선의 한 수를 찾아보세요 (막힐 때만 우측 상단 💡 탭).",
                             zhHant: viewModel.effectivePlayerColor == .black ? "黑先：請找出盤面唯一正解（如實在卡關，可點右上角 💡 查看提示）。" : "白先：請找出盤面唯一正解（如實在卡關，可點右上角 💡 查看提示）。"
                         )))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 15, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -304,7 +308,7 @@ struct PuzzlePlayView: View {
                             let isFirstTry = viewModel.wrongCount == 0
                             HStack(spacing: 6) {
                                 Image(systemName: isFirstTry ? "crown.fill" : "flame.fill")
-                                    .font(.system(size: 16, weight: .black))
+                                    .font(.system(size: 16, weight: .black, design: .rounded))
                                 Text(isFirstTry
                                      ? l10n.localized(zh: "一击必杀 · 金冠通关！", en: "One-Shot Gold Crown!", ja: "一撃クリア・金冠！", ko: "원샷 금관 클리어!", zhHant: "一擊必殺 · 金冠通關！")
                                      : l10n.localized(
@@ -314,7 +318,7 @@ struct PuzzlePlayView: View {
                                         ko: "불굴의 도전! \(viewModel.wrongCount + 1)번 만에 스스로 해결!",
                                         zhHant: "百折不撓 · 試了 \(viewModel.wrongCount + 1) 次靠自己解出！"
                                      ))
-                                    .font(.system(size: 13.5, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 13.5, weight: .black))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -332,7 +336,7 @@ struct PuzzlePlayView: View {
                             HStack(spacing: 8) {
                                 ForEach(1...3, id: \.self) { idx in
                                     Image(systemName: idx <= stars ? "star.fill" : "star")
-                                        .font(.system(size: 32))
+                                        .font(.system(size: 32, design: .rounded))
                                         .foregroundStyle(
                                             idx <= stars
                                             ? AnyShapeStyle(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
@@ -342,7 +346,7 @@ struct PuzzlePlayView: View {
                             }
                         }
                         Text(l10n.t("puzzle.play.solved"))
-                            .font(.system(size: 19, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 19, weight: .black))
                             .foregroundColor(AppTheme.mintBottom)
 
                         // Authentic Go Term mastery badge (tap to see real-Go explanation + metaphor!)
@@ -355,11 +359,11 @@ struct PuzzlePlayView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: term.symbolName)
-                                        .font(.system(size: 12, weight: .black))
-                                    Text(l10n.t("puzzle.play.learnedTerm", term.term(l10n)))
                                         .font(.system(size: 12, weight: .black, design: .rounded))
+                                    Text(l10n.t("puzzle.play.learnedTerm", term.term(l10n)))
+                                        .font(AppFont.rounded(size: 12, weight: .black))
                                     Image(systemName: "info.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(.system(size: 12, design: .rounded))
                                 }
                                 .foregroundColor(AppTheme.skyBottom)
                                 .padding(.horizontal, 12)
@@ -378,7 +382,7 @@ struct PuzzlePlayView: View {
                     VStack(spacing: 8) {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.uturn.backward.circle.fill")
-                                .font(.system(size: 22))
+                                .font(.system(size: 22, design: .rounded))
                                 .foregroundColor(AppTheme.coralBottom)
                             Text(viewModel.isDailyChallenge
                                  ? l10n.localized(
@@ -389,7 +393,7 @@ struct PuzzlePlayView: View {
                                     zhHant: "第 \(viewModel.wrongCount) 次試錯！看看對手怎麼反擊"
                                  )
                                  : l10n.t("puzzle.play.tryAgain"))
-                                .font(.system(size: 14, weight: .heavy, design: .rounded))
+                                .font(AppFont.rounded(size: 14, weight: .heavy))
                                 .foregroundColor(AppTheme.coralBottom)
                         }
                         Text(viewModel.isDailyChallenge
@@ -415,7 +419,7 @@ struct PuzzlePlayView: View {
                                 ko: "바둑판에 1~3수 더 두어 실패 이유를 보거나 아래에서 정답을 확인하세요!",
                                 zhHant: "可在棋盤繼續試下 1~3 手看失敗原因，或點下方查看正解！"
                              ))
-                        .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
 
@@ -425,7 +429,7 @@ struct PuzzlePlayView: View {
                                     viewModel.resetCurrentPuzzle()
                                 } label: {
                                     Label(l10n.localized(zh: "立刻再试一次", en: "Try Again Now", ja: "すぐ再挑戦", ko: "바로 다시 도전", zhHant: "立刻再試一次"), systemImage: "arrow.counterclockwise")
-                                        .font(.system(size: 12.5, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 12.5, weight: .black))
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 7)
@@ -438,7 +442,7 @@ struct PuzzlePlayView: View {
                                         appState.popRoute()
                                     } label: {
                                         Text(l10n.localized(zh: "先收错题本", en: "Save for Later", ja: "復習帳へ", ko: "오답노트에 저장", zhHant: "先收錯題本"))
-                                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                                            .font(AppFont.rounded(size: 12, weight: .heavy))
                                             .foregroundColor(AppTheme.inkSecondary)
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 7)
@@ -452,7 +456,7 @@ struct PuzzlePlayView: View {
                                 viewModel.playCorrectSolution()
                             } label: {
                                 Label(l10n.localized(zh: "演示正解变化", en: "Play Solution", ja: "正解手順を再生", ko: "정답 수순 재생", zhHant: "演示正解變化"), systemImage: "play.circle.fill")
-                                    .font(.system(size: 12.5, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 12.5, weight: .black))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 7)
@@ -468,7 +472,7 @@ struct PuzzlePlayView: View {
                     VStack(spacing: 8) {
                         ProgressView().tint(AppTheme.skyBottom)
                         Text(l10n.localized(zh: "正在演示正解变化图...", en: "Playing official solution...", ja: "正解手順を再生中...", ko: "정답 변화도를 재생하는 중...", zhHant: "正在演示正解變化圖..."))
-                            .font(.system(size: 14, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 14, weight: .black))
                             .foregroundColor(AppTheme.skyBottom)
                     }
                     .frame(maxWidth: .infinity)
@@ -478,10 +482,10 @@ struct PuzzlePlayView: View {
                     if viewModel.showHintText {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "lightbulb.fill")
-                                .font(.system(size: 20))
+                                .font(.system(size: 20, design: .rounded))
                                 .foregroundColor(AppTheme.sunBottom)
                             Text(viewModel.puzzle.hint(l10n))
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 14, weight: .bold))
                                 .foregroundColor(AppTheme.inkPrimary)
                         }
                         .padding(16)
@@ -494,7 +498,7 @@ struct PuzzlePlayView: View {
                         .transition(.opacity)
                     } else {
                         Text(l10n.t("game.libertiesTip"))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .semibold))
                             .foregroundColor(AppTheme.inkSecondary)
                             .multilineTextAlignment(.center)
                     }
@@ -511,7 +515,7 @@ struct PuzzlePlayView: View {
                     viewModel.resetCurrentPuzzle()
                 } label: {
                     Label(l10n.t("puzzle.play.reset"), systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -527,9 +531,9 @@ struct PuzzlePlayView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Text(l10n.t("puzzle.play.next"))
-                                        .font(.system(size: 18, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 18, weight: .black))
                                     Image(systemName: "arrow.right.circle.fill")
-                                        .font(.system(size: 20))
+                                        .font(.system(size: 20, design: .rounded))
                                 }
                                 .foregroundColor(.white)
                                 .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
@@ -545,7 +549,7 @@ struct PuzzlePlayView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "crown.fill")
-                                        .font(.system(size: 18, weight: .black))
+                                        .font(.system(size: 18, weight: .black, design: .rounded))
                                     Text(l10n.localized(
                                         zh: "返回每日道场",
                                         en: "Back to Daily Dojo",
@@ -553,7 +557,7 @@ struct PuzzlePlayView: View {
                                         ko: "매일 도장으로",
                                         zhHant: "返回每日道場"
                                     ))
-                                        .font(.system(size: 17, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 17, weight: .black))
                                 }
                                 .foregroundColor(.white)
                                 .shadow(color: AppTheme.sunRim.opacity(0.45), radius: 1, y: 1.5)
@@ -568,7 +572,7 @@ struct PuzzlePlayView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "arrow.triangle.2.circlepath")
-                                        .font(.system(size: 17, weight: .black))
+                                        .font(.system(size: 17, weight: .black, design: .rounded))
                                     Text(l10n.localized(
                                         zh: "换个角度再练一次",
                                         en: "Flip & Practice Again",
@@ -576,7 +580,7 @@ struct PuzzlePlayView: View {
                                         ko: "방향 바꿔 다시 연습",
                                         zhHant: "換個角度再練一次"
                                     ))
-                                    .font(.system(size: 16, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 16, weight: .black))
                                 }
                                 .foregroundColor(.white)
                                 .shadow(color: AppTheme.skyRim.opacity(0.45), radius: 1, y: 1.5)

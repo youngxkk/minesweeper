@@ -61,12 +61,13 @@ struct GoClock: Equatable, Codable, Sendable {
         case .byoyomi(let mainMinutes, let periodSeconds, let periods):
             let mainSecs = max(0, mainMinutes) * 60
             let startByo = (mainSecs == 0)
+            let clampedPeriod = max(5, periodSeconds)
             initial = PlayerClockState(
                 mainSecondsRemaining: mainSecs,
                 inByoyomi: startByo,
-                byoyomiSecondsRemaining: periodSeconds,
+                byoyomiSecondsRemaining: clampedPeriod,
                 byoyomiPeriodsRemaining: max(1, periods),
-                periodDuration: max(5, periodSeconds)
+                periodDuration: clampedPeriod
             )
         }
         self.black = initial

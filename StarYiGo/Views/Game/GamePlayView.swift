@@ -5,6 +5,53 @@
 
 import SwiftUI
 
+/// Isolated clock pill observing `GameClockDisplayState` via `@Observable` so 1 Hz clock ticks
+/// ONLY re-render this small badge instead of invalidating the entire `GamePlayView` + `GoBoardView`.
+private struct GameClockPillView: View {
+    let clockDisplay: GameClockDisplayState
+    let color: StoneColor
+    let isActiveTurn: Bool
+
+    var body: some View {
+        if clockDisplay.clock.isActive {
+            let pClock = clockDisplay.clock.state(for: color)
+            HStack(spacing: 4) {
+                Image(systemName: pClock.inByoyomi ? "timer" : "clock.fill")
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                Text(pClock.formattedDisplay)
+                    .font(AppFont.rounded(size: 12.5, weight: .black))
+                    .monospacedDigit()
+            }
+            .foregroundColor(pClock.isUrgentCountdown ? .white : (isActiveTurn ? AppTheme.skyBottom : AppTheme.inkSecondary))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(
+                    pClock.isUrgentCountdown
+                    ? AnyShapeStyle(AppTheme.coralBottom)
+                    : AnyShapeStyle(isActiveTurn ? AppTheme.skyTop.opacity(0.16) : AppTheme.canvasBackground)
+                )
+            )
+        } else {
+            HStack(spacing: 4) {
+                Image(systemName: isActiveTurn ? "stopwatch.fill" : "clock")
+                    .font(.system(size: 10, weight: .black, design: .rounded))
+                Text(clockDisplay.formattedElapsedTime(for: color))
+                    .font(AppFont.rounded(size: 12.5, weight: .black))
+                    .monospacedDigit()
+            }
+            .foregroundColor(isActiveTurn ? AppTheme.skyBottom : AppTheme.inkSecondary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(
+                    isActiveTurn ? AppTheme.skyTop.opacity(0.16) : AppTheme.canvasBackground
+                )
+            )
+        }
+    }
+}
+
 struct GamePlayView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
@@ -22,6 +69,10 @@ struct GamePlayView: View {
     @State private var aiThinkingNudgeShake: CGFloat = 0
     @State private var aiThinkingNudgeFlash = false
 
+    private func offersBoardFocus(for width: CGFloat) -> Bool {
+        width < 680 && viewModel.boardSize == .nineteen && !viewModel.isTabletopFaceToFace
+    }
+
     private var offersBoardFocus: Bool {
         UIDevice.current.userInterfaceIdiom == .phone &&
             viewModel.boardSize == .nineteen && !viewModel.isTabletopFaceToFace
@@ -38,7 +89,7 @@ struct GamePlayView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            (viewModel.isTwoPlayer ? SceneBackdrop.tabletop : .seasideRoom)
 
             GeometryReader { geo in
                 let w = geo.size.width
@@ -48,7 +99,7 @@ struct GamePlayView: View {
                 Group {
                     if viewModel.isTwoPlayer && viewModel.isTabletopFaceToFace {
                         tabletopTwoPlayerLayout(w: w, h: h, pad: pad)
-                    } else if w < 600 {
+                    } else if w < 720 || h > w * 1.15 {
                         compactPortraitArena(w: w, h: h, pad: pad)
                     } else {
                         standardLandscapeArena(w: w, h: h, pad: pad)
@@ -158,6 +209,26 @@ struct GamePlayView: View {
         .animation(.spring(response: 0.30, dampingFraction: 0.78), value: showResultOverlay)
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: quickTermPopover)
         .toolbar(.hidden, for: .navigationBar)
+        .background {
+            // iPadOS Magic Keyboard shortcuts for fluid play
+            Group {
+                Button("") { viewModel.undo() }
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!viewModel.isUndoAllowed)
+                Button("") { viewModel.passTurn() }
+                    .keyboardShortcut("p", modifiers: .command)
+                    .disabled(!viewModel.isHumansTurn)
+                Button("") { viewModel.requestHint() }
+                    .keyboardShortcut("h", modifiers: .command)
+                    .disabled(!viewModel.isHumansTurn || viewModel.isExamMatch)
+                Button("") { viewModel.confirmPendingPlacement() }
+                    .keyboardShortcut(.return, modifiers: [])
+                    .disabled(viewModel.pendingPoint == nil)
+            }
+            .frame(width: 0, height: 0)
+            .opacity(0.001)
+            .accessibilityHidden(true)
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             viewModel.setSuspended(phase != .active)
         }
@@ -460,12 +531,12 @@ struct GamePlayView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         Text(l10n.t(color == .black ? "stone.black" : "stone.white"))
-                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 18, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
 
                         if let target = viewModel.ruleSet.captureTarget {
                             Text(l10n.t("game.captureGoalBadge", captures, target))
-                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 11, weight: .black))
                                 .foregroundColor(AppTheme.coralBottom)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
@@ -474,7 +545,7 @@ struct GamePlayView: View {
                     }
 
                     Text(isTurn ? l10n.t(color == .black ? "game.turn.black" : "game.turn.white") : l10n.t("game.moveCount", viewModel.moves.count))
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(isTurn ? .white : AppTheme.inkSecondary)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 4)
@@ -490,11 +561,36 @@ struct GamePlayView: View {
 
             Spacer(minLength: 8)
 
-            // Right: Action buttons & Parent-Child Kid Assist toggle
+            // Right: Action buttons, Confirm Placement / Dead-Stone Confirm & Parent-Child Kid Assist toggle
             HStack(spacing: 9) {
+                if viewModel.isMarkingDeadStones {
+                    Button {
+                        viewModel.confirmDeadStoneScore()
+                    } label: {
+                        Label(l10n.t("game.deadStones.confirm"), systemImage: "checkmark.circle.fill")
+                            .font(AppFont.rounded(size: 12, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                } else if viewModel.showsConfirmPlacementButton && viewModel.pendingPoint != nil && isTurn {
+                    Button {
+                        viewModel.confirmPendingPlacement()
+                    } label: {
+                        Label(l10n.t("game.action.confirmMove"), systemImage: "checkmark.circle.fill")
+                            .font(AppFont.rounded(size: 12, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                }
+
                 GameCircleButton(icon: "arrow.uturn.backward", palette: .snow, tint: AppTheme.inkPrimary, size: 44, playTapSound: false) {
                     viewModel.undo()
                 }
+                .accessibilityLabel(l10n.t("game.action.undo"))
                 .disabled(!viewModel.isUndoAllowed)
                 .opacity(viewModel.isUndoAllowed ? 1 : 0.45)
 
@@ -502,6 +598,7 @@ struct GamePlayView: View {
                     GameCircleButton(icon: "lightbulb.fill", palette: .sun, tint: .white, size: 44) {
                         viewModel.requestHint()
                     }
+                    .accessibilityLabel(l10n.t("game.action.hint"))
                     .disabled(!isTurn)
                     .opacity(isTurn ? 1 : 0.45)
                 }
@@ -509,6 +606,7 @@ struct GamePlayView: View {
                 GameCircleButton(icon: "hand.raised.fill", palette: .snow, tint: AppTheme.inkPrimary, size: 44) {
                     viewModel.passTurn()
                 }
+                .accessibilityLabel(l10n.t("game.action.pass"))
                 .disabled(!isTurn)
                 .opacity(isTurn ? 1 : 0.45)
 
@@ -517,7 +615,7 @@ struct GamePlayView: View {
                     SoundAndHapticsManager.shared.playUITap()
                 } label: {
                     Label(l10n.t("game.tabletop.kidAssist"), systemImage: hasKidAssist ? "sparkles" : "sparkle")
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(hasKidAssist ? .white : AppTheme.sunBottom)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -540,10 +638,7 @@ struct GamePlayView: View {
     // MARK: - Glossy Top Bar (with Tappable Komi Term Explainer!)
 
     private var canShowResumeLastMatchButton: Bool {
-        !viewModel.isTwoPlayer
-            && !viewModel.isExamMatch
-            && viewModel.bossIslandId == nil
-            && viewModel.tacticalScenario == nil
+        viewModel.canOfferResumePausedAIMatch
             && appState.pausedAIMatch != nil
     }
 
@@ -565,7 +660,7 @@ struct GamePlayView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.counterclockwise.circle.fill")
-                                .font(.system(size: 15, weight: .black))
+                                .font(.system(size: 15, weight: .black, design: .rounded))
                             Text(l10n.localized(
                                 zh: "继续上局",
                                 en: "Resume Last",
@@ -573,7 +668,7 @@ struct GamePlayView: View {
                                 ko: "이어서 두기",
                                 zhHant: "繼續上局"
                             ))
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 14, weight: .heavy))
                             .lineLimit(1)
                         }
                         .foregroundColor(.white)
@@ -631,7 +726,7 @@ struct GamePlayView: View {
                         }
                     } label: {
                         Label(l10n.t("game.action.tabletop"), systemImage: "rectangle.portrait.rotate")
-                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .heavy))
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
@@ -652,7 +747,7 @@ struct GamePlayView: View {
                     }
                 } label: {
                     Image(systemName: "circle.grid.3x3.fill")
-                        .font(.system(size: 18, weight: .black))
+                        .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
                         .background(
@@ -667,6 +762,7 @@ struct GamePlayView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("GameActionsMenu")
+                .accessibilityLabel(l10n.localized(zh: "对局菜单", en: "Game Menu", ja: "対局メニュー", ko: "대국 메뉴", zhHant: "對局選單"))
             }
         }
     }
@@ -802,7 +898,7 @@ struct GamePlayView: View {
             }
         } label: {
             Image(systemName: isOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                .font(.system(size: 17, weight: .black))
+                .font(.system(size: 17, weight: .black, design: .rounded))
                 .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
                 .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
                 .background(
@@ -842,7 +938,7 @@ struct GamePlayView: View {
         } label: {
             ZStack {
                 Image(systemName: "person.wave.2.fill")
-                    .font(.system(size: 17, weight: .black))
+                    .font(.system(size: 17, weight: .black, design: .rounded))
                     .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
 
                 if !isOn {
@@ -929,7 +1025,7 @@ struct GamePlayView: View {
                         .frame(width: stoneSize, height: stoneSize)
                     case .moveNumbers:
                         Text("1")
-                            .font(.system(size: 14.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 14.5, weight: .black))
                             .foregroundColor(.white)
                     case .standard:
                         Circle()
@@ -976,7 +1072,7 @@ struct GamePlayView: View {
                     ko: "착수 방식",
                     zhHant: "落子方式"
                 ))
-                .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .heavy))
                 .foregroundColor(Color.white.opacity(0.66))
                 .padding(.horizontal, 4)
 
@@ -1048,7 +1144,7 @@ struct GamePlayView: View {
                         ko: "AI 생각 속도",
                         zhHant: "AI 思考節奏"
                     ))
-                    .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 11.5, weight: .heavy))
                     .foregroundColor(Color.white.opacity(0.66))
                     .padding(.horizontal, 4)
 
@@ -1063,7 +1159,7 @@ struct GamePlayView: View {
                                 SoundAndHapticsManager.shared.playUITap(weight: .light)
                             } label: {
                                 Text(pace.shortTitle(l10n))
-                                    .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                                    .font(AppFont.rounded(size: 11.5, weight: .heavy))
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.76)
                                     .foregroundColor(selected ? .white : Color.white.opacity(0.72))
@@ -1153,9 +1249,9 @@ struct GamePlayView: View {
         Button(action: action) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                 Text(title)
-                    .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .heavy))
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
             }
@@ -1186,12 +1282,12 @@ struct GamePlayView: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(isDestructive ? Color(red: 1.0, green: 0.56, blue: 0.56) : .white)
                     .frame(width: 22, alignment: .center)
 
                 Text(title)
-                    .font(.system(size: 14.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 14.5, weight: .bold))
                     .foregroundColor(isDestructive ? Color(red: 1.0, green: 0.62, blue: 0.62) : .white)
                     .lineLimit(1)
 
@@ -1341,7 +1437,7 @@ struct GamePlayView: View {
                     }
 
                     Text(primaryStatusLine)
-                        .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .heavy))
                         .foregroundColor(
                             isAlertStatus
                                 ? AppTheme.coralBottom
@@ -1357,7 +1453,7 @@ struct GamePlayView: View {
                         .transition(.opacity)
                 } else {
                     Text(l10n.t("game.libertiesTip"))
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .semibold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .lineLimit(1)
                         .frame(height: 26, alignment: .leading)
@@ -1459,7 +1555,7 @@ struct GamePlayView: View {
                             viewModel.beginDeadStoneReview()
                         } label: {
                             Label(l10n.t("game.action.score"), systemImage: "flag.checkered")
-                                .font(.system(size: 16, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 16, weight: .black))
                                 .foregroundColor(.white)
                                 .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
                                 .frame(maxWidth: .infinity)
@@ -1479,18 +1575,18 @@ struct GamePlayView: View {
     private func captureRaceBanner(target: Int) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "trophy.fill")
-                .font(.system(size: 20, weight: .black))
+                .font(.system(size: 20, weight: .black, design: .rounded))
                 .foregroundColor(AppTheme.sunBottom)
             VStack(alignment: .leading, spacing: 2) {
                 Text(l10n.t("rule.captureRace", target))
-                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 HStack(spacing: 12) {
                     Text("⚫️ \(viewModel.boardState.blackCaptures)/\(target)")
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text("⚪️ \(viewModel.boardState.whiteCaptures)/\(target)")
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(AppTheme.skyBottom)
                 }
             }
@@ -1511,7 +1607,7 @@ struct GamePlayView: View {
                 Image(systemName: "hand.tap.fill")
                     .foregroundColor(AppTheme.coralBottom)
                 Text(l10n.t("game.deadStones.hint"))
-                    .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -1529,7 +1625,7 @@ struct GamePlayView: View {
                             ? l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국 규칙", zhHant: "中國數子法")
                             : l10n.localized(zh: "日韩数目法", en: "Japanese Terr.", ja: "日本・韓国ルール", ko: "한·일 규칙", zhHant: "日韓數目法")
                         )
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(selected ? .white : AppTheme.inkSecondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
@@ -1552,9 +1648,9 @@ struct GamePlayView: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 10, weight: .black))
+                            .font(.system(size: 10, weight: .black, design: .rounded))
                         Text(viewModel.activeCountingPocketLabel ?? l10n.localized(zh: "逐块点地", en: "Animate", ja: "順番に計算", ko: "구역별 계가", zhHant: "逐塊點地"))
-                            .font(.system(size: 10.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 10.5, weight: .black))
                     }
                     .foregroundColor(AppTheme.sunBottom)
                     .padding(.horizontal, 9)
@@ -1569,20 +1665,20 @@ struct GamePlayView: View {
                 VStack(spacing: 4) {
                     HStack {
                         Text("⚫️ \(String(format: "%.1f", preview.blackScore))")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 15, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                         Spacer()
                         Text(l10n.t(preview.winner == .black ? "result.blackWins" : "result.whiteWins"))
-                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .black))
                             .foregroundColor(AppTheme.skyBottom)
                         Spacer()
                         Text("⚪️ \(String(format: "%.1f", preview.whiteScore))")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 15, weight: .black))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
 
                     Text(localizedScoreSummary(preview))
-                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 10.5, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -1595,7 +1691,7 @@ struct GamePlayView: View {
                             ko: "🤝 빅 \(preview.sekiGroupCount)곳 감지 (자동 생존 보호)",
                             zhHant: "🤝 偵測到 \(preview.sekiGroupCount) 處雙活（自動保護存活）"
                         ))
-                            .font(.system(size: 10.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 10.5, weight: .black))
                             .foregroundColor(AppTheme.mintBottom)
                     }
                 }
@@ -1615,7 +1711,7 @@ struct GamePlayView: View {
                         ko: "계속 두어 사활 확인",
                         zhHant: "續下驗死活"
                     ))
-                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -1626,7 +1722,7 @@ struct GamePlayView: View {
                     viewModel.confirmDeadStoneScore()
                 } label: {
                     Label(l10n.t("game.deadStones.confirm"), systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 14.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14.5, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -1685,7 +1781,7 @@ struct GamePlayView: View {
             ZStack(alignment: .bottomTrailing) {
                 CharacterAvatarView(character: difficulty, mood: viewModel.companionMood, size: 50)
                 Text(moodBadge)
-                    .font(.system(size: 14))
+                    .font(AppFont.rounded(size: 14, weight: .regular))
                     .offset(x: 4, y: 4)
             }
 
@@ -1693,11 +1789,11 @@ struct GamePlayView: View {
                 if let scenario = viewModel.tacticalScenario {
                     HStack(spacing: 6) {
                         Text(scenario.title(isChinese: l10n.language.isChinese))
-                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .black))
                             .foregroundColor(AppTheme.coralBottom)
                         if let progressText = viewModel.scenarioProgressSummary {
                             Text(progressText)
-                                .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 10.5, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 2)
@@ -1705,16 +1801,16 @@ struct GamePlayView: View {
                         }
                     }
                     Text(scenario.briefing(isChinese: l10n.language.isChinese))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
                 } else {
                     Text("\(l10n.t(difficulty.nameKey)) · \(difficulty.rankBadge)")
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(AppTheme.skyBottom)
                     Text(viewModel.companionDialogueText)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
@@ -1750,52 +1846,21 @@ struct GamePlayView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 15, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(1)
                 Text("\(l10n.t("game.captures")): \(captures)")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
             }
 
             Spacer()
 
-            if viewModel.clock.isActive {
-                let pClock = viewModel.clock.state(for: color)
-                HStack(spacing: 4) {
-                    Image(systemName: pClock.inByoyomi ? "timer" : "clock.fill")
-                        .font(.system(size: 10, weight: .black))
-                    Text(pClock.formattedDisplay)
-                        .font(.system(size: 12.5, weight: .black, design: .monospaced))
-                        .monospacedDigit()
-                }
-                .foregroundColor(pClock.isUrgentCountdown ? .white : (isActiveTurn ? AppTheme.skyBottom : AppTheme.inkSecondary))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule().fill(
-                        pClock.isUrgentCountdown
-                        ? AnyShapeStyle(AppTheme.coralBottom)
-                        : AnyShapeStyle(isActiveTurn ? AppTheme.skyTop.opacity(0.16) : AppTheme.canvasBackground)
-                    )
-                )
-            } else {
-                HStack(spacing: 4) {
-                    Image(systemName: isActiveTurn ? "stopwatch.fill" : "clock")
-                        .font(.system(size: 10, weight: .black))
-                    Text(viewModel.formattedElapsedTime(for: color))
-                        .font(.system(size: 12.5, weight: .black, design: .monospaced))
-                        .monospacedDigit()
-                }
-                .foregroundColor(isActiveTurn ? AppTheme.skyBottom : AppTheme.inkSecondary)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule().fill(
-                        isActiveTurn ? AppTheme.skyTop.opacity(0.16) : AppTheme.canvasBackground
-                    )
-                )
-            }
+            GameClockPillView(
+                clockDisplay: viewModel.clockDisplay,
+                color: color,
+                isActiveTurn: isActiveTurn
+            )
 
             WoodenGoBowlView(capturedColor: color.opposite, count: captures)
         }
@@ -1806,7 +1871,7 @@ struct GamePlayView: View {
             viewModel.confirmPendingPlacement()
         } label: {
             Label(l10n.t("game.action.confirmPlace"), systemImage: "checkmark.circle.fill")
-                .font(.system(size: 15, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 15, weight: .black))
                 .foregroundColor(.white)
                 .shadow(color: AppTheme.skyRim.opacity(0.45), radius: 1, y: 1.5)
                 .frame(maxWidth: .infinity)
@@ -1828,9 +1893,9 @@ struct GamePlayView: View {
         Button(action: action) {
             HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .black))
+                    .font(.system(size: 16, weight: .black, design: .rounded))
                 Text(title)
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .heavy))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -1852,7 +1917,7 @@ struct GamePlayView: View {
 
     private var isAlertStatus: Bool {
         if viewModel.statusBanner != nil && viewModel.suggestions.isEmpty { return true }
-        return appState.settings.highlightAtari && !viewModel.boardState.atariPoints().isEmpty && !viewModel.isGameOver && !viewModel.isAIThinking
+        return appState.settings.highlightAtari && !viewModel.cachedAtariPoints.isEmpty && !viewModel.isGameOver && !viewModel.isAIThinking
     }
 
     private var primaryStatusLine: String {
@@ -1861,7 +1926,7 @@ struct GamePlayView: View {
         if viewModel.isAIThinking, let diff = viewModel.aiDifficulty {
             return l10n.t("game.turn.aiThinking", l10n.t(diff.nameKey))
         }
-        if appState.settings.highlightAtari && !viewModel.boardState.atariPoints().isEmpty && !viewModel.isGameOver {
+        if appState.settings.highlightAtari && !viewModel.cachedAtariPoints.isEmpty && !viewModel.isGameOver {
             return l10n.t("game.status.atariWarning")
         }
         return l10n.t(viewModel.boardState.currentTurn == .black ? "game.turn.black" : "game.turn.white")
@@ -1871,11 +1936,11 @@ struct GamePlayView: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text("\(l10n.t("stone.black")): \(String(format: "%.1f", est.blackTotal))")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 11, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
                 Text("\(l10n.t("stone.white")): \(String(format: "%.1f", est.whiteTotal))")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 11, weight: .heavy))
                     .foregroundColor(AppTheme.inkSecondary)
             }
             GeometryReader { barGeo in
@@ -1916,11 +1981,11 @@ private struct GameResultOverlayCard: View {
     private var resultCard: some View {
         VStack(spacing: 16) {
             Text(isBossVictory ? "👑" : (didHumanWin ? "🏆" : "💪"))
-                .font(.system(size: 56))
+                .font(AppFont.rounded(size: 56, weight: .regular))
 
             if isBossVictory {
                 Text(l10n.t("result.bossDefeatedBadge"))
-                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 5)
@@ -1929,11 +1994,11 @@ private struct GameResultOverlayCard: View {
 
             VStack(spacing: 4) {
                 Text(l10n.t(result.winner == .black ? "result.blackWins" : "result.whiteWins"))
-                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 30, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Text(resultSubtitle)
-                    .font(.system(size: 17, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 17, weight: .heavy))
                     .foregroundColor(AppTheme.skyBottom)
             }
 
@@ -1950,7 +2015,7 @@ private struct GameResultOverlayCard: View {
                         let baseTitle = l10n.t("result.bestMove", bestMove)
                         let fullTitle = bestMoveReason.map { "\(baseTitle) · \($0.badge(l10n))" } ?? baseTitle
                         Label(fullTitle, systemImage: "star.fill")
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 14, weight: .heavy))
                             .foregroundColor(AppTheme.sunBottom)
                             .multilineTextAlignment(.center)
                     }
@@ -1959,7 +2024,7 @@ private struct GameResultOverlayCard: View {
                             onRewind(turningPoint)
                         } label: {
                             Label(l10n.t("result.rewindAction", turningPoint), systemImage: "hourglass")
-                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15, weight: .black))
                                 .foregroundColor(.white)
                                 .shadow(color: AppTheme.sunRim.opacity(0.45), radius: 1, y: 1.5)
                                 .frame(maxWidth: .infinity)
@@ -1975,7 +2040,7 @@ private struct GameResultOverlayCard: View {
             HStack(spacing: 12) {
                 Button(action: onBackHome) {
                     Text(backButtonTitle)
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -1984,7 +2049,7 @@ private struct GameResultOverlayCard: View {
 
                 Button(action: onReview) {
                     Text(l10n.t("result.reviewGame"))
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .heavy))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -1993,7 +2058,7 @@ private struct GameResultOverlayCard: View {
 
                 Button(action: onPlayAgain) {
                     Text(l10n.t("result.playAgain"))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -2019,10 +2084,10 @@ private struct GameResultOverlayCard: View {
     private func scorePill(title: String, value: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 26, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 26, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
             Text(title)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 11, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
         }

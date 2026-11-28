@@ -3,10 +3,167 @@
 //  StarYi Go — Modern Vibrant Nintendo Switch Party Aesthetic
 //
 
+import CoreText
 import SwiftUI
+import UIKit
+
+/// Kid-friendly standard rounded CJK & Latin typography powered by Resource Han Rounded CN / JP / KR (SIL OFL 1.1).
+enum AppFont {
+    static let mediumPostScriptName = "Resource-Han-Rounded-CN-Medium"
+    static let boldPostScriptName = "Resource-Han-Rounded-CN-Bold"
+
+    static let jpMediumPostScriptName = "Resource-Han-Rounded-JP-Medium"
+    static let jpBoldPostScriptName = "Resource-Han-Rounded-JP-Bold"
+
+    static let krMediumPostScriptName = "Resource-Han-Rounded-KR-Medium"
+    static let krBoldPostScriptName = "Resource-Han-Rounded-KR-Bold"
+
+    private static let bundledFontFiles = [
+        "ResourceHanRoundedCN-Medium",
+        "ResourceHanRoundedCN-Bold",
+        "ResourceHanRoundedJP-Medium",
+        "ResourceHanRoundedJP-Bold",
+        "ResourceHanRoundedKR-Medium",
+        "ResourceHanRoundedKR-Bold",
+    ]
+
+    private static let stateLock = NSLock()
+    private static var registeredFiles: Set<String> = []
+    private static var _activeLanguageCode: String = AppLanguage.system.resolvedCode
+    private static var descriptorCache: [String: UIFontDescriptor] = [:]
+    private static let fontCache = NSCache<NSString, UIFont>()
+
+    static var activeLanguageCode: String {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _activeLanguageCode
+        }
+        set {
+            stateLock.lock()
+            _activeLanguageCode = newValue
+            stateLock.unlock()
+        }
+    }
+
+    /// Registers all 6 subsetted CJK rounded fonts once (now compact ~10.9 MB total)
+    /// so CJK cascade fallbacks (`ja` -> `cn/kr`, `ko` -> `cn/jp`) resolve instantaneously.
+    static func registerBundledFonts() {
+        var toRegister: [String] = []
+        stateLock.lock()
+        for name in bundledFontFiles where !registeredFiles.contains(name) {
+            registeredFiles.insert(name)
+            toRegister.append(name)
+        }
+        stateLock.unlock()
+
+        guard !toRegister.isEmpty else { return }
+        let subdirs: [String?] = ["Resources/Fonts", "Fonts", nil]
+        for fileName in toRegister {
+            for subdir in subdirs {
+                if let url = Bundle.main.url(forResource: fileName, withExtension: "ttf", subdirectory: subdir) {
+                    CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+                    break
+                }
+            }
+        }
+    }
+
+    private static func isBoldWeight(_ weight: Font.Weight) -> Bool {
+        switch weight {
+        case .ultraLight, .thin, .light, .regular, .medium, .semibold:
+            return false
+        default:
+            return true
+        }
+    }
+
+    static func postScriptName(for weight: Font.Weight = .bold, languageCode: String? = nil) -> String {
+        let code = languageCode ?? activeLanguageCode
+        let bold = isBoldWeight(weight)
+        switch code {
+        case "ja":
+            return bold ? jpBoldPostScriptName : jpMediumPostScriptName
+        case "ko":
+            return bold ? krBoldPostScriptName : krMediumPostScriptName
+        default:
+            return bold ? boldPostScriptName : mediumPostScriptName
+        }
+    }
+
+    private static func fallbackPostScriptNames(for weight: Font.Weight, languageCode: String) -> [String] {
+        let bold = isBoldWeight(weight)
+        let cn = bold ? boldPostScriptName : mediumPostScriptName
+        let jp = bold ? jpBoldPostScriptName : jpMediumPostScriptName
+        let kr = bold ? krBoldPostScriptName : krMediumPostScriptName
+        switch languageCode {
+        case "ja":
+            return [cn, kr]
+        case "ko":
+            return [cn, jp]
+        default:
+            return [kr, jp]
+        }
+    }
+
+    static func uiFont(size: CGFloat, weight: Font.Weight = .bold, languageCode: String? = nil) -> UIFont? {
+        let code = languageCode ?? activeLanguageCode
+        let primaryName = postScriptName(for: weight, languageCode: code)
+        let fontKey = "\(primaryName)#\(code)#\(Int((size * 10).rounded()))" as NSString
+        if let cachedFont = fontCache.object(forKey: fontKey) {
+            return cachedFont
+        }
+
+        registerBundledFonts()
+
+        let descKey = "\(primaryName)#\(code)"
+        stateLock.lock()
+        let cachedDescriptor = descriptorCache[descKey]
+        stateLock.unlock()
+
+        let descriptor: UIFontDescriptor
+        if let cachedDescriptor {
+            descriptor = cachedDescriptor
+        } else {
+            guard UIFont(name: primaryName, size: size) != nil else {
+                return nil
+            }
+            let fallbacks = fallbackPostScriptNames(for: weight, languageCode: code)
+                .filter { UIFont(name: $0, size: size) != nil }
+                .map { UIFontDescriptor(name: $0, size: 0) }
+            var attributes: [UIFontDescriptor.AttributeName: Any] = [.name: primaryName]
+            if !fallbacks.isEmpty {
+                attributes[.cascadeList] = fallbacks
+            }
+            let desc = UIFontDescriptor(fontAttributes: attributes)
+            stateLock.lock()
+            descriptorCache[descKey] = desc
+            stateLock.unlock()
+            descriptor = desc
+        }
+
+        let baseFont = UIFont(descriptor: descriptor, size: size)
+        // Respect Dynamic Type with a layout-safe ceiling (+25%) for compact game chrome
+        let scaled = UIFontMetrics(forTextStyle: .body).scaledFont(
+            for: baseFont,
+            maximumPointSize: size * 1.25
+        )
+        fontCache.setObject(scaled, forKey: fontKey)
+        return scaled
+    }
+
+    static func rounded(size: CGFloat, weight: Font.Weight = .bold, languageCode: String? = nil) -> Font {
+        if let font = uiFont(size: size, weight: weight, languageCode: languageCode) {
+            return Font(font)
+        }
+        let psName = postScriptName(for: weight, languageCode: languageCode)
+        return .custom(psName, size: size, relativeTo: .body)
+    }
+}
 
 extension EnvironmentValues {
     @Entry var minimumButtonFaceHeight: CGFloat = AppTheme.buttonFaceHeight
+    @Entry var zoomTransitionNamespace: Namespace.ID? = nil
 }
 
 enum AppTheme {
@@ -61,21 +218,54 @@ enum AppTheme {
         )
         .overlay {
             ZStack {
-                // Soft cheerful sunlit radial accents
-                Circle()
-                    .fill(skyTop.opacity(0.08))
-                    .frame(width: 520, height: 520)
-                    .blur(radius: 60)
-                    .offset(x: -360, y: -240)
-                Circle()
-                    .fill(sunTop.opacity(0.09))
-                    .frame(width: 460, height: 460)
-                    .blur(radius: 60)
-                    .offset(x: 380, y: 260)
+                // Soft cheerful sunlit radial accents (GPU-lightweight RadialGradients, zero offscreen blur passes)
+                RadialGradient(
+                    colors: [skyTop.opacity(0.11), skyTop.opacity(0)],
+                    center: UnitPoint(x: 0.14, y: 0.18),
+                    startRadius: 10,
+                    endRadius: 340
+                )
+                RadialGradient(
+                    colors: [sunTop.opacity(0.12), sunTop.opacity(0)],
+                    center: UnitPoint(x: 0.86, y: 0.84),
+                    startRadius: 10,
+                    endRadius: 320
+                )
             }
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
+    }
+
+    struct StonePalette {
+        let blackColors: [Color]
+        let whiteColors: [Color]
+    }
+
+    /// Single source of truth for collectible stone preview & rendering gradients.
+    static func stonePalette(for style: StoneStyle) -> StonePalette {
+        switch style {
+        case .classicSlateShell:
+            return StonePalette(
+                blackColors: [Color(red: 0.34, green: 0.36, blue: 0.39), Color(red: 0.05, green: 0.06, blue: 0.07)],
+                whiteColors: [.white, Color(red: 0.80, green: 0.82, blue: 0.85)]
+            )
+        case .coralPearl:
+            return StonePalette(
+                blackColors: [Color(red: 0.24, green: 0.46, blue: 0.56), Color(red: 0.04, green: 0.11, blue: 0.18)],
+                whiteColors: [Color(red: 1.0, green: 0.96, blue: 0.94), Color(red: 0.96, green: 0.82, blue: 0.78)]
+            )
+        case .kyotoLacquer:
+            return StonePalette(
+                blackColors: [Color(red: 0.44, green: 0.24, blue: 0.18), Color(red: 0.07, green: 0.04, blue: 0.04)],
+                whiteColors: [Color(red: 1.0, green: 0.97, blue: 0.88), Color(red: 0.91, green: 0.82, blue: 0.62)]
+            )
+        case .starlightJade:
+            return StonePalette(
+                blackColors: [Color(red: 0.18, green: 0.54, blue: 0.46), Color(red: 0.03, green: 0.12, blue: 0.14)],
+                whiteColors: [Color(red: 0.92, green: 1.0, blue: 0.96), Color(red: 0.68, green: 0.92, blue: 0.82)]
+            )
+        }
     }
 
     struct BoardPalette {
@@ -165,6 +355,10 @@ enum MotionToken {
     static let innerParallaxRelease: Animation = .spring(response: 0.25, dampingFraction: 0.60)
     /// Calm arrival curve for staggered cards and popovers
     static let cardEntrance: Animation = .spring(response: 0.42, dampingFraction: 0.82)
+    /// Lively Nintendo title-screen bottom-up spring for home portal cards (slight playful settle)
+    static let homePortalEntrance: Animation = .spring(response: 0.56, dampingFraction: 0.74)
+    /// Graceful top-down cascade spring for home top-edge controls
+    static let homeTopBarEntrance: Animation = .spring(response: 0.58, dampingFraction: 0.78)
     /// Stagger interval between grouped items (40–80ms)
     static let itemStagger: Double = 0.055
     /// Stagger interval between grid cards (80–120ms)
@@ -204,13 +398,17 @@ struct StaggeredEntranceModifier: ViewModifier {
     let appeared: Bool
     let delay: Double
     let reduceMotion: Bool
+    var offsetY: CGFloat = 12
+    var initialScale: CGFloat = 1.0
+    var animation: Animation = MotionToken.cardEntrance
 
     func body(content: Content) -> some View {
         content
             .opacity(appeared || reduceMotion ? 1 : 0)
-            .offset(y: appeared || reduceMotion ? 0 : 12)
+            .offset(y: appeared || reduceMotion ? 0 : offsetY)
+            .scaleEffect(appeared || reduceMotion ? 1.0 : initialScale)
             .animation(
-                reduceMotion ? nil : MotionToken.cardEntrance.delay(delay),
+                reduceMotion ? nil : animation.delay(delay),
                 value: appeared
             )
     }

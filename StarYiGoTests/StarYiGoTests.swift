@@ -5,6 +5,7 @@
 
 import Foundation
 import Testing
+import UIKit
 @testable import StarYiGo
 
 struct StarYiGoEngineTests {
@@ -1445,7 +1446,12 @@ struct StarYiGoEngineTests {
         let legacyDecoded = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
         #expect(legacyDecoded.aiModelPreset == .b10c128)
 
-        // All 3 models must be bundled and runnable via CoreMLGoAIEngine
+        // All 3 models must be runnable via CoreMLGoAIEngine:
+        // b6c96 & b10c128 are bundled in the main app; b18c384nbt is packaged via On-Demand Resources (ODR).
+        let odrRequest = NSBundleResourceRequest(tags: [KataGoProModelODRManager.odrTag])
+        try await odrRequest.beginAccessingResources()
+        defer { odrRequest.endAccessingResources() }
+
         let engine = CoreMLGoAIEngine(bundle: .main, supportedBoardSize: 19, initialPreset: .b10c128)
         let board = GoBoardState(size: 9)
         for preset in KataGoModelPreset.allCases {
@@ -1520,6 +1526,72 @@ struct StarYiGoEngineTests {
         #expect(reloaded.familyProfiles.count == 1)
         #expect(reloaded.familyProfiles[0].id == lastProfile.id)
         #expect(!reloaded.familyProfiles.contains { $0.id == rabbit.id })
+    }
+
+    @Test func bundledRoundedFontsSupportChineseJapaneseAndKorean() throws {
+        AppFont.registerBundledFonts()
+
+        // All 6 bundled rounded fonts must resolve cleanly
+        let expectedNames = [
+            AppFont.mediumPostScriptName,
+            AppFont.boldPostScriptName,
+            AppFont.jpMediumPostScriptName,
+            AppFont.jpBoldPostScriptName,
+            AppFont.krMediumPostScriptName,
+            AppFont.krBoldPostScriptName,
+        ]
+        for psName in expectedNames {
+            #expect(UIFont(name: psName, size: 16) != nil, "Missing bundled font \(psName)")
+        }
+
+        // Language-specific routing
+        #expect(AppFont.postScriptName(for: .medium, languageCode: "ja") == AppFont.jpMediumPostScriptName)
+        #expect(AppFont.postScriptName(for: .bold, languageCode: "ja") == AppFont.jpBoldPostScriptName)
+        #expect(AppFont.postScriptName(for: .medium, languageCode: "ko") == AppFont.krMediumPostScriptName)
+        #expect(AppFont.postScriptName(for: .black, languageCode: "ko") == AppFont.krBoldPostScriptName)
+        #expect(AppFont.postScriptName(for: .semibold, languageCode: "zh-Hans") == AppFont.mediumPostScriptName)
+        #expect(AppFont.postScriptName(for: .heavy, languageCode: "en") == AppFont.boldPostScriptName)
+
+        // Primary font + rounded CJK cascade list
+        let jaFont = try #require(AppFont.uiFont(size: 18, weight: .bold, languageCode: "ja"))
+        #expect(jaFont.fontName == AppFont.jpBoldPostScriptName)
+        let jaCascade = jaFont.fontDescriptor.object(forKey: .cascadeList) as? [UIFontDescriptor]
+        #expect(jaCascade?.count == 2)
+
+        let koFont = try #require(AppFont.uiFont(size: 18, weight: .medium, languageCode: "ko"))
+        #expect(koFont.fontName == AppFont.krMediumPostScriptName)
+        let koCascade = koFont.fontDescriptor.object(forKey: .cascadeList) as? [UIFontDescriptor]
+        #expect(koCascade?.count == 2)
+    }
+
+    @Test func unsupportedLanguagesFallbackToEnglishForUIAndVoice() throws {
+        // Unsupported locales (Spanish, French, German, Portuguese, empty) must resolve to English
+        for unsupported in [["es-ES"], ["es-MX"], ["fr-FR"], ["de-DE"], ["pt-BR"], ["ar-SA"], []] {
+            let code = AppLanguage.resolvedCode(forPreferredLanguages: unsupported)
+            #expect(code == "en", "Expected 'en' for \(unsupported), got \(code)")
+            #expect(AppLanguage.voiceLanguageCode(forResolvedCode: code) == "en")
+        }
+
+        // Unsupported primary locale still defaults to English even if secondary is another language
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["es-ES", "zh-Hans-CN"]) == "en")
+
+        // Supported locales map to their native UI & voice packs
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["en-US"]) == "en")
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["zh-Hans-CN"]) == "zh-Hans")
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["zh-Hant-TW"]) == "zh-Hant")
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["zh-HK"]) == "zh-Hant")
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["ja-JP"]) == "ja")
+        #expect(AppLanguage.resolvedCode(forPreferredLanguages: ["ko-KR"]) == "ko")
+
+        #expect(AppLanguage.en.voiceLanguageCode == "en")
+        #expect(AppLanguage.zhHans.voiceLanguageCode == "zh")
+        #expect(AppLanguage.zhHant.voiceLanguageCode == "zh")
+        #expect(AppLanguage.ja.voiceLanguageCode == "ja")
+        #expect(AppLanguage.ko.voiceLanguageCode == "ko")
+
+        // Arbitrary unsupported voice codes normalize cleanly to English
+        #expect(AppLanguage.voiceLanguageCode(forResolvedCode: "es") == "en")
+        #expect(AppLanguage.voiceLanguageCode(forResolvedCode: "fr-CA") == "en")
     }
 }
 

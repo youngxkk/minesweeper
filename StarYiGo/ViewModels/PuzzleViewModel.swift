@@ -350,8 +350,12 @@ final class PuzzleViewModel: ObservableObject {
         responseTask?.cancel()
         responseTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            let reply = await Task.detached(priority: .userInitiated) {
+                LocalMCTSGoEngine.bestLocalReply(for: snapshot, color: oppColor, near: point, within: region)
+            }.value
             guard !Task.isCancelled, let self else { return }
-            if let reply = LocalMCTSGoEngine.bestLocalReply(for: snapshot, color: oppColor, near: point, within: region),
+            if let reply,
                case .success(let oppOut) = self.boardState.applying(action: reply, color: oppColor) {
                 self.boardState = oppOut.nextState
                 if !oppOut.capturedPoints.isEmpty {
@@ -374,9 +378,13 @@ final class PuzzleViewModel: ObservableObject {
         responseTask?.cancel()
         responseTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 320_000_000)
+            guard !Task.isCancelled else { return }
+            let reply = await Task.detached(priority: .userInitiated) {
+                LocalMCTSGoEngine.bestLocalReply(for: snapshot, color: oppColor, near: point, within: region)
+            }.value
             guard !Task.isCancelled, let self else { return }
 
-            if let reply = LocalMCTSGoEngine.bestLocalReply(for: snapshot, color: oppColor, near: point, within: region),
+            if let reply,
                case .success(let oppOutcome) = self.boardState.applying(action: reply, color: oppColor) {
                 self.boardState = oppOutcome.nextState
                 if !oppOutcome.capturedPoints.isEmpty {

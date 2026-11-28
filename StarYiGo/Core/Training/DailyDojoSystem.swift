@@ -111,7 +111,8 @@ enum DailyDojoSystem {
                 ?? StarYiIslands.findAnyPuzzle(withId: id)
         }
     ) -> DailyDojoPlan {
-        let cal = Calendar.current
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .autoupdatingCurrent
         let dayOfYear = cal.ordinality(of: .day, in: .year, for: date) ?? 1
         let year = cal.component(.year, from: date)
         let weekday = cal.component(.weekday, from: date) // 1=Sun ... 7=Sat

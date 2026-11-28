@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import os
 
 struct PuzzlePackPayload: Codable, Sendable {
     let version: Int
@@ -14,15 +15,28 @@ struct PuzzlePackPayload: Codable, Sendable {
 private final class PuzzlePackBundleToken {}
 
 enum PuzzlePackLoader {
+    private static let logger = Logger(subsystem: "super.ai.storm.staryigo", category: "PuzzlePackLoader")
 
     /// Raw verified handcrafted templates loaded from `puzzle_packs.json` (30K -> 5D).
     static let jsonTemplates: [GoPuzzle] = {
-        guard let url = locatePackURL(),
-              let data = try? Data(contentsOf: url),
-              let payload = try? JSONDecoder().decode(PuzzlePackPayload.self, from: data) else {
+        guard let url = locatePackURL() else {
+            logger.error("Could not locate bundled puzzle_packs.json")
+            #if DEBUG
+            assertionFailure("Missing bundled puzzle_packs.json")
+            #endif
             return []
         }
-        return payload.templates
+        do {
+            let data = try Data(contentsOf: url)
+            let payload = try JSONDecoder().decode(PuzzlePackPayload.self, from: data)
+            return payload.templates
+        } catch {
+            logger.error("Failed to decode puzzle_packs.json: \(error.localizedDescription, privacy: .public)")
+            #if DEBUG
+            assertionFailure("Corrupt bundled puzzle_packs.json: \(error)")
+            #endif
+            return []
+        }
     }()
 
     /// Deterministic 6-orientation expansion of the external JSON templates (~816 verified puzzles).

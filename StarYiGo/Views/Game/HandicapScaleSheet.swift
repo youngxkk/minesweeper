@@ -27,7 +27,7 @@ struct HandicapScaleSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    Text("⚖️").font(.system(size: 52))
+                    Text("⚖️").font(AppFont.rounded(size: 52, weight: .regular))
                     Text(l10n.localized(
                         zh: "客厅双人 · 水平天平让子",
                         en: "Couch Party · Rank Balance Scale",
@@ -35,7 +35,7 @@ struct HandicapScaleSheet: View {
                         ko: "거실 대국 · 실력 밸런스 천칭",
                         zhHant: "客廳雙人 · 水平天平讓子"
                     ))
-                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 22, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                     Text(l10n.localized(
@@ -45,7 +45,7 @@ struct HandicapScaleSheet: View {
                         ko: "두 사람의 기력을 고르면 부모와 아이도 마지막까지 박빙 승부를 즐길 수 있는 접바둑을 자동 추천해요!",
                         zhHant: "選出雙方大概的段級位，天平自動配出最公平的讓子數，爸爸和小孩也能下到最後一手！"
                     ))
-                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 13.5, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
 
@@ -72,7 +72,7 @@ struct HandicapScaleSheet: View {
                                 SoundAndHapticsManager.shared.playUITap()
                             } label: {
                                 Text("\(sz.rawValue)×\(sz.rawValue)")
-                                    .font(.system(size: 13.5, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 13.5, weight: .black))
                                     .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
@@ -85,14 +85,14 @@ struct HandicapScaleSheet: View {
                     VStack(spacing: 8) {
                         HStack(spacing: 10) {
                             Text(recommendation.handicapStones > 0 ? "⚫️ ×\(recommendation.handicapStones)" : "⚖️ 50 / 50")
-                                .font(.system(size: 20, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 20, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 6)
                                 .background(Capsule().fill(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom)))
                         }
                         Text(recommendation.summary(l10n))
-                            .font(.system(size: 14.5, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 14.5, weight: .heavy))
                             .foregroundColor(AppTheme.inkPrimary)
                             .multilineTextAlignment(.center)
                     }
@@ -112,7 +112,7 @@ struct HandicapScaleSheet: View {
                             l10n.localized(zh: "公平开局！", en: "Start Balanced Match!", ja: "公平に対局開始！", ko: "공정 대국 시작!", zhHant: "公平開局！"),
                             systemImage: "play.fill"
                         )
-                        .font(.system(size: 17, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 17, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
@@ -133,10 +133,10 @@ struct HandicapScaleSheet: View {
     private func rankPickerCard(title: String, selection: Binding<GoRankOption>, accent: Color) -> some View {
         VStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 12, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .black))
                 .foregroundColor(accent)
             Text(selection.wrappedValue.emoji)
-                .font(.system(size: 34))
+                .font(AppFont.rounded(size: 34, weight: .regular))
             Menu {
                 ForEach(GoRankOption.presets) { opt in
                     Button {
@@ -149,9 +149,9 @@ struct HandicapScaleSheet: View {
             } label: {
                 HStack(spacing: 5) {
                     Text(selection.wrappedValue.label)
-                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 18, weight: .black))
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                 }
                 .foregroundColor(AppTheme.inkPrimary)
                 .padding(.horizontal, 14)

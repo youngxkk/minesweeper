@@ -48,15 +48,65 @@ final class SGFNode: Sendable {
     }
 
     var addedBlackPoints: [BoardPoint] {
-        values(for: "AB").compactMap { BoardPoint(sgf: $0) }
+        Self.expandPointList(values(for: "AB"))
     }
 
     var addedWhitePoints: [BoardPoint] {
-        values(for: "AW").compactMap { BoardPoint(sgf: $0) }
+        Self.expandPointList(values(for: "AW"))
+    }
+
+    var addedEmptyPoints: [BoardPoint] {
+        Self.expandPointList(values(for: "AE"))
+    }
+
+    /// Expands FF[4] point lists including compressed rectangles (`aa:cc`).
+    private static func expandPointList(_ rawValues: [String]) -> [BoardPoint] {
+        var result: [BoardPoint] = []
+        for raw in rawValues {
+            if raw.count == 5, raw[raw.index(raw.startIndex, offsetBy: 2)] == ":" {
+                let lhs = String(raw.prefix(2))
+                let rhs = String(raw.suffix(2))
+                if let p1 = BoardPoint(sgf: lhs), let p2 = BoardPoint(sgf: rhs) {
+                    let rLo = min(p1.row, p2.row), rHi = max(p1.row, p2.row)
+                    let cLo = min(p1.col, p2.col), cHi = max(p1.col, p2.col)
+                    for r in rLo...rHi {
+                        for c in cLo...cHi {
+                            result.append(BoardPoint(row: r, col: c))
+                        }
+                    }
+                    continue
+                }
+            }
+            if let pt = BoardPoint(sgf: raw) {
+                result.append(pt)
+            }
+        }
+        return result
+    }
+
+    var isMarkedCorrect: Bool {
+        let c = (comment ?? "").uppercased()
+        return c.contains("CORRECT") || c.contains("RIGHT")
+    }
+
+    var isMarkedWrong: Bool {
+        let c = (comment ?? "").uppercased()
+        return c.contains("WRONG")
+    }
+
+    var containsCorrectLeaf: Bool {
+        var stack: [SGFNode] = [self]
+        while let node = stack.popLast() {
+            if node.isMarkedCorrect { return true }
+            stack.append(contentsOf: node.children)
+        }
+        return false
     }
 
     var boardSize: Int {
-        Int(value(for: "SZ") ?? "") ?? 19
+        guard let raw = value(for: "SZ") else { return 19 }
+        let first = raw.split(separator: ":").first.map(String.init) ?? raw
+        return Int(first) ?? 19
     }
 
     var komi: Double? {
@@ -81,6 +131,7 @@ final class SGFNode: Sendable {
         board.handicap = handicap
         for pt in black { board.setSetupStone(.black, at: pt) }
         for pt in white { board.setSetupStone(.white, at: pt) }
+        for pt in addedEmptyPoints { board.setSetupStone(nil, at: pt) }
         board.resetPositionHistoryToCurrent()
         return board
     }
@@ -163,7 +214,22 @@ enum SGFParser {
                 self.properties = properties
             }
             func build() -> SGFNode {
-                SGFNode(properties: properties, children: children.map { $0.build() })
+                // Iterative post-order build to prevent stack overflow on deep SGFs on background threads
+                var order: [NodeBuilder] = []
+                var stack: [NodeBuilder] = [self]
+                while let node = stack.popLast() {
+                    order.append(node)
+                    for child in node.children {
+                        stack.append(child)
+                    }
+                }
+                var built: [ObjectIdentifier: SGFNode] = [:]
+                built.reserveCapacity(order.count)
+                for node in order.reversed() {
+                    let builtChildren = node.children.compactMap { built[ObjectIdentifier($0)] }
+                    built[ObjectIdentifier(node)] = SGFNode(properties: node.properties, children: builtChildren)
+                }
+                return built[ObjectIdentifier(self)] ?? SGFNode(properties: properties, children: [])
             }
         }
 
@@ -211,6 +277,19 @@ enum SGFParser {
         return parseGameTree()?.build()
     }
 
+    private static func formatSGFDate(_ date: Date) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = .autoupdatingCurrent
+        let comps = cal.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            comps.year ?? 2026,
+            comps.month ?? 1,
+            comps.day ?? 1
+        )
+    }
+
     /// Exports a played game into a standard FF[4] SGF string.
     static func export(
         initialState: GoBoardState,
@@ -220,9 +299,7 @@ enum SGFParser {
         date: Date,
         moves: [GoMove]
     ) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateStr = formatter.string(from: date)
+        let dateStr = formatSGFDate(date)
 
         func escape(_ text: String) -> String {
             text.replacingOccurrences(of: "\\", with: "\\\\")
@@ -232,7 +309,7 @@ enum SGFParser {
         var parts: [String] = []
         parts.append("(;GM[1]FF[4]CA[UTF-8]AP[StarYi Go:1.0]")
         parts.append("SZ[\(initialState.size)]")
-        parts.append(String(format: "KM[%.1f]", initialState.komi))
+        parts.append(String(format: "KM[%.1f]", locale: Locale(identifier: "en_US_POSIX"), initialState.komi))
         parts.append("DT[\(dateStr)]")
         parts.append("PB[\(escape(blackName))]")
         parts.append("PW[\(escape(whiteName))]")

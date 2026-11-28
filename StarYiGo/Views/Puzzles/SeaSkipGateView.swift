@@ -139,13 +139,13 @@ struct SeaSkipGateView: View {
                         ko: "월반 \(index + 1)/\(gatePuzzles.count)번",
                         zhHant: "跳級第 \(index + 1)/\(gatePuzzles.count) 題"
                     ))
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(AppTheme.sunBottom))
                     Text(puzzle.rankBadge)
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(AppTheme.grapeBottom)
                     Spacer()
                     Text(l10n.localized(
@@ -155,11 +155,11 @@ struct SeaSkipGateView: View {
                         ko: "\(correctCount)문제 통과",
                         zhHant: "已對 \(correctCount) 題"
                     ))
-                        .font(.system(size: 12.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
                         .foregroundColor(AppTheme.mintBottom)
                 }
                 Text(puzzle.category.localizedTitle(l10n))
-                    .font(.system(size: 19, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 19, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 Text(puzzle.playerColor == .black
                      ? l10n.localized(
@@ -176,7 +176,7 @@ struct SeaSkipGateView: View {
                          ko: "백선: 힌트 없는 시험 모드입니다. 바둑판의 정답을 찾아보세요.",
                          zhHant: "白先：考場無提示模式，請找出盤面唯一正解。"
                      ))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -184,7 +184,7 @@ struct SeaSkipGateView: View {
 
             if let status = statusBanner {
                 Text(status)
-                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .warmCard(cornerRadius: 18, padding: 12)
@@ -195,7 +195,7 @@ struct SeaSkipGateView: View {
 
     private var resultCard: some View {
         VStack(spacing: 16) {
-            Text(didPass ? "🔑✨" : "🧭").font(.system(size: 56))
+            Text(didPass ? "🔑✨" : "🧭").font(AppFont.rounded(size: 56, weight: .regular))
             Text(didPass
                  ? l10n.localized(
                      zh: "跳级成功！已解锁 \(sea.localizedName(l10n))",
@@ -211,7 +211,7 @@ struct SeaSkipGateView: View {
                      ko: "조금만 더! \(correctCount)/\(gatePuzzles.count)문제 정답",
                      zhHant: "差一點點！答對 \(correctCount)/\(gatePuzzles.count) 題"
                  ))
-                .font(.system(size: 22, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 22, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
             Text(didPass
@@ -229,7 +229,7 @@ struct SeaSkipGateView: View {
                      ko: "월반하려면 최소 \(sea.skipGatePassCount)문제를 맞혀야 합니다. 조금 연습하고 다시 도전해 보세요!",
                      zhHant: "需要答對至少 \(sea.skipGatePassCount) 題才能跳級，可以先練幾關再來挑戰！"
                  ))
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 14, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
 
@@ -242,7 +242,7 @@ struct SeaSkipGateView: View {
                         loadQuestion()
                     } label: {
                         Text(l10n.localized(zh: "重新试炼", en: "Try Again", ja: "再挑戦", ko: "다시 시험", zhHant: "重新試煉"))
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 15, weight: .black))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
@@ -255,7 +255,7 @@ struct SeaSkipGateView: View {
                     Text(didPass
                          ? l10n.localized(zh: "扬帆起航 →", en: "Set Sail →", ja: "出航する →", ko: "출항하기 →", zhHant: "揚帆起航 →")
                          : l10n.localized(zh: "返回地图", en: "Back to Map", ja: "マップへ戻る", ko: "지도로 돌아가기", zhHant: "返回地圖"))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)

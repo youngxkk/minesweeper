@@ -88,18 +88,18 @@ struct GoMiniDrillPlayView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            if campaignNodeId == nil {
+                SceneBackdrop.morningDojo
+            } else {
+                AppTheme.brightArenaBackground
+            }
 
             GeometryReader { geo in
                 let isCompact = geo.size.width < 700
                 let pad: CGFloat = isCompact ? 14 : 22
 
                 VStack(spacing: 12) {
-                    HStack {
-                        GameBackButton(title: l10n.t("common.back")) {
-                            appState.popRoute()
-                        }
-                        Spacer()
+                    ZStack {
                         GameTitleCrest(
                             title: kind.title(isChinese: l10n.language.isChinese),
                             subtitle: l10n.localized(
@@ -110,14 +110,20 @@ struct GoMiniDrillPlayView: View {
                                 zhHant: "第 \(min(questionsDone + 1, goalCount))/\(goalCount) 題 · 得分 \(score)"
                             )
                         )
-                        Spacer()
-                        if kind == .speedLiberties {
-                            Text("⏱ \(secondsLeft)s")
-                                .font(.system(size: 14, weight: .black, design: .monospaced))
-                                .foregroundColor(secondsLeft <= 10 ? .white : AppTheme.coralBottom)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Capsule().fill(secondsLeft <= 10 ? AppTheme.coralBottom : Color.white))
+
+                        HStack {
+                            GameBackButton(title: l10n.t("common.back")) {
+                                appState.popRoute()
+                            }
+                            Spacer()
+                            if kind == .speedLiberties {
+                                Text("⏱ \(secondsLeft)s")
+                                    .font(AppFont.rounded(size: 14, weight: .black))
+                                    .foregroundColor(secondsLeft <= 10 ? .white : AppTheme.coralBottom)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(Capsule().fill(secondsLeft <= 10 ? AppTheme.coralBottom : Color.white))
+                            }
                         }
                     }
 
@@ -184,38 +190,75 @@ struct GoMiniDrillPlayView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let stars = campaignClearedStars {
                 VStack(spacing: 12) {
-                    Text("🏆").font(.system(size: 46))
+                    Text("🏆").font(AppFont.rounded(size: 46, weight: .regular))
                     Text(isDailyDojoWarmup
                          ? l10n.localized(zh: "今日热身完成！", en: "Daily Warmup Done!", ja: "今日のウォームアップ完了！", ko: "오늘의 워밍업 완료!", zhHant: "今日熱身完成！")
                          : l10n.localized(zh: "专项闯关完成！", en: "Mini-Drill Cleared!", ja: "特訓クリア！", ko: "특훈 클리어!", zhHant: "專項闖關完成！"))
-                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 20, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     HStack(spacing: 6) {
                         ForEach(1...3, id: \.self) { i in
                             Image(systemName: i <= stars ? "star.fill" : "star")
-                                .font(.system(size: 24, weight: .black))
+                                .font(.system(size: 24, weight: .black, design: .rounded))
                                 .foregroundColor(i <= stars ? AppTheme.sunBottom : AppTheme.subtleBorder)
                         }
                     }
                     Text(l10n.localized(zh: "答对 \(score)/\(goalCount) 题", en: "Scored \(score)/\(goalCount)", ja: "\(score)/\(goalCount) 問正解", ko: "\(score)/\(goalCount)문제 정답", zhHant: "答對 \(score)/\(goalCount) 題"))
-                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .heavy))
                         .foregroundColor(AppTheme.inkSecondary)
 
-                    Button {
-                        appState.popRoute()
-                    } label: {
-                        Label(
-                            isDailyDojoWarmup
-                                ? l10n.localized(zh: "返回每日道场", en: "Return to Daily Dojo", ja: "毎日の道場に戻る", ko: "일일 도장으로 돌아가기", zhHant: "返回每日道場")
-                                : l10n.localized(zh: "返回岛屿继续闯关", en: "Return to Island", ja: "島に戻って挑戦を続ける", ko: "섬으로 돌아가 계속 도전", zhHant: "返回島嶼繼續闖關"),
-                            systemImage: "flag.checkered"
-                        )
-                            .font(.system(size: 15, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                    if isDailyDojoWarmup {
+                        Button {
+                            appState.popRoute()
+                        } label: {
+                            Label(
+                                l10n.localized(zh: "返回每日道场", en: "Return to Daily Dojo", ja: "毎日の道場に戻る", ko: "일일 도장으로 돌아가기", zhHant: "返回每日道場"),
+                                systemImage: "flag.checkered"
+                            )
+                                .font(AppFont.rounded(size: 15, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    } else if let nodeId = campaignNodeId, let nextNode = StarYiCampaign.nextNode(after: nodeId) {
+                        Button {
+                            appState.navigateToCampaignNode(nextNode, replaceTopRoute: true)
+                        } label: {
+                            Text(l10n.localized(
+                                zh: "进入下一关 · \(nextNode.title(isChinese: true)) ▶",
+                                en: "Next Stage · \(nextNode.title(isChinese: false)) ▶",
+                                ja: "次のステージへ ▶",
+                                ko: "다음 스테이지 ▶",
+                                zhHant: "進入下一關 · \(nextNode.title(isChinese: true)) ▶"
+                            ))
+                                .font(AppFont.rounded(size: 15, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    } else if let nodeId = campaignNodeId, let island = StarYiCampaign.island(containingNodeId: nodeId) {
+                        Button {
+                            if !appState.navigationPath.isEmpty {
+                                appState.navigationPath.removeLast()
+                            }
+                            appState.startCampaignBossMatch(island: island)
+                        } label: {
+                            Text(l10n.localized(
+                                zh: "挑战守岛 Boss ▶",
+                                en: "Challenge Island Boss ▶",
+                                ja: "島のボスに挑戦 ▶",
+                                ko: "섬 보스 도전 ▶",
+                                zhHant: "挑戰守島 Boss ▶"
+                            ))
+                                .font(AppFont.rounded(size: 15, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                 }
                 .frame(maxWidth: .infinity)
                 .warmCard(cornerRadius: 24, padding: 18)
@@ -244,7 +287,7 @@ struct GoMiniDrillPlayView: View {
                     HStack(spacing: 10) {
                         Button { answerLadder(guessWorks: true) } label: {
                             Label(l10n.localized(zh: "征子成立 ✅", en: "Works ✅", ja: "シチョウ成立 ✅", ko: "축 성립 ✅", zhHant: "征子成立 ✅"), systemImage: "checkmark.circle.fill")
-                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15, weight: .black))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -253,7 +296,7 @@ struct GoMiniDrillPlayView: View {
 
                         Button { answerLadder(guessWorks: false) } label: {
                             Label(l10n.localized(zh: "征子失败 ❌", en: "Fails ❌", ja: "シチョウ不成立 ❌", ko: "축 실패 ❌", zhHant: "征子失敗 ❌"), systemImage: "xmark.circle.fill")
-                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15, weight: .black))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -278,7 +321,7 @@ struct GoMiniDrillPlayView: View {
                     HStack(spacing: 10) {
                         Button { answerCounting(guessWinner: .black) } label: {
                             Text(l10n.localized(zh: "⚫️ 黑棋领先", en: "⚫️ Black Ahead", ja: "⚫️ 黒優勢", ko: "⚫️ 흑 우세", zhHant: "⚫️ 黑棋領先"))
-                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15, weight: .black))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -287,7 +330,7 @@ struct GoMiniDrillPlayView: View {
 
                         Button { answerCounting(guessWinner: .white) } label: {
                             Text(l10n.localized(zh: "⚪️ 白棋领先", en: "⚪️ White Ahead", ja: "⚪️ 白優勢", ko: "⚪️ 백 우세", zhHant: "⚪️ 白棋領先"))
-                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 15, weight: .black))
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -306,7 +349,7 @@ struct GoMiniDrillPlayView: View {
                         } label: {
                             HStack {
                                 Text(l10n.localized(zh: ch.labelZh, en: ch.labelEn))
-                                    .font(.system(size: 14, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 14, weight: .black))
                                     .foregroundColor(AppTheme.inkPrimary)
                                 Spacer()
                                 if answered {
@@ -333,14 +376,14 @@ struct GoMiniDrillPlayView: View {
             if !answered, let wrongMsg = lastWrongAttemptText {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "xmark.octagon.fill")
-                        .font(.system(size: 20, weight: .black))
+                        .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundColor(.red)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(l10n.localized(zh: "落子不对，再试试！", en: "Not quite — try again!", ja: "惜しい！もう一度考えてみましょう！", ko: "아쉬워요, 다시 시도해 보세요!", zhHant: "落子不對，再試試！"))
-                            .font(.system(size: 14.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 14.5, weight: .black))
                             .foregroundColor(.red)
                         Text(wrongMsg)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .bold))
                             .foregroundColor(AppTheme.inkPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -362,10 +405,10 @@ struct GoMiniDrillPlayView: View {
                     Text(isCorrectAnswer
                          ? l10n.localized(zh: "🎉 判断完全正确！", en: "🎉 Spot On!", ja: "🎉 大正解！", ko: "🎉 완벽한 판단이에요!", zhHant: "🎉 判斷完全正確！")
                          : l10n.localized(zh: "💡 差点意思，看棋理解析：", en: "💡 Good try — here's why:", ja: "💡 惜しい！解説をチェック：", ko: "💡 아깝네요! 해설을 확인해 보세요:", zhHant: "💡 差點意思，看棋理解析："))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(isCorrectAnswer ? AppTheme.mintBottom : AppTheme.coralBottom)
                     Text(feedbackText)
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -380,7 +423,7 @@ struct GoMiniDrillPlayView: View {
                                 : l10n.localized(zh: "下一题 →", en: "Next Question →", ja: "次の問題 →", ko: "다음 문제 →", zhHant: "下一題 →"),
                             systemImage: "arrow.right.circle.fill"
                         )
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 15, weight: .black))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
@@ -396,10 +439,10 @@ struct GoMiniDrillPlayView: View {
     private func promptCard(title: String, body: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 17, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 17, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
             Text(body)
-                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 13.5, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

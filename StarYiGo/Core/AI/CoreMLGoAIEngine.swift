@@ -5,6 +5,153 @@
 
 import CoreML
 import Foundation
+import Observation
+#if canImport(UIKit)
+import UIKit
+#endif
+
+/// Manages Apple On-Demand Resources (ODR) for the optional 25.5 MB Pro KataGo model (`b18c384nbt`).
+/// - When bundled locally (e.g. Simulator/Debug) or already cached, transitions immediately to `.ready`.
+/// - When tagged as ODR (`katago-pro-b18c384nbt`) in App Store Connect, downloads seamlessly on demand
+///   from Apple's CDN while falling back to the bundled 5.8 MB Standard model (`b10c128`) if offline.
+@MainActor
+@Observable
+final class KataGoProModelODRManager {
+    static let shared = KataGoProModelODRManager()
+    nonisolated static let odrTag = "katago-pro-b18c384nbt"
+
+    enum DownloadState: Equatable {
+        case notDownloaded
+        case downloading(progress: Double)
+        case ready
+        case failed
+    }
+
+    #if DEBUG
+    private static let debugBypassDefaultsKey = "staryigo.debug.bypassProModelODR"
+    /// Debug-only switch (defaults to `true`): when ON, directly uses the locally bundled `b18c384nbt` model
+    /// without going through Apple ODR; turn OFF to test the real `NSBundleResourceRequest` ODR flow.
+    var bypassODRUseLocalModel: Bool {
+        didSet {
+            UserDefaults.standard.set(bypassODRUseLocalModel, forKey: Self.debugBypassDefaultsKey)
+            if bypassODRUseLocalModel {
+                progressObservation?.invalidate()
+                progressObservation = nil
+                activeRequest?.endAccessingResources()
+                activeRequest = nil
+                state = .ready
+                CoreMLGoAIEngine.shared.setProModelAvailableForUse(true)
+            } else {
+                activeRequest?.endAccessingResources()
+                activeRequest = nil
+                state = .notDownloaded
+                CoreMLGoAIEngine.shared.setProModelAvailableForUse(false)
+                refreshAvailability()
+            }
+        }
+    }
+    #endif
+
+    private(set) var state: DownloadState = .notDownloaded
+    private var activeRequest: NSBundleResourceRequest?
+    private var pendingAvailabilityRequest: NSBundleResourceRequest?
+    private var progressObservation: NSKeyValueObservation?
+
+    private init() {
+        #if DEBUG
+        let stored = UserDefaults.standard.object(forKey: Self.debugBypassDefaultsKey) as? Bool
+        self.bypassODRUseLocalModel = stored ?? true
+        if self.bypassODRUseLocalModel {
+            self.state = .ready
+            CoreMLGoAIEngine.shared.setProModelAvailableForUse(true)
+            return
+        }
+        #endif
+        CoreMLGoAIEngine.shared.setProModelAvailableForUse(false)
+        refreshAvailability()
+    }
+
+    func refreshAvailability() {
+        #if DEBUG
+        if bypassODRUseLocalModel {
+            state = .ready
+            CoreMLGoAIEngine.shared.setProModelAvailableForUse(true)
+            return
+        }
+        #endif
+        let request = NSBundleResourceRequest(tags: [Self.odrTag])
+        pendingAvailabilityRequest = request
+        request.conditionallyBeginAccessingResources { [weak self] available in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let checkedRequest = self.pendingAvailabilityRequest
+                self.pendingAvailabilityRequest = nil
+                #if DEBUG
+                if self.bypassODRUseLocalModel { return }
+                #endif
+                if available {
+                    self.activeRequest = checkedRequest
+                    Bundle.main.setPreservationPriority(1.0, forTags: [Self.odrTag])
+                    self.state = .ready
+                    CoreMLGoAIEngine.shared.setProModelAvailableForUse(true)
+                    CoreMLGoAIEngine.shared.clearMissingPresetCache(for: .b18c384nbt)
+                } else if case .downloading = self.state {
+                    // Keep active download state
+                } else {
+                    self.state = .notDownloaded
+                    CoreMLGoAIEngine.shared.setProModelAvailableForUse(false)
+                }
+            }
+        }
+    }
+
+    func ensureDownloaded() {
+        #if DEBUG
+        if bypassODRUseLocalModel {
+            state = .ready
+            CoreMLGoAIEngine.shared.setProModelAvailableForUse(true)
+            return
+        }
+        #endif
+        if state == .ready { return }
+        if case .downloading = state { return }
+
+        let request = NSBundleResourceRequest(tags: [Self.odrTag])
+        request.loadingPriority = NSBundleResourceRequestLoadingPriorityUrgent
+        activeRequest = request
+        state = .downloading(progress: 0.02)
+
+        progressObservation?.invalidate()
+        progressObservation = request.progress.observe(\.fractionCompleted, options: [.new]) { [weak self] prog, _ in
+            let frac = max(0.02, min(1.0, prog.fractionCompleted))
+            Task { @MainActor [weak self] in
+                guard let self, case .downloading = self.state else { return }
+                self.state = .downloading(progress: frac)
+            }
+        }
+
+        request.beginAccessingResources { [weak self] error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.progressObservation?.invalidate()
+                self.progressObservation = nil
+                #if DEBUG
+                if self.bypassODRUseLocalModel { return }
+                #endif
+                if error == nil {
+                    Bundle.main.setPreservationPriority(1.0, forTags: [Self.odrTag])
+                    self.state = .ready
+                    CoreMLGoAIEngine.shared.setProModelAvailableForUse(true)
+                    CoreMLGoAIEngine.shared.clearMissingPresetCache(for: .b18c384nbt)
+                } else {
+                    self.activeRequest = nil
+                    self.state = .failed
+                    CoreMLGoAIEngine.shared.setProModelAvailableForUse(false)
+                }
+            }
+        }
+    }
+}
 
 /// Selectable offline KataGo CoreML neural network models bundled in the app.
 enum KataGoModelPreset: String, CaseIterable, Codable, Identifiable, Sendable {
@@ -88,9 +235,14 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
     private let bundle: Bundle
     private let supportedBoardSize: Int
     private let lock = NSLock()
+    private let loadLock = NSLock()
+    private let inferenceLock = NSLock()
     private var _activePreset: KataGoModelPreset = .defaultPreset
-    private var loadedModels: [KataGoModelPreset: MLModel] = [:]
+    /// Retain only the single currently active model in memory to avoid pinning 30+ MB of ANE/GPU weights.
+    private var activeLoadedModel: (preset: KataGoModelPreset, model: MLModel)? = nil
     private var missingPresets: Set<KataGoModelPreset> = []
+    private var proModelAvailableForUse: Bool = true
+    private var memoryWarningObserver: NSObjectProtocol?
 
     var activeModelPreset: KataGoModelPreset {
         lock.lock()
@@ -100,23 +252,48 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
 
     func setActiveModelPreset(_ preset: KataGoModelPreset) {
         lock.lock()
+        let changed = (_activePreset != preset)
         _activePreset = preset
+        if changed, let loaded = activeLoadedModel, loaded.preset != preset {
+            activeLoadedModel = nil
+        }
+        lock.unlock()
+    }
+
+    func evictLoadedModels() {
+        lock.lock()
+        activeLoadedModel = nil
+        lock.unlock()
+    }
+
+    func clearMissingPresetCache(for preset: KataGoModelPreset) {
+        lock.lock()
+        missingPresets.remove(preset)
+        lock.unlock()
+    }
+
+    func setProModelAvailableForUse(_ available: Bool) {
+        lock.lock()
+        proModelAvailableForUse = available
+        if !available, let loaded = activeLoadedModel, loaded.preset == .b18c384nbt {
+            activeLoadedModel = nil
+        }
         lock.unlock()
     }
 
     var isNeuralModelLoaded: Bool { true }
-    var hasExternalCoreMLWeights: Bool { resolveActiveModel() != nil }
+    var hasExternalCoreMLWeights: Bool { resolvedAvailablePreset() != nil }
 
     var engineName: String {
-        if let active = resolveActiveModel() {
-            return "StarYi KataGo \(active.preset.technicalName) (CoreML ANE + PUCT MCTS)"
+        if let preset = resolvedAvailablePreset() {
+            return "StarYi KataGo \(preset.technicalName) (CoreML ANE + PUCT MCTS)"
         }
         return "StarYi Offline Neural Policy-Value + MCTS"
     }
 
     func activeEngineBadge(_ l10n: L10n) -> String {
-        if let active = resolveActiveModel() {
-            let tag = active.preset.rawValue
+        if let preset = resolvedAvailablePreset() {
+            let tag = preset.rawValue
             return l10n.localized(
                 zh: "🧠 KataGo \(tag) 神经引擎在线",
                 en: "🧠 KataGo \(tag) Neural Engine",
@@ -138,14 +315,87 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         self.bundle = bundle
         self.supportedBoardSize = supportedBoardSize
         self._activePreset = initialPreset
+        #if canImport(UIKit)
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.evictLoadedModels()
+        }
+        #endif
     }
 
-    /// Loads and caches the specified preset if bundled, returning `nil` if unavailable.
+    deinit {
+        if let observer = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    /// Lightweight non-blocking bundle check for UI badges (never loads `MLModel` on `@MainActor`).
+    private func modelURL(for preset: KataGoModelPreset) -> URL? {
+        if preset == .b18c384nbt {
+            lock.lock()
+            let allowed = proModelAvailableForUse
+            lock.unlock()
+            if !allowed { return nil }
+        }
+        let subdirectories: [String?] = [nil, "Models", "Resources/Models"]
+        let candidateNames: [String] = (preset == .b6c96)
+            ? [preset.resourceName, "KataGoPolicyValue", "GoPolicyValueNet"]
+            : [preset.resourceName]
+        for name in candidateNames {
+            for subdir in subdirectories {
+                if let url = bundle.url(forResource: name, withExtension: "mlmodelc", subdirectory: subdir) {
+                    return url
+                }
+            }
+        }
+        return nil
+    }
+
+    private func resolvedAvailablePreset() -> KataGoModelPreset? {
+        lock.lock()
+        let preferred = _activePreset
+        if let loaded = activeLoadedModel, loaded.preset == preferred {
+            lock.unlock()
+            return loaded.preset
+        }
+        let missing = missingPresets
+        lock.unlock()
+
+        let order: [KataGoModelPreset] = [preferred, .b10c128, .b6c96, .b18c384nbt]
+        var seen: Set<KataGoModelPreset> = []
+        for preset in order where seen.insert(preset).inserted {
+            if !missing.contains(preset), modelURL(for: preset) != nil {
+                return preset
+            }
+        }
+        return nil
+    }
+
+    /// Loads the specified preset if bundled, retaining only one loaded `MLModel` at a time.
+    /// Serialized with `loadLock` so concurrent callers never load duplicate 25 MB models or race with preset changes.
     func loadModel(for preset: KataGoModelPreset) -> MLModel? {
         lock.lock()
-        if let cached = loadedModels[preset] {
+        if let loaded = activeLoadedModel, loaded.preset == preset {
             lock.unlock()
-            return cached
+            return loaded.model
+        }
+        if missingPresets.contains(preset) {
+            lock.unlock()
+            return nil
+        }
+        lock.unlock()
+
+        loadLock.lock()
+        defer { loadLock.unlock() }
+
+        // Re-check after acquiring loadLock in case another thread just finished loading it
+        lock.lock()
+        if let loaded = activeLoadedModel, loaded.preset == preset {
+            lock.unlock()
+            return loaded.model
         }
         if missingPresets.contains(preset) {
             lock.unlock()
@@ -155,26 +405,19 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
 
         let config = MLModelConfiguration()
         config.computeUnits = .all
-        let subdirectories: [String?] = [nil, "Models", "Resources/Models"]
-        let candidateNames: [String] = (preset == .b6c96)
-            ? [preset.resourceName, "KataGoPolicyValue", "GoPolicyValueNet"]
-            : [preset.resourceName]
 
         var found: MLModel? = nil
-        for name in candidateNames {
-            for subdir in subdirectories {
-                if let url = bundle.url(forResource: name, withExtension: "mlmodelc", subdirectory: subdir),
-                   let mlModel = try? MLModel(contentsOf: url, configuration: config) {
-                    found = mlModel
-                    break
-                }
-            }
-            if found != nil { break }
+        if let url = modelURL(for: preset),
+           let mlModel = try? MLModel(contentsOf: url, configuration: config) {
+            found = mlModel
         }
 
         lock.lock()
         if let found {
-            loadedModels[preset] = found
+            // Only cache if this preset is still active (or fallback when active is missing)
+            if _activePreset == preset || activeLoadedModel == nil {
+                activeLoadedModel = (preset, found)
+            }
         } else {
             missingPresets.insert(preset)
         }
@@ -221,6 +464,21 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         return decision.action
     }
 
+    /// Runs a synchronous work closure on a background task while preserving structured cancellation from the parent Task.
+    private func runCancellableBackground<T: Sendable>(
+        priority: TaskPriority = .userInitiated,
+        _ operation: @escaping @Sendable () -> T
+    ) async -> T {
+        let child = Task.detached(priority: priority) {
+            operation()
+        }
+        return await withTaskCancellationHandler {
+            await child.value
+        } onCancel: {
+            child.cancel()
+        }
+    }
+
     func selectMoveDecision(
         for state: GoBoardState,
         color: StoneColor,
@@ -230,15 +488,18 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
     ) async -> AIMoveDecision {
         // Use real KataGo + PUCT MCTS for standard 7x7..19x19 matches from Deer (12K) up to Kirin (5D)!
         // Keep beginner levels (Sprout 25K, Rabbit 20K, Fox 15K), 5x5, Capture Race, and themed drills on LocalMCTSGoEngine.
-        if let active = resolveActiveModel(),
-           !ruleSet.isCaptureRace,
+        if !ruleSet.isCaptureRace,
            coachingStyle == .standard,
            state.size >= 7,
            state.size <= supportedBoardSize,
-           let profile = rankProfile(for: level) {
-            return await Task.detached(priority: .userInitiated) {
-                self.selectKataGoDecisionSync(model: active.model, state: state, color: color, profile: profile)
-            }.value
+           let profile = rankProfile(for: level),
+           resolvedAvailablePreset() != nil {
+            if let decision = await runCancellableBackground({ [self] () -> AIMoveDecision? in
+                guard let active = self.resolveActiveModel() else { return nil }
+                return self.selectKataGoDecisionSync(model: active.model, state: state, color: color, profile: profile)
+            }) {
+                return decision
+            }
         }
 
         let action = await fallbackEngine.selectMove(
@@ -256,11 +517,12 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         color: StoneColor,
         count: Int
     ) async -> [MoveSuggestion] {
-        if let active = resolveActiveModel(), state.size >= 7, state.size <= supportedBoardSize {
-            let result = await Task.detached(priority: .userInitiated) {
-                self.analyzeWithKataGoSync(model: active.model, state: state, color: color, playouts: 24, maxVariations: max(2, count))
-            }.value
-            if !result.topVariations.isEmpty {
+        if state.size >= 7, state.size <= supportedBoardSize, resolvedAvailablePreset() != nil {
+            let result = await runCancellableBackground { [self] () -> PositionAnalysis? in
+                guard let active = self.resolveActiveModel() else { return nil }
+                return self.analyzeWithKataGoSync(model: active.model, state: state, color: color, playouts: 24, maxVariations: max(2, count))
+            }
+            if let result, !result.topVariations.isEmpty {
                 return result.topVariations.prefix(count).map { v in
                     MoveSuggestion(point: v.firstMove, score: v.winrateForMover, reason: v.reason, pvMoves: v.pvMoves)
                 }
@@ -274,10 +536,13 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         color: StoneColor,
         maxVariations: Int
     ) async -> PositionAnalysis {
-        if let active = resolveActiveModel(), state.size >= 7, state.size <= supportedBoardSize {
-            return await Task.detached(priority: .userInitiated) {
-                self.analyzeWithKataGoSync(model: active.model, state: state, color: color, playouts: 28, maxVariations: maxVariations)
-            }.value
+        if state.size >= 7, state.size <= supportedBoardSize, resolvedAvailablePreset() != nil {
+            if let result = await runCancellableBackground({ [self] () -> PositionAnalysis? in
+                guard let active = self.resolveActiveModel() else { return nil }
+                return self.analyzeWithKataGoSync(model: active.model, state: state, color: color, playouts: 28, maxVariations: maxVariations)
+            }) {
+                return result
+            }
         }
         return await fallbackEngine.analyzePosition(for: state, color: color, maxVariations: maxVariations)
     }
@@ -286,7 +551,180 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         initialState: GoBoardState,
         moves: [GoMove]
     ) async -> GameReviewReport {
-        await fallbackEngine.analyzeGame(initialState: initialState, moves: moves)
+        if initialState.size >= 7,
+           initialState.size <= supportedBoardSize,
+           resolvedAvailablePreset() != nil {
+            if let report = await runCancellableBackground({ [self] () -> GameReviewReport? in
+                guard let active = self.resolveActiveModel() else { return nil }
+                return self.analyzeGameWithKataGoSync(model: active.model, initialState: initialState, moves: moves)
+            }) {
+                return report
+            }
+        }
+        return await fallbackEngine.analyzeGame(initialState: initialState, moves: moves)
+    }
+
+    private func analyzeGameWithKataGoSync(
+        model: MLModel,
+        initialState: GoBoardState,
+        moves: [GoMove]
+    ) -> GameReviewReport {
+        var states: [GoBoardState] = [initialState]
+        var cur = initialState
+        for mv in moves {
+            if case .success(let out) = cur.applying(action: mv.action, color: mv.color) {
+                cur = out.nextState
+            }
+            states.append(cur)
+        }
+
+        let initialEval = evaluateSync(model: model, state: initialState, color: initialState.currentTurn)
+        let initBlackWR: Double = {
+            guard let ev = initialEval else { return 0.5 }
+            return initialState.currentTurn == .black ? ev.moverWinrate : (1.0 - ev.moverWinrate)
+        }()
+        let initBlackLead: Double = {
+            guard let ev = initialEval else { return 0.0 }
+            return initialState.currentTurn == .black ? ev.scoreLeadForMover : -ev.scoreLeadForMover
+        }()
+
+        var winrateHistory: [Double] = [initBlackWR]
+        var scoreLeadHistory: [Double] = [initBlackLead]
+        var reviewed: [ReviewedMove] = []
+        reviewed.reserveCapacity(moves.count)
+
+        var prevEval = initialEval
+        var prevBlackWR = initBlackWR
+        var prevBlackLead = initBlackLead
+
+        for (i, mv) in moves.enumerated() {
+            if Task.isCancelled { break }
+            let stateBefore = states[i]
+            let stateAfter = states[i + 1]
+
+            let beforeEval: KataGoEvalOutput?
+            if let cached = prevEval, stateBefore.currentTurn == mv.color {
+                beforeEval = cached
+            } else {
+                beforeEval = evaluateSync(model: model, state: stateBefore, color: mv.color)
+            }
+
+            let afterEval = evaluateSync(model: model, state: stateAfter, color: stateAfter.currentTurn)
+            let afterBlackWR: Double = {
+                guard let ev = afterEval else { return prevBlackWR }
+                return stateAfter.currentTurn == .black ? ev.moverWinrate : (1.0 - ev.moverWinrate)
+            }()
+            let afterBlackLead: Double = {
+                guard let ev = afterEval else { return prevBlackLead }
+                return stateAfter.currentTurn == .black ? ev.scoreLeadForMover : -ev.scoreLeadForMover
+            }()
+
+            let moverWRBefore = mv.color == .black ? prevBlackWR : (1.0 - prevBlackWR)
+            let moverWRAfter = mv.color == .black ? afterBlackWR : (1.0 - afterBlackWR)
+            let wrDrop = max(0.0, moverWRBefore - moverWRAfter)
+
+            let moverLeadBefore = mv.color == .black ? prevBlackLead : -prevBlackLead
+            let moverLeadAfter = mv.color == .black ? afterBlackLead : -afterBlackLead
+            let scoreDrop = max(0.0, moverLeadBefore - moverLeadAfter)
+
+            // Build top-3 candidate variations from KataGo policy head at `stateBefore`
+            var topVariations: [MoveVariation] = []
+            if let bEval = beforeEval {
+                let s = stateBefore.size
+                let ranked = bEval.boardPolicy.enumerated()
+                    .filter { $0.element > 0.005 }
+                    .sorted { $0.element > $1.element }
+                    .prefix(3)
+                for (flatIdx, _) in ranked {
+                    let pt = BoardPoint(row: flatIdx / s, col: flatIdx % s)
+                    let blackLead = mv.color == .black ? bEval.scoreLeadForMover : -bEval.scoreLeadForMover
+                    topVariations.append(
+                        MoveVariation(
+                            firstMove: pt,
+                            winrateForMover: bEval.moverWinrate,
+                            scoreLeadForBlack: blackLead,
+                            pvMoves: [pt],
+                            reason: .bestMove
+                        )
+                    )
+                }
+            }
+
+            let bestCoord = topVariations.first?.firstMove.humanLabel(boardSize: stateBefore.size)
+            let quality: MoveQuality
+            let diagZh: String
+            let diagEn: String
+
+            if wrDrop >= 0.14 || scoreDrop >= 6.0 {
+                quality = .blunder
+                if let bestCoord {
+                    diagZh = "这一手损失较大，KataGo 推荐优先考虑 \(bestCoord)。"
+                    diagEn = "Big swing here — KataGo strongly recommends \(bestCoord)."
+                } else {
+                    diagZh = "这一手胜率下滑较明显，可以结合参考变化复盘。"
+                    diagEn = "Noticeable winrate drop on this move."
+                }
+            } else if wrDrop >= 0.07 || scoreDrop >= 3.0 {
+                quality = .mistake
+                if let bestCoord {
+                    diagZh = "稍有缓手，走 \(bestCoord) 会更积极稳健。"
+                    diagEn = "A bit slow — \(bestCoord) keeps stronger momentum."
+                } else {
+                    diagZh = "这里有更积极的选点可以争取主动。"
+                    diagEn = "There was a more active continuation here."
+                }
+            } else if wrDrop >= 0.035 || scoreDrop >= 1.5 {
+                quality = .inaccuracy
+                if let bestCoord {
+                    diagZh = "小瑕疵，参考点 \(bestCoord) 效率略高。"
+                    diagEn = "Slight inaccuracy — \(bestCoord) is a touch more efficient."
+                } else {
+                    diagZh = "细节上还可以更紧凑一些。"
+                    diagEn = "A small refinement was available here."
+                }
+            } else if let best = topVariations.first?.firstMove,
+                      case .place(let played) = mv.action,
+                      played == best,
+                      (moverWRAfter - moverWRBefore) >= 0.02 {
+                quality = .brilliant
+                diagZh = "精准妙手！完全契合 KataGo 第一选点。"
+                diagEn = "Brilliant move! Matches KataGo's top choice."
+            } else {
+                quality = .good
+                diagZh = "稳健好手，保持了局面平衡与步调。"
+                diagEn = "Solid move keeping good balance and pace."
+            }
+
+            reviewed.append(
+                ReviewedMove(
+                    id: mv.moveNumber,
+                    moveNumber: mv.moveNumber,
+                    color: mv.color,
+                    playedAction: mv.action,
+                    blackWinrateAfter: afterBlackWR,
+                    blackScoreLeadAfter: afterBlackLead,
+                    moverWinrateDrop: wrDrop,
+                    moverScoreDrop: scoreDrop,
+                    quality: quality,
+                    diagnosisZh: diagZh,
+                    diagnosisEn: diagEn,
+                    topVariations: topVariations
+                )
+            )
+
+            winrateHistory.append(afterBlackWR)
+            scoreLeadHistory.append(afterBlackLead)
+            prevEval = afterEval
+            prevBlackWR = afterBlackWR
+            prevBlackLead = afterBlackLead
+        }
+
+        return GameReviewReport(
+            initialBlackWinrate: initBlackWR,
+            winrateHistory: winrateHistory,
+            scoreLeadHistory: scoreLeadHistory,
+            reviewedMoves: reviewed
+        )
     }
 
     // MARK: - Calibrated Rank Profiles (12K -> 5D+)
@@ -399,23 +837,51 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
             setBin(6, ko.row, ko.col, 1.0)
         }
 
-        // Plane 9 / Global 0: Last move (t-1)
-        if let last = state.lastMove {
-            switch last {
+        // Planes 9..13 / Globals 0..4: Move history (t-1 .. t-5)
+        let historyMoves: [MoveAction] = state.recentMoves.isEmpty
+            ? (state.lastMove.map { [$0] } ?? [])
+            : state.recentMoves
+        let histCount = historyMoves.count
+        for offset in 0..<min(5, histCount) {
+            let action = historyMoves[histCount - 1 - offset]
+            switch action {
             case .place(let pt):
                 if pt.row < s && pt.col < s {
-                    setBin(9, pt.row, pt.col, 1.0)
+                    setBin(9 + offset, pt.row, pt.col, 1.0)
                 }
             case .pass:
-                glPtr[0] = 1.0
+                glPtr[offset] = 1.0
             case .resign:
                 break
+            }
+        }
+
+        // Planes 14 & 17: Working ladder capture / escape features via exact ladder reader
+        // (Plane 14: currently in working ladder; Plane 17: working ladder escape move)
+        for g in groups where g.liberties.count == 1 && g.stones.count <= 4 {
+            if let repIdx = g.stones.first {
+                let repPt = state.point(for: repIdx)
+                if repPt.row < s && repPt.col < s {
+                    if case .captured = GoTacticalReader.readLadderDefenderToMove(state: state, targetStone: repPt, maxDepth: 24) {
+                        for stIdx in g.stones {
+                            let pt = state.point(for: stIdx)
+                            if pt.row < s && pt.col < s {
+                                setBin(14, pt.row, pt.col, 1.0)
+                            }
+                        }
+                    }
+                }
             }
         }
 
         // Global 5: selfKomi / 20.0 (from mover's perspective)
         let selfKomi: Float32 = (color == .white) ? Float32(state.komi) : -Float32(state.komi)
         glPtr[5] = selfKomi / 20.0
+
+        // Global 14: passWouldEndPhase (opponent just passed, so passing now ends the game)
+        if state.consecutivePasses >= 1 {
+            glPtr[14] = 1.0
+        }
 
         return (sp, gl)
     }
@@ -429,8 +895,15 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
               let provider = try? MLDictionaryFeatureProvider(dictionary: [
                   "spatial": MLFeatureValue(multiArray: inputs.spatial),
                   "global_in": MLFeatureValue(multiArray: inputs.global)
-              ]),
-              let output = try? model.prediction(from: provider),
+              ]) else {
+            return nil
+        }
+
+        inferenceLock.lock()
+        let output = try? model.prediction(from: provider)
+        inferenceLock.unlock()
+
+        guard let output,
               let policyArr = output.featureValue(for: "policy")?.multiArrayValue,
               let valueArr = output.featureValue(for: "value")?.multiArrayValue else {
             return nil
@@ -536,15 +1009,20 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
             visits > 0 ? (totalValue / Double(visits)) : 0.5
         }
 
-        func puctScore(sqrtParentVisits: Double, cPuct: Double = 1.35) -> Double {
-            let q = visits > 0 ? (totalValue / Double(visits)) : 0.45
+        func puctScore(sqrtParentVisits: Double, parentFPU: Double, cPuct: Double = 1.35) -> Double {
+            let q = visits > 0 ? (totalValue / Double(visits)) : parentFPU
             let u = cPuct * prior * sqrtParentVisits / (1.0 + Double(visits))
             return q + u
         }
     }
 
-    private func expandNode(_ node: PUCTNode, model: MLModel, maxChildren: Int) -> Double {
-        guard let eval = evaluateSync(model: model, state: node.state, color: node.moverToPlay) else {
+    private func expandNode(
+        _ node: PUCTNode,
+        model: MLModel,
+        maxChildren: Int,
+        precomputedEval: KataGoEvalOutput? = nil
+    ) -> Double {
+        guard let eval = precomputedEval ?? evaluateSync(model: model, state: node.state, color: node.moverToPlay) else {
             node.isExpanded = true
             return 0.5
         }
@@ -587,26 +1065,31 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         model: MLModel,
         state: GoBoardState,
         color: StoneColor,
-        playouts: Int
+        playouts: Int,
+        precomputedRootEval: KataGoEvalOutput? = nil
     ) -> PUCTNode {
         let root = PUCTNode(action: nil, state: state, moverToPlay: color, prior: 1.0)
         let rootCap = state.size >= 13 ? 18 : 14
         let innerCap = 10
 
-        let rootVal = expandNode(root, model: model, maxChildren: rootCap)
+        let rootVal = expandNode(root, model: model, maxChildren: rootCap, precomputedEval: precomputedRootEval)
         root.visits = 1
-        root.totalValue = rootVal
+        root.totalValue = 1.0 - rootVal // Stored from parent's perspective (consistent with backpropagation)
 
         let iterations = max(0, playouts - 1)
         for _ in 0..<iterations {
+            if Task.isCancelled { break }
             var current = root
             // 1. Selection
             while current.isExpanded && !current.children.isEmpty {
                 let sqrtN = sqrt(Double(max(1, current.visits)))
+                // Relative FPU from current mover's perspective (1.0 - current.meanQ)
+                let parentMoverQ = 1.0 - current.meanQ
+                let parentFPU = max(0.02, parentMoverQ - 0.18)
                 var bestChild = current.children[0]
-                var bestScore = bestChild.puctScore(sqrtParentVisits: sqrtN)
+                var bestScore = bestChild.puctScore(sqrtParentVisits: sqrtN, parentFPU: parentFPU)
                 for child in current.children.dropFirst() {
-                    let sc = child.puctScore(sqrtParentVisits: sqrtN)
+                    let sc = child.puctScore(sqrtParentVisits: sqrtN, parentFPU: parentFPU)
                     if sc > bestScore {
                         bestScore = sc
                         bestChild = child
@@ -732,8 +1215,8 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
             )
         }
 
-        // Full KataGo PUCT MCTS for 5K / 3K / 1D / 3D / 5D
-        let root = runPUCT(model: model, state: state, color: color, playouts: profile.playouts)
+        // Full KataGo PUCT MCTS for 5K / 3K / 1D / 3D / 5D (reuse already-computed rootEval!)
+        let root = runPUCT(model: model, state: state, color: color, playouts: profile.playouts, precomputedRootEval: rootEval)
         guard !root.children.isEmpty else {
             return AIMoveDecision(
                 action: .pass,
@@ -797,7 +1280,8 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
             return pool[0].action
         }
         let invT = 1.0 / max(0.05, temperature)
-        let weights = pool.map { pow(max(1e-9, $0.prob), invT) }
+        let maxProb = max(1e-9, pool.map(\.prob).max() ?? 1.0)
+        let weights = pool.map { pow(max(1e-9, $0.prob / maxProb), invT) }
         let total = weights.reduce(0.0, +)
         guard total > 0 else { return pool[0].action }
         var r = Double.random(in: 0..<total)
@@ -816,7 +1300,7 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         maxVariations: Int
     ) -> PositionAnalysis {
         let eval = evaluateSync(model: model, state: state, color: color)
-        let root = runPUCT(model: model, state: state, color: color, playouts: playouts)
+        let root = runPUCT(model: model, state: state, color: color, playouts: playouts, precomputedRootEval: eval)
         let sorted = root.children.sorted { a, b in
             if a.visits != b.visits { return a.visits > b.visits }
             return a.meanQ > b.meanQ
@@ -900,8 +1384,21 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         let exactResult = GoScoring.score(state: state, rule: rule, deadStoneIndices: deadStoneIndices)
         let heuristicDead = GoScoring.autoEstimateDeadStones(state: state)
 
-        if let active = resolveActiveModel(), state.size >= 7, state.size <= supportedBoardSize {
-            return await Task.detached(priority: .userInitiated) {
+        if state.size >= 7, state.size <= supportedBoardSize, resolvedAvailablePreset() != nil {
+            return await runCancellableBackground { [self] in
+                guard let active = self.resolveActiveModel() else {
+                    let fallbackEst = GoScoring.estimateTerritory(state: state, deadStoneIndices: deadStoneIndices)
+                    let lead = exactResult.blackScore - exactResult.whiteScore
+                    let wr = min(0.99, max(0.01, 1.0 / (1.0 + exp(-lead * 0.25))))
+                    return PhotoJudgeEvaluation(
+                        gameResult: exactResult,
+                        territoryEstimate: fallbackEst,
+                        blackWinrate: wr,
+                        aiScoreLeadForBlack: lead,
+                        suggestedDeadIndices: heuristicDead,
+                        usedKataGoNeuralModel: false
+                    )
+                }
                 var evalState = state
                 for idx in deadStoneIndices where idx >= 0 && idx < evalState.grid.count {
                     evalState.grid[idx] = nil
@@ -954,7 +1451,7 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
                     suggestedDeadIndices: heuristicDead,
                     usedKataGoNeuralModel: false
                 )
-            }.value
+            }
         }
 
         let fallbackEst = GoScoring.estimateTerritory(state: state, deadStoneIndices: deadStoneIndices)
@@ -978,8 +1475,15 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
               let provider = try? MLDictionaryFeatureProvider(dictionary: [
                   "spatial": MLFeatureValue(multiArray: inputs.spatial),
                   "global_in": MLFeatureValue(multiArray: inputs.global)
-              ]),
-              let output = try? model.prediction(from: provider),
+              ]) else {
+            return nil
+        }
+
+        inferenceLock.lock()
+        let output = try? model.prediction(from: provider)
+        inferenceLock.unlock()
+
+        guard let output,
               let valueArr = output.featureValue(for: "value")?.multiArrayValue,
               let ownArr = output.featureValue(for: "ownership")?.multiArrayValue else {
             return nil

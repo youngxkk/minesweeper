@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import ImageIO
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -40,7 +41,7 @@ struct PhotoBoardJudgeView: View {
 
     @State private var sourceImage: UIImage? = nil
     @State private var corners: BoardCornerQuad = .defaultCentered
-    @State private var gridInsetFraction: CGFloat = 0.045
+    @State private var gridInsetFraction: CGFloat = 0.0
     @State private var isProcessing: Bool = false
 
     @State private var recognitionResult: BoardRecognitionResult? = nil
@@ -63,6 +64,8 @@ struct PhotoBoardJudgeView: View {
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var evaluationTask: Task<Void, Never>? = nil
     @State private var liveGridDetectTask: Task<Void, Never>? = nil
+    @State private var activeVisionTask: Task<Void, Never>? = nil
+    @State private var activeVisionTaskID: UUID = UUID()
 
     @State private var activeRecordId: UUID? = nil
     @State private var activeRecordDate: Date? = nil
@@ -79,8 +82,7 @@ struct PhotoBoardJudgeView: View {
 
     var body: some View {
         ZStack {
-            // Dedicated full-bleed sunlit Go veranda & bamboo courtyard backdrop
-            PhotoJudgeBackdropView()
+            SceneBackdrop.bambooPond
 
             VStack(spacing: 12) {
                 topBar
@@ -142,13 +144,15 @@ struct PhotoBoardJudgeView: View {
             guard !hasInitialized else { return }
             hasInitialized = true
             scoringRule = .chinese
-            selectedSize = .nineteen
-            autoDetectBoardSize = false
+            let savedRaw = UserDefaults.standard.integer(forKey: "photoJudgePreferredBoardSize")
+            selectedSize = BoardSize(rawValue: savedRaw) ?? .nineteen
+            autoDetectBoardSize = UserDefaults.standard.bool(forKey: "photoJudgeAutoDetectBoardSize")
             komi = scoringRule.defaultKomi(for: selectedSize)
         }
         .onDisappear {
             evaluationTask?.cancel()
             liveGridDetectTask?.cancel()
+            activeVisionTask?.cancel()
         }
         .fullScreenCover(isPresented: $showCameraSheet) {
             CameraCaptureView { image in
@@ -164,7 +168,7 @@ struct PhotoBoardJudgeView: View {
             guard let newItem else { return }
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
+                   let image = Self.downsampledPickedImage(from: data, maxDimension: 1400) ?? UIImage(data: data) {
                     await MainActor.run {
                         handlePickedImage(image)
                     }
@@ -309,7 +313,7 @@ struct PhotoBoardJudgeView: View {
                                         : l10n.localized(zh: "看原图", en: "Photo", ja: "元写真", ko: "원본", zhHant: "看原圖"),
                                     systemImage: showOriginalPhotoOverlay ? "square.grid.3x3" : "photo"
                                 )
-                                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12.5, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
@@ -331,7 +335,7 @@ struct PhotoBoardJudgeView: View {
                                     l10n.localized(zh: "删除", en: "Delete", ja: "削除", ko: "삭제", zhHant: "刪除"),
                                     systemImage: "trash"
                                 )
-                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 13, weight: .black))
                                 .foregroundColor(AppTheme.coralBottom)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
@@ -356,7 +360,7 @@ struct PhotoBoardJudgeView: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 13, weight: .black))
+                                    .font(.system(size: 13, weight: .black, design: .rounded))
                                 Text(
                                     appState.photoJudgeHistory.isEmpty
                                         ? l10n.localized(zh: "历史", en: "History", ja: "履歴", ko: "기록", zhHant: "歷史")
@@ -368,7 +372,7 @@ struct PhotoBoardJudgeView: View {
                                             zhHant: "歷史 (\(appState.photoJudgeHistory.count))"
                                         )
                                 )
-                                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12.5, weight: .black))
                             }
                             .foregroundColor(AppTheme.inkPrimary)
                             .padding(.horizontal, 12)
@@ -385,7 +389,7 @@ struct PhotoBoardJudgeView: View {
                                 l10n.localized(zh: "清空", en: "Clear All", ja: "全削除", ko: "전체 삭제", zhHant: "清空"),
                                 systemImage: "trash"
                             )
-                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .black))
                             .foregroundColor(AppTheme.coralBottom)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
@@ -511,7 +515,7 @@ struct PhotoBoardJudgeView: View {
                         .frame(width: isCompact ? 46 : 62, height: isCompact ? 46 : 62)
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.65), lineWidth: 2.5))
                     Image(systemName: "camera.fill")
-                        .font(.system(size: isCompact ? 22 : 30, weight: .black))
+                        .font(.system(size: isCompact ? 22 : 30, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .shadow(color: AppTheme.skyRim.opacity(0.55), radius: 2, y: 2)
                 }
@@ -526,7 +530,7 @@ struct PhotoBoardJudgeView: View {
                         ko: "사진 촬영",
                         zhHant: "立即拍照"
                     ))
-                    .font(.system(size: isCompact ? 22 : 30, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: isCompact ? 22 : 30, weight: .black))
                     .foregroundColor(.white)
                     .shadow(color: AppTheme.skyRim.opacity(0.55), radius: 2, y: 2)
                     .lineLimit(1)
@@ -539,7 +543,7 @@ struct PhotoBoardJudgeView: View {
                         ko: "실제 바둑판을 촬영해 즉시 승패 판정",
                         zhHant: "對準實體棋盤俯拍，秒判黑白勝負"
                     ))
-                    .font(.system(size: isCompact ? 11.5 : 13.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: isCompact ? 11.5 : 13.5, weight: .bold))
                     .foregroundColor(.white.opacity(0.94))
                     .lineLimit(2)
                 }
@@ -574,7 +578,7 @@ struct PhotoBoardJudgeView: View {
                         .frame(width: isCompact ? 46 : 62, height: isCompact ? 46 : 62)
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.65), lineWidth: 2.5))
                     Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: isCompact ? 21 : 28, weight: .black))
+                        .font(.system(size: isCompact ? 21 : 28, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .shadow(color: AppTheme.sunRim.opacity(0.55), radius: 2, y: 2)
                 }
@@ -589,7 +593,7 @@ struct PhotoBoardJudgeView: View {
                         ko: "앨범에서 선택",
                         zhHant: "從相簿選擇"
                     ))
-                    .font(.system(size: isCompact ? 22 : 30, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: isCompact ? 22 : 30, weight: .black))
                     .foregroundColor(.white)
                     .shadow(color: AppTheme.sunRim.opacity(0.55), radius: 2, y: 2)
                     .lineLimit(1)
@@ -602,7 +606,7 @@ struct PhotoBoardJudgeView: View {
                         ko: "촬영해 둔 대국 사진을 오프라인 판정",
                         zhHant: "匯入已拍好的對局照片離線算勝負"
                     ))
-                    .font(.system(size: isCompact ? 11.5 : 13.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: isCompact ? 11.5 : 13.5, weight: .bold))
                     .foregroundColor(.white.opacity(0.94))
                     .lineLimit(2)
                 }
@@ -637,7 +641,7 @@ struct PhotoBoardJudgeView: View {
                         .frame(width: isCompact ? 46 : 62, height: isCompact ? 46 : 62)
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.65), lineWidth: 2.5))
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: isCompact ? 22 : 30, weight: .black))
+                        .font(.system(size: isCompact ? 22 : 30, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .shadow(color: AppTheme.grapeRim.opacity(0.55), radius: 2, y: 2)
                 }
@@ -652,14 +656,14 @@ struct PhotoBoardJudgeView: View {
                         ko: "기록",
                         zhHant: "查看歷史"
                     ))
-                    .font(.system(size: isCompact ? 20 : 26, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: isCompact ? 20 : 26, weight: .black))
                     .foregroundColor(.white)
                     .shadow(color: AppTheme.grapeRim.opacity(0.55), radius: 2, y: 2)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
 
                     Text("\(appState.photoJudgeHistory.count)/\(PhotoJudgeRecord.maxStoredCount)")
-                        .font(.system(size: isCompact ? 11.5 : 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: isCompact ? 11.5 : 13.5, weight: .bold))
                         .foregroundColor(.white.opacity(0.94))
                         .lineLimit(1)
                 }
@@ -720,16 +724,17 @@ struct PhotoBoardJudgeView: View {
     private func boardSizeRuleGroup(isCompact: Bool) -> some View {
         HStack(spacing: isCompact ? 5 : 7) {
             Text(l10n.localized(zh: "棋盘规格", en: "Board", ja: "盤サイズ", ko: "바둑판", zhHant: "棋盤規格"))
-                .font(.system(size: isCompact ? 11.5 : 12.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                 .foregroundColor(.white.opacity(0.9))
                 .fixedSize()
 
             Button {
                 SoundAndHapticsManager.shared.playUITap()
                 autoDetectBoardSize = true
+                UserDefaults.standard.set(true, forKey: "photoJudgeAutoDetectBoardSize")
             } label: {
                 Text(l10n.localized(zh: "自动", en: "Auto", ja: "自動", ko: "자동", zhHant: "自動"))
-                    .font(.system(size: isCompact ? 11.5 : 12.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                     .foregroundColor(autoDetectBoardSize ? .white : AppTheme.inkPrimary)
                     .padding(.horizontal, isCompact ? 9 : 12)
                     .padding(.vertical, 6)
@@ -750,9 +755,11 @@ struct PhotoBoardJudgeView: View {
                     autoDetectBoardSize = false
                     selectedSize = size
                     komi = scoringRule.defaultKomi(for: size)
+                    UserDefaults.standard.set(false, forKey: "photoJudgeAutoDetectBoardSize")
+                    UserDefaults.standard.set(size.rawValue, forKey: "photoJudgePreferredBoardSize")
                 } label: {
                     Text("\(size.rawValue)×\(size.rawValue)")
-                        .font(.system(size: isCompact ? 11.5 : 12.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                         .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
                         .padding(.horizontal, isCompact ? 8 : 11)
                         .padding(.vertical, 6)
@@ -772,7 +779,7 @@ struct PhotoBoardJudgeView: View {
     private func scoringRuleGroup(isCompact: Bool) -> some View {
         HStack(spacing: isCompact ? 6 : 8) {
             Text(l10n.localized(zh: "计分规则", en: "Rules", ja: "ルール", ko: "규칙", zhHant: "計分規則"))
-                .font(.system(size: isCompact ? 11.5 : 12.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                 .foregroundColor(.white.opacity(0.9))
                 .fixedSize()
 
@@ -784,7 +791,7 @@ struct PhotoBoardJudgeView: View {
                     komi = rule.defaultKomi(for: selectedSize)
                 } label: {
                     Text(ruleLabel(rule))
-                        .font(.system(size: isCompact ? 11.5 : 12.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                         .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
                         .padding(.horizontal, isCompact ? 10 : 13)
                         .padding(.vertical, 6)
@@ -834,30 +841,30 @@ struct PhotoBoardJudgeView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(l10n.localized(
-                        zh: "拖动 4 个彩色圆点对齐棋盘四角",
-                        en: "Drag the 4 Handles to Board Corners",
-                        ja: "4つの丸を盤の四隅に合わせてください",
-                        ko: "4개의 핸들을 바둑판 네 모서리에 맞추세요",
-                        zhHant: "拖動 4 個彩色圓點對齊棋盤四角"
+                        zh: "拖动 4 个彩色圆环对齐网格四角",
+                        en: "Drag the 4 Rings to Grid Corners",
+                        ja: "4つの丸を最外周の四隅に合わせてください",
+                        ko: "4개의 링을 바둑판 최외곽 네 모서리에 맞추세요",
+                        zhHant: "拖動 4 個彩色圓環對齊網格四角"
                     ))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                     Text(l10n.localized(
-                        zh: "让青色参考网格线尽量与实体棋盘的纵横线重合，识别会非常准确。",
-                        en: "Align the cyan grid preview with the physical board lines for best accuracy.",
-                        ja: "青いグリッド線が実際の碁盤の線に重なるように調整すると高精度になります。",
-                        ko: "파란 격자선이 실제 바둑판 선과 겹치도록 맞추면 정확도가 높아집니다.",
-                        zhHant: "讓青色參考網格線盡量與實體棋盤的縱橫線重合，識別會非常準確。"
+                        zh: "把每个圆环的准星直接对准最边角交叉点（1-1、1-19 等），拖动时放大镜会实时放大手指位置与青色网格。",
+                        en: "Align each crosshair directly onto the 4 outermost grid intersections. The magnifier zooms right under your fingertip.",
+                        ja: "各リングの照準を最外周の四隅の交点に直接合わせてください。ドラッグ中は指先を拡大表示します。",
+                        ko: "각 링의 십자선을 바둑판 최외곽 모서리 교차점에 맞추세요. 드래그 시 손가락 위치가 확대됩니다.",
+                        zhHant: "把每個圓環的準星直接對準最邊角交叉點（1-1、1-19 等），拖動時放大鏡會即時放大手指位置與青色網格。"
                     ))
-                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
 
                     // Board Size quick switcher
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text(l10n.localized(zh: "棋盘路数", en: "Board Size", ja: "路数", ko: "바둑판 크기", zhHant: "棋盤路數"))
-                                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: .heavy))
                                 .foregroundColor(AppTheme.inkSecondary)
                             Spacer()
                             if autoDetectBoardSize, let conf = detectedGridConfidence, conf >= 0.38 {
@@ -868,7 +875,7 @@ struct PhotoBoardJudgeView: View {
                                     ko: "✓ 자동 인식 \(selectedSize.rawValue)×\(selectedSize.rawValue)",
                                     zhHant: "✓ 自動識別 \(selectedSize.rawValue)×\(selectedSize.rawValue)"
                                 ))
-                                .font(.system(size: 11, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 11, weight: .black))
                                 .foregroundColor(AppTheme.mintBottom)
                             }
                         }
@@ -881,10 +888,11 @@ struct PhotoBoardJudgeView: View {
                                     autoDetectBoardSize = false
                                     selectedSize = size
                                     komi = scoringRule.defaultKomi(for: size)
-                                    fitInsetForCurrentSelection()
+                                    UserDefaults.standard.set(false, forKey: "photoJudgeAutoDetectBoardSize")
+                                    UserDefaults.standard.set(size.rawValue, forKey: "photoJudgePreferredBoardSize")
                                 } label: {
                                     Text("\(size.rawValue)×\(size.rawValue)")
-                                        .font(.system(size: 13, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 13, weight: .black))
                                         .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
@@ -901,27 +909,6 @@ struct PhotoBoardJudgeView: View {
                         }
                     }
 
-                    // Border inset slider
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(l10n.localized(
-                                zh: "木框留白微调",
-                                en: "Board Border Inset",
-                                ja: "盤の外枠余白",
-                                ko: "테두리 여백 미세조정",
-                                zhHant: "木框留白微調"
-                            ))
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
-                            .foregroundColor(AppTheme.inkSecondary)
-                            Spacer()
-                            Text("\(Int((gridInsetFraction * 100).rounded()))%")
-                                .font(.system(size: 12, weight: .black, design: .rounded))
-                                .foregroundColor(AppTheme.skyBottom)
-                        }
-                        Slider(value: $gridInsetFraction, in: 0.0...0.12, step: 0.005)
-                            .tint(AppTheme.skyBottom)
-                    }
-
                     HStack(spacing: 8) {
                         Button {
                             if let img = sourceImage {
@@ -933,7 +920,7 @@ struct PhotoBoardJudgeView: View {
                                 l10n.localized(zh: "重测四角", en: "Re-corners", ja: "四隅再検出", ko: "모서리 재탐지", zhHant: "重測四角"),
                                 systemImage: "crop"
                             )
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .heavy))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
@@ -944,6 +931,7 @@ struct PhotoBoardJudgeView: View {
                             if let img = sourceImage {
                                 SoundAndHapticsManager.shared.playUITap()
                                 autoDetectBoardSize = true
+                                UserDefaults.standard.set(true, forKey: "photoJudgeAutoDetectBoardSize")
                                 detectGridForCurrentCorners(in: img)
                             }
                         } label: {
@@ -951,7 +939,7 @@ struct PhotoBoardJudgeView: View {
                                 l10n.localized(zh: "识别路数", en: "Auto Size", ja: "路数検出", ko: "크기 자동", zhHant: "識別路數"),
                                 systemImage: "sparkles"
                             )
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .heavy))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
@@ -972,7 +960,7 @@ struct PhotoBoardJudgeView: View {
                             ),
                             systemImage: "wand.and.stars"
                         )
-                        .font(.system(size: 19, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 19, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 62)
                         .padding(.vertical, 4)
@@ -1057,7 +1045,7 @@ struct PhotoBoardJudgeView: View {
                                 l10n.localized(zh: "调四角", en: "Re-align", ja: "再調整", ko: "재보정", zhHant: "調四角"),
                                 systemImage: "crop"
                             )
-                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -1130,7 +1118,7 @@ struct PhotoBoardJudgeView: View {
                         .shadow(color: Color.black.opacity(0.28), radius: 4, y: 2)
 
                     Image(systemName: "crown.fill")
-                        .font(.system(size: 13, weight: .black))
+                        .font(.system(size: 13, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.sunTop)
                         .offset(y: -22)
                         .shadow(color: Color.black.opacity(0.3), radius: 2, y: 1)
@@ -1138,12 +1126,12 @@ struct PhotoBoardJudgeView: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(winnerTitle)
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 28, weight: .black))
                         .foregroundColor(.white)
                         .shadow(color: palette.rim.opacity(0.55), radius: 2, y: 2)
 
                     Text(marginDisplay)
-                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 32, weight: .black))
                         .foregroundColor(Color(red: 1.0, green: 0.98, blue: 0.80))
                         .shadow(color: palette.rim.opacity(0.65), radius: 3, y: 2)
                 }
@@ -1168,18 +1156,18 @@ struct PhotoBoardJudgeView: View {
                             .frame(width: 13, height: 13)
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5))
                         Text(l10n.localized(zh: "黑占地盘", en: "Black Area", ja: "黒の陣地", ko: "흑 영토", zhHant: "黑佔地盤"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(.white.opacity(0.92))
                     }
 
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(blackPrimaryNum)
-                            .font(.system(size: 30, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 30, weight: .black))
                             .foregroundColor(.white)
                             .minimumScaleFactor(0.75)
                             .lineLimit(1)
                         Text(areaUnit)
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 14, weight: .heavy))
                             .foregroundColor(.white.opacity(0.88))
                     }
 
@@ -1190,7 +1178,7 @@ struct PhotoBoardJudgeView: View {
                         ko: "돌 \(result.blackStones) · 집 \(result.blackTerritory)",
                         zhHant: "黑子 \(result.blackStones) · 空 \(result.blackTerritory)"
                     ))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(.white.opacity(0.86))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1215,18 +1203,18 @@ struct PhotoBoardJudgeView: View {
                             .frame(width: 13, height: 13)
                             .overlay(Circle().strokeBorder(Color.black.opacity(0.28), lineWidth: 1.2))
                         Text(l10n.localized(zh: "白占地盘", en: "White Area", ja: "白の陣地", ko: "백 영토", zhHant: "白佔地盤"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                     }
 
                     HStack(alignment: .firstTextBaseline, spacing: 3) {
                         Text(whitePrimaryNum)
-                            .font(.system(size: 30, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 30, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                             .minimumScaleFactor(0.75)
                             .lineLimit(1)
                         Text(areaUnit)
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 14, weight: .heavy))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
 
@@ -1237,7 +1225,7 @@ struct PhotoBoardJudgeView: View {
                         ko: "돌 \(result.whiteStones) · 집 \(result.whiteTerritory)",
                         zhHant: "白子 \(result.whiteStones) · 空 \(result.whiteTerritory)"
                     ))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1256,7 +1244,7 @@ struct PhotoBoardJudgeView: View {
             }
 
             Text(detail)
-                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .heavy))
                 .foregroundColor(Color.white.opacity(0.95))
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -1284,7 +1272,7 @@ struct PhotoBoardJudgeView: View {
                         ? l10n.localized(zh: "🧠 KataGo 离线胜率", en: "🧠 KataGo Offline Winrate", ja: "🧠 KataGo オフライン勝率", ko: "🧠 KataGo 오프라인 승률", zhHant: "🧠 KataGo 離線勝率")
                         : l10n.localized(zh: "⚖️ 离线形势胜率", en: "⚖️ Offline Winrate", ja: "⚖️ オフライン勝率", ko: "⚖️ 오프라인 승률", zhHant: "⚖️ 離線形勢勝率")
                 )
-                .font(.system(size: 13, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13, weight: .black))
                 .foregroundColor(AppTheme.inkSecondary)
                 Spacer()
             }
@@ -1295,10 +1283,10 @@ struct PhotoBoardJudgeView: View {
                         .fill(Color(white: 0.14))
                         .frame(width: 12, height: 12)
                     Text(l10n.localized(zh: "黑", en: "B", ja: "黒", ko: "흑", zhHant: "黑"))
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text("\(blackPct)%")
-                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 24, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                 }
 
@@ -1306,10 +1294,10 @@ struct PhotoBoardJudgeView: View {
 
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
                     Text("\(whitePct)%")
-                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 24, weight: .black))
                         .foregroundColor(AppTheme.skyBottom)
                     Text(l10n.localized(zh: "白", en: "W", ja: "白", ko: "백", zhHant: "白"))
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(AppTheme.inkSecondary)
                     Circle()
                         .fill(Color.white)
@@ -1346,7 +1334,7 @@ struct PhotoBoardJudgeView: View {
                     ko: "바둑판 탭하여 수정",
                     zhHant: "點棋盤快速修正"
                 ))
-                .font(.system(size: 12, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
 
                 Spacer()
@@ -1358,7 +1346,7 @@ struct PhotoBoardJudgeView: View {
                         l10n.localized(zh: "自动标死子", en: "Auto Dead", ja: "死石自動", ko: "사석 자동", zhHant: "自動標死子"),
                         systemImage: "wand.and.stars.inverse"
                     )
-                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 11, weight: .black))
                     .foregroundColor(AppTheme.grapeBottom)
                 }
             }
@@ -1386,9 +1374,9 @@ struct PhotoBoardJudgeView: View {
         } label: {
             VStack(spacing: 2) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .black))
+                    .font(.system(size: 12, weight: .black, design: .rounded))
                 Text(title)
-                    .font(.system(size: 10, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 10, weight: .black))
             }
             .foregroundColor(active ? .white : AppTheme.inkPrimary)
             .frame(maxWidth: .infinity)
@@ -1417,7 +1405,7 @@ struct PhotoBoardJudgeView: View {
                         refreshEvaluation()
                     } label: {
                         Text(ruleLabel(rule))
-                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11.5, weight: .black))
                             .foregroundColor(active ? .white : AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 6)
@@ -1428,7 +1416,7 @@ struct PhotoBoardJudgeView: View {
 
             HStack {
                 Text(l10n.localized(zh: "贴目 (Komi)", en: "Komi", ja: "コミ", ko: "덤 (Komi)", zhHant: "貼目 (Komi)"))
-                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .heavy))
                     .foregroundColor(AppTheme.inkSecondary)
 
                 Spacer()
@@ -1440,11 +1428,11 @@ struct PhotoBoardJudgeView: View {
                         refreshEvaluation()
                     } label: {
                         Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 18, design: .rounded))
                             .foregroundColor(AppTheme.skyBottom)
                     }
                     Text(String(format: "%.1f", komi))
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(minWidth: 34)
                     Button {
@@ -1453,7 +1441,7 @@ struct PhotoBoardJudgeView: View {
                         refreshEvaluation()
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: 18, design: .rounded))
                             .foregroundColor(AppTheme.skyBottom)
                     }
                 }
@@ -1467,7 +1455,7 @@ struct PhotoBoardJudgeView: View {
                     ko: "영토 색상 표시",
                     zhHant: "顯示黑白領地塗色"
                 ))
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .heavy))
                 .foregroundColor(AppTheme.inkPrimary)
             }
             .tint(AppTheme.mintBottom)
@@ -1511,7 +1499,7 @@ struct PhotoBoardJudgeView: View {
                     ko: "오프라인으로 바둑판 인식 중...",
                     zhHant: "正在本地離線識別棋盤..."
                 ))
-                .font(.system(size: 15, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 15, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
             }
             .padding(.horizontal, 26)
@@ -1531,6 +1519,7 @@ struct PhotoBoardJudgeView: View {
 
     private func handlePickedImage(_ image: UIImage) {
         liveGridDetectTask?.cancel()
+        activeVisionTask?.cancel()
         isProcessing = true
         activeRecordId = nil
         activeRecordDate = nil
@@ -1542,23 +1531,35 @@ struct PhotoBoardJudgeView: View {
         let currentRule = scoringRule
         let allCandidates = supportedSizes
 
-        Task.detached(priority: .userInitiated) {
+        let taskID = UUID()
+        activeVisionTaskID = taskID
+        activeVisionTask = Task.detached(priority: .userInitiated) {
+            defer {
+                Task { @MainActor in
+                    if self.activeVisionTaskID == taskID {
+                        self.isProcessing = false
+                    }
+                }
+            }
             let upright = GoBoardPhotoRecognizer.normalizedUpImage(image, maxDimension: 1400)
             let candidates: [BoardSize] = shouldAutoSize ? allCandidates : [manualSize]
             let autoResult = GoBoardPhotoRecognizer.autoDetectBoardAndGrid(
                 in: upright,
                 candidates: candidates
             )
+            if Task.isCancelled { return }
 
             await MainActor.run {
+                guard self.activeVisionTaskID == taskID else { return }
                 self.sourceImage = upright
-                self.corners = autoResult.corners
+                // Place the 4 draggable handles directly onto the 4 outermost grid intersections (1-1, 1-N, N-N, N-1)
+                self.corners = autoResult.confidence >= 0.38
+                    ? autoResult.corners.insetBy(autoResult.gridInsetFraction)
+                    : autoResult.corners
+                self.gridInsetFraction = 0.0
                 if shouldAutoSize && autoResult.confidence >= 0.38 {
                     self.selectedSize = autoResult.boardSize
                     self.komi = currentRule.defaultKomi(for: autoResult.boardSize)
-                }
-                if autoResult.confidence >= 0.38 {
-                    self.gridInsetFraction = autoResult.gridInsetFraction
                 }
                 self.detectedGridConfidence = autoResult.confidence
                 self.isProcessing = false
@@ -1569,26 +1570,38 @@ struct PhotoBoardJudgeView: View {
 
     private func reDetectCornersAndGrid(in image: UIImage) {
         liveGridDetectTask?.cancel()
+        activeVisionTask?.cancel()
         isProcessing = true
+        let taskID = UUID()
+        activeVisionTaskID = taskID
         let shouldAutoSize = autoDetectBoardSize
         let manualSize = selectedSize
         let currentRule = scoringRule
         let allCandidates = supportedSizes
 
-        Task.detached(priority: .userInitiated) {
+        activeVisionTask = Task.detached(priority: .userInitiated) {
+            defer {
+                Task { @MainActor in
+                    if self.activeVisionTaskID == taskID {
+                        self.isProcessing = false
+                    }
+                }
+            }
             let candidates: [BoardSize] = shouldAutoSize ? allCandidates : [manualSize]
             let autoResult = GoBoardPhotoRecognizer.autoDetectBoardAndGrid(
                 in: image,
                 candidates: candidates
             )
+            if Task.isCancelled { return }
             await MainActor.run {
-                self.corners = autoResult.corners
+                guard self.activeVisionTaskID == taskID else { return }
+                self.corners = autoResult.confidence >= 0.38
+                    ? autoResult.corners.insetBy(autoResult.gridInsetFraction)
+                    : autoResult.corners
+                self.gridInsetFraction = 0.0
                 if shouldAutoSize && autoResult.confidence >= 0.38 {
                     self.selectedSize = autoResult.boardSize
                     self.komi = currentRule.defaultKomi(for: autoResult.boardSize)
-                }
-                if autoResult.confidence >= 0.38 {
-                    self.gridInsetFraction = autoResult.gridInsetFraction
                 }
                 self.detectedGridConfidence = autoResult.confidence
                 self.isProcessing = false
@@ -1598,26 +1611,38 @@ struct PhotoBoardJudgeView: View {
 
     private func detectGridForCurrentCorners(in image: UIImage) {
         liveGridDetectTask?.cancel()
+        activeVisionTask?.cancel()
         isProcessing = true
+        let taskID = UUID()
+        activeVisionTaskID = taskID
         let quad = corners
         let currentRule = scoringRule
         let allCandidates = supportedSizes
 
-        Task.detached(priority: .userInitiated) {
+        activeVisionTask = Task.detached(priority: .userInitiated) {
+            defer {
+                Task { @MainActor in
+                    if self.activeVisionTaskID == taskID {
+                        self.isProcessing = false
+                    }
+                }
+            }
             let gridInfo = GoBoardPhotoRecognizer.detectBoardGridStructure(
                 from: image,
                 corners: quad,
                 candidates: allCandidates,
                 snapCorners: true
             )
+            if Task.isCancelled { return }
             await MainActor.run {
+                guard self.activeVisionTaskID == taskID else { return }
                 if let snapped = gridInfo.refinedCorners, gridInfo.confidence >= 0.45 {
-                    self.corners = snapped
+                    self.corners = snapped.insetBy(gridInfo.gridInsetFraction)
                 }
+                self.gridInsetFraction = 0.0
                 if gridInfo.confidence >= 0.38 {
                     self.selectedSize = gridInfo.boardSize
                     self.komi = currentRule.defaultKomi(for: gridInfo.boardSize)
-                    self.gridInsetFraction = gridInfo.gridInsetFraction
                 }
                 self.detectedGridConfidence = gridInfo.confidence
                 self.isProcessing = false
@@ -1626,46 +1651,62 @@ struct PhotoBoardJudgeView: View {
     }
 
     private func scheduleLiveGridDetectAfterCornerDrag() {
-        guard let img = sourceImage else { return }
+        guard autoDetectBoardSize, let img = sourceImage else { return }
         liveGridDetectTask?.cancel()
-        let shouldAutoSize = autoDetectBoardSize
         let quad = corners
         let currentRule = scoringRule
-        let candidates: [BoardSize] = shouldAutoSize ? supportedSizes : [selectedSize]
 
         liveGridDetectTask = Task.detached(priority: .userInitiated) {
             let gridInfo = GoBoardPhotoRecognizer.detectBoardGridStructure(
                 from: img,
                 corners: quad,
-                candidates: candidates,
+                candidates: supportedSizes,
                 snapCorners: false
             )
             if Task.isCancelled { return }
             await MainActor.run {
-                if shouldAutoSize && gridInfo.confidence >= 0.40 {
+                if gridInfo.confidence >= 0.45 {
                     self.selectedSize = gridInfo.boardSize
                     self.komi = currentRule.defaultKomi(for: gridInfo.boardSize)
-                }
-                if gridInfo.confidence >= 0.40 {
-                    self.gridInsetFraction = gridInfo.gridInsetFraction
                 }
                 self.detectedGridConfidence = gridInfo.confidence
             }
         }
     }
 
+    /// Decodes a picked photo directly to a bounded pixel size via ImageIO to avoid 50-100 MB full-res memory spikes.
+    private static func downsampledPickedImage(from data: Data, maxDimension: Int) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+
     private func fitInsetForCurrentSelection() {
         guard let img = sourceImage else { return }
+        activeVisionTask?.cancel()
+        isProcessing = false
+        let taskID = UUID()
+        activeVisionTaskID = taskID
         let quad = corners
         let targetSize = selectedSize
-        Task.detached(priority: .userInitiated) {
+        activeVisionTask = Task.detached(priority: .userInitiated) {
             let gridInfo = GoBoardPhotoRecognizer.detectBoardGridStructure(
                 from: img,
                 corners: quad,
                 candidates: [targetSize],
                 snapCorners: false
             )
+            if Task.isCancelled { return }
             await MainActor.run {
+                guard self.activeVisionTaskID == taskID else { return }
                 if gridInfo.confidence >= 0.38 {
                     self.gridInsetFraction = gridInfo.gridInsetFraction
                 }
@@ -1676,6 +1717,7 @@ struct PhotoBoardJudgeView: View {
     private func runOfflineRecognition() {
         guard let image = sourceImage else { return }
         liveGridDetectTask?.cancel()
+        activeVisionTask?.cancel()
         isProcessing = true
         let shouldAutoSize = autoDetectBoardSize
         let chosenSize = selectedSize
@@ -1685,7 +1727,16 @@ struct PhotoBoardJudgeView: View {
         let currentKomi = komi
         let allCandidates = supportedSizes
 
-        Task.detached(priority: .userInitiated) {
+        let taskID = UUID()
+        activeVisionTaskID = taskID
+        activeVisionTask = Task.detached(priority: .userInitiated) {
+            defer {
+                Task { @MainActor in
+                    if self.activeVisionTaskID == taskID {
+                        self.isProcessing = false
+                    }
+                }
+            }
             var effectiveSize = chosenSize
             var effectiveInset = userInset
             var effectiveKomi = currentKomi
@@ -1697,9 +1748,9 @@ struct PhotoBoardJudgeView: View {
                     candidates: allCandidates,
                     snapCorners: false
                 )
-                if gridInfo.confidence >= 0.40 {
+                if Task.isCancelled { return }
+                if gridInfo.confidence >= 0.45 {
                     effectiveSize = gridInfo.boardSize
-                    effectiveInset = gridInfo.gridInsetFraction
                     effectiveKomi = currentRule.defaultKomi(for: gridInfo.boardSize)
                 }
             }
@@ -1711,6 +1762,7 @@ struct PhotoBoardJudgeView: View {
                 gridInsetFraction: effectiveInset,
                 komi: effectiveKomi
             )
+            if Task.isCancelled { return }
             let autoDead = GoScoring.autoEstimateDeadStones(state: result.boardState)
             let finalSize = effectiveSize
             let finalInset = effectiveInset
@@ -1720,7 +1772,7 @@ struct PhotoBoardJudgeView: View {
                 self.gridInsetFraction = finalInset
                 self.komi = finalKomi
                 self.recognitionResult = result
-                self.loadedWarpedImage = result.warpedBoardImage
+                self.loadedWarpedImage = nil
                 self.boardState = result.boardState
                 self.deadStoneIndices = autoDead
                 self.openedFromHistory = false
@@ -1870,6 +1922,9 @@ private struct BoardCornerCalibrationOverlay: View {
     let gridInsetFraction: CGFloat
     var onDragEnded: (() -> Void)? = nil
 
+    @State private var activeDragNormalizedPoint: CGPoint? = nil
+    @State private var activeDragColor: Color = AppTheme.coralBottom
+
     var body: some View {
         GeometryReader { geo in
             let imageRect = fittedImageRect(imageSize: image.size, containerSize: geo.size)
@@ -1881,7 +1936,7 @@ private struct BoardCornerCalibrationOverlay: View {
                     .frame(width: imageRect.width, height: imageRect.height)
                     .position(x: imageRect.midX, y: imageRect.midY)
 
-                // Projected N x N Go grid & quad outline
+                // Projected N x N Go grid & quad outline (using exact projective homography to match CIPerspectiveCorrection)
                 Canvas { context, _ in
                     func screenPt(_ norm: CGPoint) -> CGPoint {
                         CGPoint(
@@ -1906,13 +1961,13 @@ private struct BoardCornerCalibrationOverlay: View {
                     for i in 0..<n {
                         let t = inset + span * (CGFloat(i) / CGFloat(n - 1))
                         var hLine = Path()
-                        hLine.move(to: screenPt(corners.point(u: inset, v: t)))
-                        hLine.addLine(to: screenPt(corners.point(u: 1.0 - inset, v: t)))
+                        hLine.move(to: screenPt(corners.projectivePoint(u: inset, v: t)))
+                        hLine.addLine(to: screenPt(corners.projectivePoint(u: 1.0 - inset, v: t)))
                         context.stroke(hLine, with: .color(Color.cyan.opacity(i == 0 || i == n - 1 ? 0.95 : 0.55)), lineWidth: i == 0 || i == n - 1 ? 2.0 : 1.0)
 
                         var vLine = Path()
-                        vLine.move(to: screenPt(corners.point(u: t, v: inset)))
-                        vLine.addLine(to: screenPt(corners.point(u: t, v: 1.0 - inset)))
+                        vLine.move(to: screenPt(corners.projectivePoint(u: t, v: inset)))
+                        vLine.addLine(to: screenPt(corners.projectivePoint(u: t, v: 1.0 - inset)))
                         context.stroke(vLine, with: .color(Color.cyan.opacity(i == 0 || i == n - 1 ? 0.95 : 0.55)), lineWidth: i == 0 || i == n - 1 ? 2.0 : 1.0)
                     }
                 }
@@ -1923,8 +1978,115 @@ private struct BoardCornerCalibrationOverlay: View {
                 cornerHandle(point: $corners.topRight, in: imageRect, color: AppTheme.skyBottom)
                 cornerHandle(point: $corners.bottomRight, in: imageRect, color: AppTheme.mintBottom)
                 cornerHandle(point: $corners.bottomLeft, in: imageRect, color: AppTheme.sunBottom)
+
+                // 2.5× Magnifier Loupe while dragging any corner handle so fingertips never obscure the board corner
+                if let dragPt = activeDragNormalizedPoint {
+                    magnifierLoupe(
+                        normalizedPoint: dragPt,
+                        imageRect: imageRect,
+                        containerSize: geo.size,
+                        accentColor: activeDragColor
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.scale(scale: 0.82).combined(with: .opacity))
+                }
             }
         }
+    }
+
+    private func magnifierLoupe(
+        normalizedPoint: CGPoint,
+        imageRect: CGRect,
+        containerSize: CGSize,
+        accentColor: Color
+    ) -> some View {
+        let loupeDiameter: CGFloat = 136
+        let loupeRadius = loupeDiameter * 0.5
+        let zoom: CGFloat = 3.0
+        let anchorX = imageRect.minX + normalizedPoint.x * imageRect.width
+        let anchorY = imageRect.minY + normalizedPoint.y * imageRect.height
+
+        // Position loupe comfortably clear of the user's fingertip (above by default; below when near top edge)
+        let preferAboveY = anchorY - (loupeRadius + 46)
+        let loupeY: CGFloat = preferAboveY < loupeRadius + 8
+            ? min(containerSize.height - loupeRadius - 8, anchorY + (loupeRadius + 46))
+            : preferAboveY
+        let loupeX = min(
+            max(loupeRadius + 8, anchorX),
+            max(loupeRadius + 8, containerSize.width - loupeRadius - 8)
+        )
+
+        return Canvas { context, size in
+            let cx = size.width * 0.5
+            let cy = size.height * 0.5
+
+            // Maps any normalized image coordinate directly into the 3x zoomed loupe centered on `normalizedPoint` (the fingertip).
+            func loupePt(_ norm: CGPoint) -> CGPoint {
+                CGPoint(
+                    x: cx + (norm.x - normalizedPoint.x) * imageRect.width * zoom,
+                    y: cy + (norm.y - normalizedPoint.y) * imageRect.height * zoom
+                )
+            }
+
+            // Dark backdrop for out-of-bounds areas when aligning corners right against the photo border
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color.black.opacity(0.92)))
+
+            // Draw zoomed photo with exact pixel alignment to the fingertip coordinate
+            let photoOrigin = loupePt(CGPoint(x: 0, y: 0))
+            let photoRect = CGRect(
+                x: photoOrigin.x,
+                y: photoOrigin.y,
+                width: imageRect.width * zoom,
+                height: imageRect.height * zoom
+            )
+            context.draw(Image(uiImage: image), in: photoRect)
+
+            // Draw the live projected N x N grid lines right inside the magnifier so the corner lines snap visually
+            let n = max(2, boardSize)
+            let inset = gridInsetFraction
+            let span = 1.0 - 2.0 * inset
+            for i in 0..<n {
+                let t = inset + span * (CGFloat(i) / CGFloat(n - 1))
+                let isOuter = (i == 0 || i == n - 1)
+                let lineColor = isOuter ? Color.cyan.opacity(0.95) : Color.cyan.opacity(0.55)
+                let lineWidth: CGFloat = isOuter ? 2.2 : 1.1
+
+                var hLine = Path()
+                hLine.move(to: loupePt(corners.projectivePoint(u: inset, v: t)))
+                hLine.addLine(to: loupePt(corners.projectivePoint(u: 1.0 - inset, v: t)))
+                context.stroke(hLine, with: .color(lineColor), lineWidth: lineWidth)
+
+                var vLine = Path()
+                vLine.move(to: loupePt(corners.projectivePoint(u: t, v: inset)))
+                vLine.addLine(to: loupePt(corners.projectivePoint(u: t, v: 1.0 - inset)))
+                context.stroke(vLine, with: .color(lineColor), lineWidth: lineWidth)
+            }
+
+            // Precision open-center crosshair so the exact 1-1 corner intersection remains unobstructed
+            let gap: CGFloat = 5
+            let arm: CGFloat = 20
+            var cross = Path()
+            cross.move(to: CGPoint(x: cx - arm, y: cy))
+            cross.addLine(to: CGPoint(x: cx - gap, y: cy))
+            cross.move(to: CGPoint(x: cx + gap, y: cy))
+            cross.addLine(to: CGPoint(x: cx + arm, y: cy))
+            cross.move(to: CGPoint(x: cx, y: cy - arm))
+            cross.addLine(to: CGPoint(x: cx, y: cy - gap))
+            cross.move(to: CGPoint(x: cx, y: cy + gap))
+            cross.addLine(to: CGPoint(x: cx, y: cy + arm))
+            context.stroke(cross, with: .color(.white.opacity(0.95)), lineWidth: 3.0)
+            context.stroke(cross, with: .color(accentColor), lineWidth: 1.6)
+
+            let centerRing = Path(ellipseIn: CGRect(x: cx - gap, y: cy - gap, width: gap * 2, height: gap * 2))
+            context.stroke(centerRing, with: .color(.white.opacity(0.95)), lineWidth: 2.2)
+            context.stroke(centerRing, with: .color(accentColor), lineWidth: 1.2)
+        }
+        .frame(width: loupeDiameter, height: loupeDiameter)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(.white, lineWidth: 4))
+        .overlay(Circle().strokeBorder(accentColor, lineWidth: 2))
+        .shadow(color: .black.opacity(0.36), radius: 12, y: 6)
+        .position(x: loupeX, y: loupeY)
     }
 
     private func cornerHandle(point: Binding<CGPoint>, in rect: CGRect, color: Color) -> some View {
@@ -1933,25 +2095,36 @@ private struct BoardCornerCalibrationOverlay: View {
             y: rect.minY + point.wrappedValue.y * rect.height
         )
         return ZStack {
+            // Generous 48pt touch target
             Circle()
-                .fill(color.opacity(0.28))
-                .frame(width: 44, height: 44)
+                .fill(color.opacity(0.18))
+                .frame(width: 48, height: 48)
+            // Open target ring so the underlying 1-1 grid intersection stays visible even at rest
+            Circle()
+                .strokeBorder(.white, lineWidth: 4.5)
+                .frame(width: 24, height: 24)
+                .shadow(color: .black.opacity(0.45), radius: 3, y: 1.5)
+            Circle()
+                .strokeBorder(color, lineWidth: 2.5)
+                .frame(width: 24, height: 24)
             Circle()
                 .fill(color)
-                .frame(width: 22, height: 22)
-                .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+                .frame(width: 4.5, height: 4.5)
         }
         .position(pos)
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     guard rect.width > 1, rect.height > 1 else { return }
-                    let nx = min(0.99, max(0.01, (value.location.x - rect.minX) / rect.width))
-                    let ny = min(0.99, max(0.01, (value.location.y - rect.minY) / rect.height))
-                    point.wrappedValue = CGPoint(x: nx, y: ny)
+                    let nx = min(0.998, max(0.002, (value.location.x - rect.minX) / rect.width))
+                    let ny = min(0.998, max(0.002, (value.location.y - rect.minY) / rect.height))
+                    let pt = CGPoint(x: nx, y: ny)
+                    point.wrappedValue = pt
+                    activeDragNormalizedPoint = pt
+                    activeDragColor = color
                 }
                 .onEnded { _ in
+                    activeDragNormalizedPoint = nil
                     onDragEnded?()
                 }
         )

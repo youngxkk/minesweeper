@@ -252,9 +252,7 @@ enum StarYiNeuralPolicyValueNet {
                 }
             }
         }
-        blackArea += Double(state.blackCaptures) * 0.4
-        whiteArea += Double(state.whiteCaptures) * 0.4
-
+        // Chinese area scoring already reflects captures via stones on board + empty territory
         let lead = blackArea - whiteArea
         let scale = n <= 9 ? 5.5 : (n <= 13 ? 8.5 : 12.0)
         let rawBlackWR = 1.0 / (1.0 + exp(-lead / scale))

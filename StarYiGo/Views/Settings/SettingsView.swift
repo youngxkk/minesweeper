@@ -18,6 +18,10 @@ struct SettingsView: View {
     @State private var pendingExternalURL: URL? = nil
     @State private var profilePendingDeletion: UserProfile? = nil
     @FocusState private var isNewKidNameFocused: Bool
+    #if DEBUG
+    @State private var showDebugResetConfirm = false
+    @State private var debugStatusMessage: String? = nil
+    #endif
 
     private let avatarChoices = ["🦊", "🐼", "🐰", "🐉", "🦢", "🐯", "🦁", "🦉", "🌟", "🎋"]
     private let eyeCareOptions = [0, 15, 25, 40]
@@ -25,8 +29,33 @@ struct SettingsView: View {
     private var l10n: L10n { appState.l10n }
 
     var body: some View {
+        #if DEBUG
+        settingsBody
+            .gameDialog(
+                isPresented: $showDebugResetConfirm,
+                title: "重置当前档案进度？",
+                message: "将清空当前档案「\(appState.profile.nickname)」的金币、经验、段位、题库与海域进度（仅 Debug 本地测试使用）。",
+                icon: "arrow.counterclockwise.circle.fill",
+                accentPalette: .coral,
+                actions: [
+                    .secondary(l10n.t("common.cancel")) {
+                        showDebugResetConfirm = false
+                    },
+                    .destructive("确认重置") {
+                        appState.debugResetCurrentProfileProgress()
+                        debugStatusMessage = "已重置当前档案进度"
+                        showDebugResetConfirm = false
+                    }
+                ]
+            )
+        #else
+        settingsBody
+        #endif
+    }
+
+    private var settingsBody: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.paperSettings
 
             VStack(spacing: 0) {
                 HStack {
@@ -61,6 +90,9 @@ struct SettingsView: View {
                                 aiThinkingPaceCard
                                 audioAndEyeCareCard
                                 aboutFooterCard
+                                #if DEBUG
+                                debugModeCard
+                                #endif
                             }
                             .padding(.horizontal, 16)
                             .padding(.bottom, 32)
@@ -71,6 +103,9 @@ struct SettingsView: View {
                                     languageCard
                                     boardThemeCard
                                     audioAndEyeCareCard
+                                    #if DEBUG
+                                    debugModeCard
+                                    #endif
                                 }
                                 .frame(maxWidth: .infinity)
 
@@ -175,7 +210,7 @@ struct SettingsView: View {
                             )
                             : l10n.t("settings.profile.addKidTitle")
                     )
-                        .font(.system(size: 21, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 21, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .multilineTextAlignment(.center)
 
@@ -190,7 +225,7 @@ struct SettingsView: View {
                             )
                             : l10n.t("settings.profile.addKidHint")
                     )
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
@@ -199,7 +234,7 @@ struct SettingsView: View {
 
                 // Branded rounded nickname field
                 TextField(l10n.t("settings.profile.nickname"), text: $newKidName)
-                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
                     .focused($isNewKidNameFocused)
@@ -245,7 +280,7 @@ struct SettingsView: View {
                         dismissAddKidModal()
                     } label: {
                         Text(l10n.t("common.cancel"))
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -268,7 +303,7 @@ struct SettingsView: View {
                         confirmAddKidProfile()
                     } label: {
                         Text(l10n.t("common.ok"))
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(.white)
                             .shadow(color: AppTheme.mintRim.opacity(0.5), radius: 1.5, y: 1.5)
                             .lineLimit(1)
@@ -377,7 +412,7 @@ struct SettingsView: View {
                 HStack(spacing: 5) {
                     StarCoinBadgeView(size: 15)
                     Text("\(appState.profile.starCoins)")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(AppTheme.sunBottom)
                 }
                 .padding(.horizontal, 10)
@@ -396,7 +431,7 @@ struct SettingsView: View {
                             HStack(spacing: 6) {
                                 StarYiMascotView(emojiKey: kid.avatarEmoji, size: 22, showRing: false)
                                 Text(kid.nickname)
-                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 12, weight: .black))
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                                     .frame(maxWidth: 96, alignment: .leading)
@@ -452,7 +487,7 @@ struct SettingsView: View {
                         showAddKidSheet = true
                     } label: {
                         Label(l10n.t("settings.profile.addKid"), systemImage: "plus.circle.fill")
-                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .black))
                             .foregroundColor(AppTheme.mintBottom)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
@@ -465,7 +500,7 @@ struct SettingsView: View {
 
             HStack {
                 Text(l10n.t("settings.profile.nickname"))
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                 Spacer()
                 TextField(
@@ -478,7 +513,7 @@ struct SettingsView: View {
                         }
                     )
                 )
-                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 15, weight: .heavy))
                 .multilineTextAlignment(.trailing)
                 .foregroundColor(AppTheme.skyBottom)
                 .padding(.horizontal, 14)
@@ -538,7 +573,7 @@ struct SettingsView: View {
             }
         } label: {
             Text(label)
-                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .heavy, languageCode: lang.resolvedCode))
                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -553,7 +588,7 @@ struct SettingsView: View {
                 Spacer()
                 if let msg = unlockMessage {
                     Text(msg)
-                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .heavy))
                         .foregroundColor(AppTheme.coralBottom)
                 }
             }
@@ -588,10 +623,10 @@ struct SettingsView: View {
                                 if !unlocked {
                                     HStack(spacing: 3) {
                                         Image(systemName: "lock.fill")
-                                            .font(.system(size: 10, weight: .black))
+                                            .font(.system(size: 10, weight: .black, design: .rounded))
                                         StarCoinBadgeView(size: 12)
                                         Text("\(theme.unlockCoinCost)")
-                                            .font(.system(size: 11, weight: .black, design: .rounded))
+                                            .font(AppFont.rounded(size: 11, weight: .black))
                                     }
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 8)
@@ -600,7 +635,7 @@ struct SettingsView: View {
                                 }
                             }
                             Text(l10n.t(theme.localizationKey))
-                                .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                                .font(AppFont.rounded(size: 11.5, weight: .heavy))
                                 .foregroundColor(selected ? AppTheme.skyBottom : AppTheme.inkPrimary)
                                 .lineLimit(1)
                         }
@@ -613,7 +648,7 @@ struct SettingsView: View {
             Divider()
 
             Text(l10n.localized(zh: "收藏级棋子皮肤", en: "Collectible Stone Finishes", ja: "碁石コレクション", ko: "바둑돌 스킨", zhHant: "收藏級棋子皮膚"))
-                .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .heavy))
                 .foregroundColor(AppTheme.inkSecondary)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
@@ -641,17 +676,17 @@ struct SettingsView: View {
         } label: {
             HStack(spacing: 6) {
                 Text(style.badgeEmoji)
-                    .font(.system(size: 15))
+                    .font(AppFont.rounded(size: 15, weight: .regular))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(style.displayName(l10n))
-                        .font(.system(size: 11.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .black))
                         .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                         .lineLimit(1)
                     if !unlocked {
                         HStack(spacing: 3) {
                             StarCoinBadgeView(size: 11)
                             Text("\(style.unlockCoinCost)")
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 10, weight: .bold))
                                 .foregroundColor(selected ? .white.opacity(0.9) : AppTheme.sunBottom)
                         }
                     }
@@ -689,7 +724,7 @@ struct SettingsView: View {
                             ? l10n.localized(zh: "中国数子法", en: "Chinese Area", ja: "中国ルール", ko: "중국식 계가", zhHant: "中國數子法")
                             : l10n.localized(zh: "日韩数目法", en: "Japanese Terr.", ja: "日韓ルール", ko: "한일식 계가", zhHant: "日韓數目法")
                         )
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
@@ -716,7 +751,7 @@ struct SettingsView: View {
                         zhHant: "視覺輔助退場階梯（從啟蒙過渡到真棋盤）"
                     )
                 )
-                    .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .heavy))
                     .foregroundColor(AppTheme.inkSecondary)
                 HStack(spacing: 6) {
                     assistPresetChip(.starter, label: l10n.localized(zh: "启蒙全辅", en: "Starter", ja: "入門フル", ko: "입문 전체", zhHant: "啟蒙全輔"))
@@ -796,9 +831,12 @@ struct SettingsView: View {
                         appState.updateSettings {
                             $0.aiModelPreset = preset
                         }
+                        if preset == .b18c384nbt {
+                            KataGoProModelODRManager.shared.ensureDownloaded()
+                        }
                     } label: {
                         Text(preset.shortTitle(l10n))
-                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11.5, weight: .black))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -811,9 +849,64 @@ struct SettingsView: View {
             }
 
             Text(appState.settings.aiModelPreset.summaryText(l10n))
-                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .semibold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if appState.settings.aiModelPreset == .b18c384nbt {
+                let odrManager = KataGoProModelODRManager.shared
+                #if DEBUG
+                if odrManager.bypassODRUseLocalModel {
+                    Text("DEBUG · 专业模型已直连本地包（已跳过 Apple ODR）")
+                        .font(AppFont.rounded(size: 11, weight: .bold))
+                        .foregroundColor(AppTheme.mintBottom)
+                }
+                #endif
+                let odrState = odrManager.state
+                switch odrState {
+                case .downloading(let progress):
+                    HStack(spacing: 8) {
+                        ProgressView(value: progress)
+                            .tint(AppTheme.grapeBottom)
+                        Text("\(Int(progress * 100))%")
+                            .font(AppFont.rounded(size: 11, weight: .black))
+                            .foregroundColor(AppTheme.grapeBottom)
+                            .monospacedDigit()
+                    }
+                case .failed:
+                    Button {
+                        KataGoProModelODRManager.shared.ensureDownloaded()
+                    } label: {
+                        Text(l10n.localized(
+                            zh: "专业模型按需下载失败（当前自动回退标准版），点此重试",
+                            en: "Pro model download paused (using Standard offline). Tap to retry.",
+                            ja: "プロモデルのダウンロード失敗（標準版を使用中）。タップで再試行",
+                            ko: "프로 모델 다운로드 실패 (표준 모델 사용 중). 탭하여 재시도",
+                            zhHant: "專業模型按需下載失敗（目前自動回退標準版），點此重試"
+                        ))
+                        .font(AppFont.rounded(size: 11, weight: .bold))
+                        .foregroundColor(AppTheme.coralBottom)
+                    }
+                    .buttonStyle(.plain)
+                case .notDownloaded:
+                    Button {
+                        KataGoProModelODRManager.shared.ensureDownloaded()
+                    } label: {
+                        Text(l10n.localized(
+                            zh: "点此通过 Apple ODR 按需下载专业模型（25.5 MB）",
+                            en: "Tap to download Pro model on demand via Apple ODR (25.5 MB)",
+                            ja: "Apple ODR でプロモデルをダウンロード（25.5 MB）",
+                            ko: "Apple ODR로 프로 모델 다운로드 (25.5 MB)",
+                            zhHant: "點此透過 Apple ODR 按需下載專業模型（25.5 MB）"
+                        ))
+                        .font(AppFont.rounded(size: 11, weight: .bold))
+                        .foregroundColor(AppTheme.grapeBottom)
+                    }
+                    .buttonStyle(.plain)
+                case .ready:
+                    EmptyView()
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .warmCard(cornerRadius: 24, padding: 18)
@@ -843,7 +936,7 @@ struct SettingsView: View {
                         }
                     } label: {
                         Text(pace.shortTitle(l10n))
-                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11.5, weight: .black))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -856,7 +949,7 @@ struct SettingsView: View {
             }
 
             Text(appState.settings.aiThinkingPace.summaryText(l10n))
-                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .semibold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -870,7 +963,7 @@ struct SettingsView: View {
             appState.applyAssistPreset(preset)
         } label: {
             Text(label)
-                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .black))
                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
@@ -907,7 +1000,7 @@ struct SettingsView: View {
             Divider()
 
             Text(l10n.t("settings.section.eyecare"))
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 13, weight: .heavy))
                 .foregroundColor(AppTheme.inkSecondary)
 
             HStack(spacing: 8) {
@@ -917,7 +1010,7 @@ struct SettingsView: View {
                         appState.updateSettings { $0.eyeCareMinutes = mins }
                     } label: {
                         Text(mins == 0 ? l10n.t("settings.eyecare.off") : l10n.t("settings.eyecare.minutes", mins))
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .heavy))
                             .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -935,7 +1028,7 @@ struct SettingsView: View {
                 sectionHeader(l10n.t("settings.section.about"), icon: "heart.circle.fill", color: AppTheme.skyBottom)
                 Spacer()
                 Text(AppLegalLinks.appVersionString)
-                    .font(.system(size: 11.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 11.5, weight: .black))
                     .foregroundColor(AppTheme.inkSecondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -943,13 +1036,13 @@ struct SettingsView: View {
             }
 
             Text(l10n.t("settings.about.kidSafe"))
-                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 13, weight: .heavy))
                 .foregroundColor(AppTheme.mintBottom)
             Text(l10n.t("settings.about.offlineNote"))
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .semibold))
                 .foregroundColor(AppTheme.inkSecondary)
             Text(CoreMLGoAIEngine.shared.activeEngineBadge(l10n))
-                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .black))
                 .foregroundColor(AppTheme.skyBottom)
 
             Divider()
@@ -989,7 +1082,7 @@ struct SettingsView: View {
             }
         } label: {
             Label(title, systemImage: icon)
-                .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .heavy))
                 .foregroundColor(AppTheme.skyBottom)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -1004,7 +1097,7 @@ struct SettingsView: View {
     private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
         Label {
             Text(title)
-                .font(.system(size: 15, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 15, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
         } icon: {
             Image(systemName: icon)
@@ -1015,11 +1108,153 @@ struct SettingsView: View {
     private func gameToggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             Text(title)
-                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 13.5, weight: .bold))
                 .foregroundColor(AppTheme.inkPrimary)
         }
         .toggleStyle(GameSwitchToggleStyle())
     }
+
+    #if DEBUG
+    private var debugModeCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                sectionHeader("Debug 模式", icon: "ladybug.fill", color: AppTheme.coralBottom)
+                Spacer()
+                Text("DEBUG ONLY")
+                    .font(AppFont.rounded(size: 10.5, weight: .black))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(AppTheme.coralBottom))
+            }
+
+            gameToggleRow(
+                "启用本地调试工具",
+                isOn: Binding(
+                    get: { appState.isDebugModeEnabled },
+                    set: { appState.setDebugModeEnabled($0) }
+                )
+            )
+            .accessibilityIdentifier("SettingsDebugModeToggle")
+
+            if appState.isDebugModeEnabled {
+                Divider()
+
+                gameToggleRow(
+                    "专业模型本地直连（关掉走 Apple ODR）",
+                    isOn: Binding(
+                        get: { KataGoProModelODRManager.shared.bypassODRUseLocalModel },
+                        set: { enabled in
+                            KataGoProModelODRManager.shared.bypassODRUseLocalModel = enabled
+                            debugStatusMessage = enabled
+                                ? "已切换为本地直连 b18c384nbt（跳过 ODR）"
+                                : "已切换为 Apple ODR 模式（未下载时自动回退标准版）"
+                        }
+                    )
+                )
+                .accessibilityIdentifier("SettingsDebugBypassProModelODRToggle")
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("段位 \(appState.profile.rankString) · 金币 \(appState.profile.starCoins) · 体力 \(appState.currentGauntletHearts)/\(PuzzleProgressStore.maxGauntletHearts) · 已解锁海域 \(appState.puzzleProgress.unlockedSeaIds.count)/\(StarYiCampaign.allSeas.count)")
+                        .font(AppFont.rounded(size: 11.5, weight: .bold))
+                        .foregroundColor(AppTheme.inkSecondary)
+
+                    if let msg = debugStatusMessage {
+                        Text(msg)
+                            .font(AppFont.rounded(size: 11.5, weight: .heavy))
+                            .foregroundColor(AppTheme.mintBottom)
+                    }
+                }
+
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                    debugActionButton(title: "+500 金币 / +200 XP", palette: .sun) {
+                        appState.debugGrantCoinsAndXP()
+                        debugStatusMessage = "已发放 +500 金币 / +200 XP"
+                    }
+                    debugActionButton(title: "解锁全海域与皮肤", palette: .mint) {
+                        appState.debugUnlockAllContent()
+                        debugStatusMessage = "已解锁全部海域、棋盘与棋子皮肤"
+                    }
+                    debugActionButton(title: "补满体力 (3❤️)", palette: .sky) {
+                        appState.debugSetGauntletHearts(PuzzleProgressStore.maxGauntletHearts)
+                        debugStatusMessage = "体力已补满 (3/3)"
+                    }
+                    debugActionButton(title: "清空体力 (0❤️)", palette: .snow, isLight: true) {
+                        appState.debugSetGauntletHearts(0)
+                        debugStatusMessage = "体力已清空 (0/3)"
+                    }
+                    debugActionButton(title: "重置今日每日道场", palette: .grape) {
+                        appState.debugResetTodayDailyDojo()
+                        debugStatusMessage = "今日每日道场已重置"
+                    }
+                    debugActionButton(title: "触发护眼提醒弹窗", palette: .sky) {
+                        appState.debugTriggerEyeCareAlert()
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("快速切换认证段位")
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
+                        .foregroundColor(AppTheme.inkSecondary)
+
+                    let rankChoices: [(tier: Int, label: String)] = [
+                        (0, "25K"), (3, "15K"), (4, "10K"), (5, "5K"), (6, "1D"), (8, "5D")
+                    ]
+                    HStack(spacing: 6) {
+                        ForEach(rankChoices, id: \.tier) { choice in
+                            let selected = appState.profile.certifiedRankTier == choice.tier
+                            Button {
+                                appState.debugSetCertifiedRankTier(choice.tier)
+                                debugStatusMessage = "已切换段位至 \(choice.label)"
+                            } label: {
+                                Text(choice.label)
+                                    .font(AppFont.rounded(size: 11, weight: .black))
+                                    .foregroundColor(selected ? .white : AppTheme.inkPrimary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                            }
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                        }
+                    }
+                }
+
+                Button {
+                    SoundAndHapticsManager.shared.playUITap(weight: .light)
+                    showDebugResetConfirm = true
+                } label: {
+                    Label("重置当前档案进度", systemImage: "arrow.counterclockwise")
+                        .font(AppFont.rounded(size: 12.5, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                }
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .warmCard(cornerRadius: 24, padding: 18)
+        .accessibilityIdentifier("SettingsDebugCard")
+    }
+
+    private func debugActionButton(
+        title: String,
+        palette: GlossyPalette,
+        isLight: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        return Button(action: action) {
+            Text(title)
+                .font(AppFont.rounded(size: 11.5, weight: .black))
+                .foregroundColor(isLight ? AppTheme.inkPrimary : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: palette, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+    }
+    #endif
 }
 
 private struct GameSwitchToggleStyle: ToggleStyle {
@@ -1071,7 +1306,7 @@ private struct GameSwitchToggleStyle: ToggleStyle {
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(.isButton)
-            .accessibilityValue(configuration.isOn ? "On" : "Off")
+            .accessibilityValue(Text(configuration.isOn ? "1" : "0"))
         }
     }
 }

@@ -46,7 +46,9 @@ struct GoBoardView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
+    @GestureState private var isTouchActive: Bool = false
     @State private var dragHoverPoint: BoardPoint? = nil
     @State private var isDraggingAim: Bool = false
     @State private var inspectedGroup: GoGroup? = nil
@@ -59,17 +61,26 @@ struct GoBoardView: View {
     @State private var illegalTimestamp: Date = .distantPast
     @State private var activeIllegalPoint: BoardPoint? = nil
     @State private var shakeOffset: CGFloat = 0
+    @State private var highFPSAnimationActive: Bool = false
+    @State private var highFPSCooldownTask: Task<Void, Never>? = nil
 
     private var effectiveRegion: BoardCropRegion {
         cropRegion ?? BoardCropRegion.full(size: boardState.size)
     }
 
-    private func needsHighFPSTimeline(now: Date) -> Bool {
-        if dragHoverPoint != nil { return true }
-        if now.timeIntervalSince(lastMoveTimestamp) < 0.45 { return true }
-        if now.timeIntervalSince(captureTimestamp) < 0.60 { return true }
-        if now.timeIntervalSince(illegalTimestamp) < 0.85 { return true }
-        return false
+    private func needsHighFPSTimeline() -> Bool {
+        dragHoverPoint != nil || highFPSAnimationActive
+    }
+
+    private func scheduleHighFPSBurst(duration: TimeInterval) {
+        guard !reduceMotion else { return }
+        highFPSAnimationActive = true
+        highFPSCooldownTask?.cancel()
+        highFPSCooldownTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            highFPSAnimationActive = false
+        }
     }
 
     private func needsAmbientTimeline(hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
@@ -77,15 +88,15 @@ struct GoBoardView: View {
         return hasAtari || hasTwoEyes || boardState.koIndex != nil || !aiSuggestions.isEmpty || puzzleHintPoint != nil || !unsealedWarningPoints.isEmpty || !highlightedPocketPoints.isEmpty || pendingPoint != nil || inspectedGroup != nil || showLiveLiberties
     }
 
-    private func timelineInterval(now: Date, hasAtari: Bool, hasTwoEyes: Bool) -> TimeInterval {
-        if needsHighFPSTimeline(now: now) {
+    private func timelineInterval(hasAtari: Bool, hasTwoEyes: Bool) -> TimeInterval {
+        if needsHighFPSTimeline() {
             return 1.0 / 60.0
         }
         return needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes) ? (1.0 / 15.0) : 1.0
     }
 
-    private func isTimelinePaused(now: Date, hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
-        !needsHighFPSTimeline(now: now) && !needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+    private func isTimelinePaused(hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
+        !needsHighFPSTimeline() && !needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
     }
 
     var body: some View {
@@ -95,45 +106,68 @@ struct GoBoardView: View {
             let palette = AppTheme.palette(for: theme)
             let atariSet = highlightAtari ? boardState.atariPoints() : []
             let twoEyeAnalysis = showTwoEyeGlow ? boardState.twoEyeAliveAnalysis() : (eyePoints: Set<BoardPoint>(), aliveStoneIndices: Set<Int>())
+            let cachedGroups = (expressiveStones || showLiveLiberties) ? boardState.allGroups() : []
 
-            let nowSnapshot = Date()
             let hasAtari = !atariSet.isEmpty
             let hasTwoEyes = !twoEyeAnalysis.eyePoints.isEmpty
-            let interval = timelineInterval(now: nowSnapshot, hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
-            let paused = isTimelinePaused(now: nowSnapshot, hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+            let interval = timelineInterval(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+            let paused = isTimelinePaused(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
 
-            TimelineView(.animation(minimumInterval: interval, paused: paused)) { timeline in
-                let now = timeline.date
+            ZStack {
+                // Static board surface (wood grain, grid lines, star points, coordinates) — rasterized once & never redrawn by TimelineView ticks
                 Canvas { context, size in
-                    drawBoard(
+                    drawStaticBoardSurface(
                         context: &context,
                         canvasSize: size,
                         region: region,
-                        palette: palette,
-                        atariSet: atariSet,
-                        twoEyeAnalysis: twoEyeAnalysis,
-                        now: now
+                        palette: palette
                     )
                 }
+                .drawingGroup()
                 .frame(width: side, height: side)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(palette.frameBorder, lineWidth: 4)
-                )
-                .shadow(color: Color.black.opacity(0.22), radius: 22, x: 0, y: 12)
-                .offset(x: shakeOffset)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
+                .allowsHitTesting(false)
+
+                TimelineView(.animation(minimumInterval: interval, paused: paused)) { timeline in
+                    let now = timeline.date
+                    Canvas { context, size in
+                        drawBoard(
+                            context: &context,
+                            canvasSize: size,
+                            region: region,
+                            palette: palette,
+                            atariSet: atariSet,
+                            twoEyeAnalysis: twoEyeAnalysis,
+                            cachedGroups: cachedGroups,
+                            now: now
+                        )
+                    }
+                    .frame(width: side, height: side)
+                }
+            }
+            .frame(width: side, height: side)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(palette.frameBorder, lineWidth: 4)
+            )
+            .shadow(color: Color.black.opacity(0.22), radius: 22, x: 0, y: 12)
+            .offset(x: shakeOffset)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($isTouchActive) { _, state, _ in
+                        state = true
+                    }
+                    .onChanged { value in
                             if isChoosingRegion || isDeadStoneReviewMode { return }
                             let distMoved = hypot(value.translation.width, value.translation.height)
                             if distMoved > 12 {
                                 isDraggingAim = true
                             }
+                            let cellStep = side / CGFloat(max(region.rowCount, region.colCount) + 1)
+                            let dragOffset = min(26.0, cellStep * 1.1)
                             let aimedLocation = isDraggingAim
-                                ? CGPoint(x: value.location.x, y: value.location.y - 26)
+                                ? CGPoint(x: value.location.x, y: max(0, value.location.y - dragOffset))
                                 : value.location
 
                             guard let pt = nearestPoint(for: aimedLocation, side: side, region: region) else {
@@ -194,10 +228,17 @@ struct GoBoardView: View {
                                 isDraggingAim = false
                                 return
                             }
-                            let aimedLocation = isDraggingAim
-                                ? CGPoint(x: value.location.x, y: value.location.y - 26)
+                            let wasDraggingAim = isDraggingAim
+                            let cellStep = side / CGFloat(max(region.rowCount, region.colCount) + 1)
+                            let dragOffset = min(26.0, cellStep * 1.1)
+                            let aimedLocation = wasDraggingAim
+                                ? CGPoint(x: value.location.x, y: max(0, value.location.y - dragOffset))
                                 : value.location
-                            let target = dragHoverPoint ?? nearestPoint(for: aimedLocation, side: side, region: region)
+                            // If drag-aim ended over an occupied stone or off-board (`dragHoverPoint == nil`),
+                            // cancel silently instead of firing a false illegal-move error!
+                            let target: BoardPoint? = wasDraggingAim
+                                ? dragHoverPoint
+                                : (dragHoverPoint ?? nearestPoint(for: aimedLocation, side: side, region: region))
                             dragHoverPoint = nil
                             isDraggingAim = false
                             if let target {
@@ -205,6 +246,19 @@ struct GoBoardView: View {
                             }
                         }
                 )
+            .onContinuousHover { phase in
+                guard isInteractive, !isChoosingRegion, !isDeadStoneReviewMode, !isTouchActive else { return }
+                switch phase {
+                case .active(let location):
+                    if let pt = nearestPoint(for: location, side: side, region: region),
+                       boardState.stone(at: pt) == nil {
+                        dragHoverPoint = pt
+                    } else {
+                        dragHoverPoint = nil
+                    }
+                case .ended:
+                    dragHoverPoint = nil
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -214,32 +268,49 @@ struct GoBoardView: View {
         .accessibilityLabel(boardAccessibilitySummary)
         .accessibilityHint(isInteractive ? "Double-tap or use board intersections to place a stone." : "")
         .overlay {
-            if UIAccessibility.isVoiceOverRunning && isInteractive {
+            if voiceOverEnabled && isInteractive {
                 voiceOverGridOverlay
+            }
+        }
+        .onChange(of: isTouchActive) { _, active in
+            if !active {
+                dragHoverPoint = nil
+                isDraggingAim = false
+                inspectedGroup = nil
+                inspectAnchorPoint = nil
             }
         }
         .onChange(of: boardState.moveCount) { _, _ in
             if case .place(let pt) = boardState.lastMove {
                 lastMovePointCached = pt
                 lastMoveTimestamp = Date()
+                scheduleHighFPSBurst(duration: 0.50)
             }
         }
         .onChange(of: captureEventID) { _, _ in
             if !capturedFlashPoints.isEmpty {
                 activeCapturedBurst = capturedFlashPoints
                 captureTimestamp = Date()
+                scheduleHighFPSBurst(duration: 0.65)
             }
         }
         .onChange(of: illegalEventID) { _, _ in
             if let pt = illegalFlashPoint {
                 activeIllegalPoint = pt
                 illegalTimestamp = Date()
+                scheduleHighFPSBurst(duration: 0.90)
                 triggerMicroShake()
             }
+        }
+        .onDisappear {
+            highFPSCooldownTask?.cancel()
+            highFPSCooldownTask = nil
+            highFPSAnimationActive = false
         }
     }
 
     private func triggerMicroShake() {
+        guard !reduceMotion else { return }
         withAnimation(.easeInOut(duration: 0.055)) { shakeOffset = -6 }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.055) {
             withAnimation(.easeInOut(duration: 0.055)) { shakeOffset = 6 }
@@ -321,38 +392,16 @@ struct GoBoardView: View {
 
     // MARK: - Canvas Rendering
 
-    private func drawBoard(
+    /// Draws the static board surface (wood grain, vignette, grid, star points, coordinates).
+    /// Separated from `TimelineView` so animations never re-rasterize wood fibers or grid lines.
+    private func drawStaticBoardSurface(
         context: inout GraphicsContext,
         canvasSize: CGSize,
         region: BoardCropRegion,
-        palette: AppTheme.BoardPalette,
-        atariSet: Set<BoardPoint>,
-        twoEyeAnalysis: (eyePoints: Set<BoardPoint>, aliveStoneIndices: Set<Int>),
-        now: Date
+        palette: AppTheme.BoardPalette
     ) {
         let rect = CGRect(origin: .zero, size: canvasSize)
         let m = computeMetrics(side: min(canvasSize.width, canvasSize.height), region: region)
-        let timePhase = now.timeIntervalSinceReferenceDate
-        let breathe = 0.5 + 0.5 * sin(timePhase * 4.4)
-        let stoneRadius = m.cellStep * BoardMetrics.stoneRadiusPerCell
-
-        // Precompute group liberty counts for expressive stones & beginner live liberties
-        let allGroups = (expressiveStones || showLiveLiberties) ? boardState.allGroups() : []
-        var libertyCountByIndex: [Int: Int] = [:]
-        var urgentLibertyPoints: Set<BoardPoint> = []
-        if !allGroups.isEmpty {
-            for g in allGroups {
-                let libCount = g.liberties.count
-                for s in g.stones {
-                    libertyCountByIndex[s] = libCount
-                }
-                if showLiveLiberties && libCount <= 2 {
-                    for libIdx in g.liberties {
-                        urgentLibertyPoints.insert(boardState.point(for: libIdx))
-                    }
-                }
-            }
-        }
 
         // 1. Background gradient
         context.fill(
@@ -482,16 +531,50 @@ struct GoBoardView: View {
             for c in region.minCol...region.maxCol {
                 let letter = c < BoardPoint.columnLetters.count ? String(BoardPoint.columnLetters[c]) : ""
                 let x = m.originX + CGFloat(c - region.minCol) * m.cellStep
-                let label = Text(letter).font(.system(size: fontSize, weight: .semibold, design: .rounded)).foregroundColor(palette.coordText)
+                let label = Text(letter).font(AppFont.rounded(size: fontSize, weight: .semibold)).foregroundColor(palette.coordText)
                 context.draw(label, at: CGPoint(x: x, y: m.padding * 0.44))
                 context.draw(label, at: CGPoint(x: x, y: canvasSize.height - m.padding * 0.44))
             }
             for r in region.minRow...region.maxRow {
                 let num = "\(boardState.size - r)"
                 let y = m.originY + CGFloat(r - region.minRow) * m.cellStep
-                let label = Text(num).font(.system(size: fontSize, weight: .semibold, design: .rounded)).foregroundColor(palette.coordText)
+                let label = Text(num).font(AppFont.rounded(size: fontSize, weight: .semibold)).foregroundColor(palette.coordText)
                 context.draw(label, at: CGPoint(x: m.padding * 0.44, y: y))
                 context.draw(label, at: CGPoint(x: canvasSize.width - m.padding * 0.44, y: y))
+            }
+        }
+    }
+
+    private func drawBoard(
+        context: inout GraphicsContext,
+        canvasSize: CGSize,
+        region: BoardCropRegion,
+        palette: AppTheme.BoardPalette,
+        atariSet: Set<BoardPoint>,
+        twoEyeAnalysis: (eyePoints: Set<BoardPoint>, aliveStoneIndices: Set<Int>),
+        cachedGroups: [GoGroup],
+        now: Date
+    ) {
+        let rect = CGRect(origin: .zero, size: canvasSize)
+        let m = computeMetrics(side: min(canvasSize.width, canvasSize.height), region: region)
+        let timePhase = now.timeIntervalSinceReferenceDate
+        let breathe = 0.5 + 0.5 * sin(timePhase * 4.4)
+        let stoneRadius = m.cellStep * BoardMetrics.stoneRadiusPerCell
+
+        // Use hoisted group liberty counts for expressive stones & beginner live liberties
+        var libertyCountByIndex: [Int: Int] = [:]
+        var urgentLibertyPoints: Set<BoardPoint> = []
+        if !cachedGroups.isEmpty {
+            for g in cachedGroups {
+                let libCount = g.liberties.count
+                for s in g.stones {
+                    libertyCountByIndex[s] = libCount
+                }
+                if showLiveLiberties && libCount <= 2 {
+                    for libIdx in g.liberties {
+                        urgentLibertyPoints.insert(boardState.point(for: libIdx))
+                    }
+                }
             }
         }
 
@@ -550,7 +633,7 @@ struct GoBoardView: View {
                 )
                 context.draw(
                     Text("✦")
-                        .font(.system(size: max(10, stoneRadius * 0.56), weight: .black))
+                        .font(.system(size: max(10, stoneRadius * 0.56), weight: .black, design: .rounded))
                         .foregroundColor(.white),
                     at: center
                 )
@@ -691,7 +774,7 @@ struct GoBoardView: View {
                     context.fill(Path(ellipseIn: badgeRect), with: .color(AppTheme.vermilionAccent))
                     context.stroke(Path(ellipseIn: badgeRect), with: .color(.white), lineWidth: 1.2)
                     context.draw(
-                        Text("!").font(.system(size: max(7, badgeR * 1.3), weight: .black)).foregroundColor(.white),
+                        Text("!").font(.system(size: max(7, badgeR * 1.3), weight: .black, design: .rounded)).foregroundColor(.white),
                         at: badgeCenter
                     )
                 }
@@ -763,7 +846,7 @@ struct GoBoardView: View {
                 context.stroke(Path(roundedRect: badgeRect, cornerRadius: 13), with: .color(.white.opacity(0.8)), lineWidth: 1.5)
                 let label = String(format: libertyBadgeFormat, group.liberties.count)
                 context.draw(
-                    Text(label).font(.system(size: 12, weight: .black, design: .rounded)).foregroundColor(.white),
+                    Text(label).font(AppFont.rounded(size: 12, weight: .black)).foregroundColor(.white),
                     at: CGPoint(x: c.x, y: badgeY)
                 )
             }
@@ -941,7 +1024,7 @@ struct GoBoardView: View {
                 context.fill(Path(roundedRect: badgeRect, cornerRadius: 12), with: .color(AppTheme.jadeAccent))
                 context.draw(
                     Text(ghost.humanLabel(boardSize: boardState.size))
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(.white),
                     at: CGPoint(x: center.x, y: badgeY)
                 )

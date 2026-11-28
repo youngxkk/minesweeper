@@ -94,6 +94,28 @@ struct CampaignNode: Identifiable, Hashable, Sendable {
         if case .puzzleGauntlet(let ids, _) = kind { return ids }
         return []
     }
+
+    /// Number of puzzles per playable section (5 puzzles = 3–5 min kid-friendly session).
+    var sectionSize: Int {
+        StarYiCampaign.puzzlesPerSection
+    }
+
+    /// Total number of sections inside this node. Non-gauntlet nodes always have 1 section.
+    var sectionCount: Int {
+        let count = puzzleIds.count
+        guard count > 0 else { return 1 }
+        return max(1, (count + sectionSize - 1) / sectionSize)
+    }
+
+    /// Returns the slice of puzzle IDs belonging to a specific 0-based section index.
+    func puzzleIds(forSection sectionIndex: Int) -> [String] {
+        let all = puzzleIds
+        guard !all.isEmpty else { return [] }
+        let clamped = max(0, min(sectionIndex, sectionCount - 1))
+        let start = clamped * sectionSize
+        let end = min(all.count, start + sectionSize)
+        return Array(all[start..<end])
+    }
 }
 
 struct CampaignBossConfig: Hashable, Sendable {
@@ -122,15 +144,22 @@ struct CampaignIsland: Identifiable, Hashable, Sendable {
     let rankRange: String
     let nodes: [CampaignNode]
     let boss: CampaignBossConfig
-    /// Normalized coordinates aligned with `IslandMapBackdrop.jpg` (5 island slots per Sea!)
+    /// Normalized coordinates aligned with each Region's 4:3 iPad Landscape diorama artwork (`RegionMap1...5`)
     let mapX: CGFloat
     let mapY: CGFloat
+    /// Normalized intermediate waypoints from this island to the next island in the same region
+    /// so the Go-stone star road walks cleanly across painted bridges, stepping stones, and staircases.
+    var pathToNextWaypoints: [CGPoint] = []
 
     func name(isChinese: Bool) -> String { isChinese ? nameZh : nameEn }
     func desc(isChinese: Bool) -> String { isChinese ? descZh : descEn }
 
     var allReferencedPuzzleIds: Set<String> {
         Set(nodes.flatMap(\.puzzleIds))
+    }
+
+    var totalPuzzleCount: Int {
+        nodes.reduce(0) { $0 + $1.puzzleIds.count }
     }
 }
 
@@ -168,19 +197,13 @@ struct PlacementOption: Identifiable, Hashable, Sendable {
 
 enum StarYiCampaign {
 
-    /// Coordinates matching the 5 illustrated island regions on `IslandMapBackdrop.jpg`
-    private static let mapSlots: [(CGFloat, CGFloat)] = [
-        (0.19, 0.62),
-        (0.32, 0.29),
-        (0.51, 0.49),
-        (0.78, 0.64),
-        (0.80, 0.28)
-    ]
+    /// Standard number of puzzles in each playable section inside a campaign node.
+    static let puzzlesPerSection: Int = 5
 
     static let placementOptions: [PlacementOption] = [
-        PlacementOption(id: "pl-30k", rankLabel: "30K–22K", titleZh: "萌新启蒙", titleEn: "Brand New", descZh: "刚认识棋盘、气与提子，从第一区域·碧蓝海岛轻松起步", descEn: "Learning liberties & capture from Region 1 · Azure Islands", targetSeaId: "sea-1", recommendedRankTier: 0, emoji: "🏝️"),
+        PlacementOption(id: "pl-30k", rankLabel: "30K–22K", titleZh: "萌新启蒙", titleEn: "Brand New", descZh: "刚认识棋盘、气与提子，从第一区域·风起棋丘轻松起步", descEn: "Learning liberties & capture from Region 1 · Windmill Meadow", targetSeaId: "sea-1", recommendedRankTier: 0, emoji: "🌱"),
         PlacementOption(id: "pl-18k", rankLabel: "21K–15K", titleZh: "吃子进阶（约15K）", titleEn: "Intermediate (~15K)", descZh: "已会双打吃与征子，直接飞往第二区域·翡翠森林", descEn: "Know basic captures — fly to Region 2 · Emerald Forest!", targetSeaId: "sea-2", recommendedRankTier: 3, emoji: "🌿"),
-        PlacementOption(id: "pl-10k", rankLabel: "14K–8K", titleZh: "级位高手（14K–8K）", titleEn: "Solid Kyu (14K–8K)", descZh: "熟悉死活与对杀，直奔第三区域·金色沙漠", descEn: "Solid L&D & races — fly to Region 3 · Golden Desert!", targetSeaId: "sea-3", recommendedRankTier: 4, emoji: "🏜️"),
+        PlacementOption(id: "pl-10k", rankLabel: "14K–8K", titleZh: "级位高手（14K–8K）", titleEn: "Solid Kyu (14K–8K)", descZh: "熟悉死活与对杀，直奔第三区域·双月镜湖", descEn: "Solid L&D & races — fly to Region 3 · Mirror Lake!", targetSeaId: "sea-3", recommendedRankTier: 4, emoji: "🪷"),
         PlacementOption(id: "pl-5k", rankLabel: "7K–1K", titleZh: "高段预备（7K–1K）", titleEn: "High Kyu (7K–1K)", descZh: "冲刺业余段位，直闯第四区域·凛冬雪山", descEn: "Approaching Dan — fly to Region 4 · Frost Peak!", targetSeaId: "sea-4", recommendedRankTier: 5, emoji: "❄️"),
         PlacementOption(id: "pl-1d", rankLabel: "1D–5D+", titleZh: "业余段位炼狱", titleEn: "Amateur Dan (1D–5D+)", descZh: "精通19路定式与精算，直闯第五区域·熔岩火山终极试炼", descEn: "Master 19×19 reading — enter Region 5 · Volcano Peak!", targetSeaId: "sea-5", recommendedRankTier: 6, emoji: "🌋")
     ]
@@ -190,11 +213,11 @@ enum StarYiCampaign {
     static let allSeas: [CampaignSea] = [
 
         // =========================================================================
-        // REGION 1: 碧蓝海岛 (30K - 22K) — 5×5 / 7×7 Friendly Capture & Foundations
+        // REGION 1: 风起棋丘 (30K - 22K) — 5×5 / 7×7 Friendly Capture & Foundations
         // =========================================================================
         CampaignSea(
-            id: "sea-1", index: 0, emoji: "🏝️", mapImageName: "RegionMap1",
-            nameZh: "碧蓝海岛 · 启蒙浅滩", nameEn: "Region 1 · Azure Islands",
+            id: "sea-1", index: 0, emoji: "🌱", mapImageName: "RegionMap1",
+            nameZh: "风起棋丘 · 启蒙浅滩", nameEn: "Region 1 · Windmill Meadow",
             subtitleZh: "5路/7路吃子棋与基础打吃连结，零基础轻松爱上围棋",
             subtitleEn: "5×5 & 7×7 Capture Go, liberties, escapes, and basic eyes",
             rankRange: "30K–22K", minRankValue: 22, maxRankValue: 30,
@@ -203,20 +226,20 @@ enum StarYiCampaign {
             islands: [
                 CampaignIsland(
                     id: "s1-reef", seaId: "sea-1", orderInSea: 0,
-                    nameZh: "青芽珊瑚礁", nameEn: "Sprout Coral Reef",
+                    nameZh: "青芽草坪", nameEn: "Sprout Meadow",
                     descZh: "认识气、提子与逃跑", descEn: "Liberties, Capture & Escape",
                     rankRange: "30K–26K",
                     nodes: [
                         CampaignNode(id: "s1-reef-1", titleZh: "提子启蒙三连闯", titleEn: "First Captures Set", rankBadge: "30K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-01", "pk-cap-02", "cap-01"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-01", "pk-cap-02", "cap-01", "exp-r1-01", "exp-r1-02", "exp-r1-03", "exp-r1-28", "exp-r1-04", "exp-r1-05", "exp-r1-06"], forceExam: false)),
                         CampaignNode(id: "s1-reef-2", titleZh: "闪电数气小游戏", titleEn: "Speed Liberties", rankBadge: "28K",
                                      kind: .miniDrill(kind: .speedLiberties, startOffset: 0, questionCount: 3)),
                         CampaignNode(id: "s1-reef-3", titleZh: "逃跑与反提解围", titleEn: "Escape & Counter-Capture", rankBadge: "27K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-03", "pk-cap-04", "pk-cap-05"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-03", "pk-cap-04", "pk-cap-05", "exp-r1-11", "exp-r1-12", "exp-r1-13", "exp-r1-34", "exp-r1-35", "exp-r1-36", "exp-r1-07"], forceExam: false)),
                         CampaignNode(id: "s1-reef-4", titleZh: "5路十字吃子战", titleEn: "5×5 Cross-Cut Capture", rankBadge: "26K",
                                      kind: .tacticalScenario(scenarioId: "scn-s1-cross")),
-                        CampaignNode(id: "s1-reef-5", titleZh: "珊瑚礁小考", titleEn: "Reef Mastery Test", rankBadge: "25K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-01", "pk-ex-02", "dojo-cap-01"], forceExam: true))
+                        CampaignNode(id: "s1-reef-5", titleZh: "青芽草坪小考", titleEn: "Meadow Mastery Test", rankBadge: "25K",
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-01", "pk-ex-02", "dojo-cap-01", "exp-r1-17", "exp-r1-18", "exp-r1-19", "exp-r1-39", "exp-r1-40", "exp-r1-41", "pk-cap-06", "pk-ex-03", "cap-02", "dojo-cap-02", "exp-r1-14", "exp-r1-15"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .sprout, boardSize: .five, ruleSet: .captureRace(target: 1),
@@ -224,24 +247,25 @@ enum StarYiCampaign {
                         titleZh: "萌新小芽 · 5路先吃1子", titleEn: "Sprout · 5×5 First Capture",
                         taglineZh: "在 5 路棋盘先提掉芽芽 1 颗子就通关！", taglineEn: "Capture 1 stone on 5×5 to clear!"
                     ),
-                    mapX: mapSlots[0].0, mapY: mapSlots[0].1
+                    mapX: 0.20, mapY: 0.56,
+                    pathToNextWaypoints: [CGPoint(x: 0.28, y: 0.45)]
                 ),
                 CampaignIsland(
                     id: "s1-shell", seaId: "sea-1", orderInSea: 1,
-                    nameZh: "贝壳抱吃湾", nameEn: "Shell Hug Bay",
+                    nameZh: "抱吃溪岸", nameEn: "Capture Creek",
                     descZh: "打吃方向、边线抱吃与切断", descEn: "Atari Direction & Edge Hug",
                     rankRange: "25K–23K",
                     nodes: [
                         CampaignNode(id: "s1-shell-1", titleZh: "边线提子与切断", titleEn: "Edge Capture & Cut", rankBadge: "25K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["cap-02", "pk-cap-06", "pk-ex-03"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["cap-02", "pk-cap-06", "pk-ex-03", "cap-01", "dojo-cap-01", "exp-r1-17", "exp-r1-18", "exp-r1-19", "exp-r1-39", "exp-r1-40"], forceExam: false)),
                         CampaignNode(id: "s1-shell-2", titleZh: "棋谱捉虫 · 找错方向", titleEn: "Blunder Spotter", rankBadge: "24K",
                                      kind: .miniDrill(kind: .blunderSpotter, startOffset: 0, questionCount: 2)),
                         CampaignNode(id: "s1-shell-3", titleZh: "顺墙抱吃三连击", titleEn: "Drive to the Wall Set", rankBadge: "23K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-07", "pk-cap-08", "cap-03"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-07", "pk-cap-08", "cap-03", "dojo-cap-03", "exp-r1-23", "exp-r1-24", "exp-r1-25", "exp-r1-45", "exp-r1-46", "exp-r1-47"], forceExam: false)),
                         CampaignNode(id: "s1-shell-4", titleZh: "一路提三子挑战", titleEn: "Edge Triple Capture", rankBadge: "23K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-04", "pk-ex-05", "dojo-cap-03"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-04", "pk-ex-05", "dojo-cap-03", "exp-r1-49", "exp-r1-52", "pk-ex-09", "dojo-cap-02", "dojo-cap-04", "exp-r1-20", "exp-r1-21"], forceExam: false)),
                         CampaignNode(id: "s1-shell-5", titleZh: "抱吃湾无辅助小考", titleEn: "Shell Bay Exam", rankBadge: "22K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-cap-04", "cap-03-r90", "pk-cap-07-w"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-cap-04", "cap-03-r90", "pk-cap-07-w", "exp-r1-26", "exp-r1-27", "exp-r1-48", "exp-r1-50", "exp-r1-54", "exp-r1-55", "pk-cap-09", "pk-cap-10", "pk-ex-06", "pk-lad-02", "pk-open-01", "exp-r1-22"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .sprout, boardSize: .five, ruleSet: .captureRace(target: 3),
@@ -249,24 +273,25 @@ enum StarYiCampaign {
                         titleZh: "萌新小芽 · 5路先吃3子", titleEn: "Sprout · 5×5 Capture 3",
                         taglineZh: "用抱吃和切断先吃满 3 颗子！", taglineEn: "Use cuts and edge hugs to capture 3!"
                     ),
-                    mapX: mapSlots[1].0, mapY: mapSlots[1].1
+                    mapX: 0.40, mapY: 0.35,
+                    pathToNextWaypoints: [CGPoint(x: 0.49, y: 0.47)]
                 ),
                 CampaignIsland(
                     id: "s1-lagoon", seaId: "sea-1", orderInSea: 2,
-                    nameZh: "关门泻湖", nameEn: "Door-Trap Lagoon",
+                    nameZh: "关门花坡", nameEn: "Flower Hill",
                     descZh: "关门吃（门吃）与虎口逃生", descEn: "Door Captures & Escapes",
                     rankRange: "23K–21K",
                     nodes: [
                         CampaignNode(id: "s1-lagoon-1", titleZh: "请君入瓮：关门吃", titleEn: "Door Capture Basics", rankBadge: "22K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-cap-02", "pk-cap-09", "pk-cap-10"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-cap-02", "pk-cap-09", "pk-cap-10", "cap-03", "dojo-cap-04", "exp-r1-26", "exp-r1-27", "exp-r1-48", "exp-r1-50", "exp-r1-54"], forceExam: false)),
                         CampaignNode(id: "s1-lagoon-2", titleZh: "7路边线围捕实战", titleEn: "7×7 Capture Sprint", rankBadge: "22K",
                                      kind: .tacticalScenario(scenarioId: "scn-s1-fence")),
                         CampaignNode(id: "s1-lagoon-3", titleZh: "虎口逃生与反击", titleEn: "Tiger Mouth Escapes", rankBadge: "21K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-06", "pk-ex-08", "dojo-cap-06"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-06", "pk-ex-08", "dojo-cap-06", "exp-r1-55", "pk-lad-02", "pk-open-01", "dojo-cap-03", "exp-r1-23", "exp-r1-24", "exp-r1-25"], forceExam: false)),
                         CampaignNode(id: "s1-lagoon-4", titleZh: "闪电找断点", titleEn: "Speed Cut Spotter", rankBadge: "21K",
                                      kind: .miniDrill(kind: .speedLiberties, startOffset: 3, questionCount: 3)),
                         CampaignNode(id: "s1-lagoon-5", titleZh: "泻湖变向测试", titleEn: "Lagoon Flip Exam", rankBadge: "21K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-cap-02-r90", "pk-cap-09-w", "pk-cap-10-m"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-cap-02-r90", "pk-cap-09-w", "pk-cap-10-m", "exp-r1-45", "exp-r1-46", "exp-r1-47", "exp-r1-49", "exp-r1-52", "pk-cap-08", "pk-ex-05", "pk-ex-09", "cap-02", "exp-r1-20", "exp-r1-21", "exp-r1-22"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .rabbit, boardSize: .seven, ruleSet: .captureRace(target: 3),
@@ -274,24 +299,25 @@ enum StarYiCampaign {
                         titleZh: "灵巧小兔 · 7路先吃3子", titleEn: "Swift Rabbit · 7×7 Capture 3",
                         taglineZh: "小兔出招飞快，布好门吃陷阱抓住它！", taglineEn: "Trap the fast Rabbit for 3 captures!"
                     ),
-                    mapX: mapSlots[2].0, mapY: mapSlots[2].1
+                    mapX: 0.52, mapY: 0.65,
+                    pathToNextWaypoints: [CGPoint(x: 0.66, y: 0.59)]
                 ),
                 CampaignIsland(
                     id: "s1-harbor", seaId: "sea-1", orderInSea: 3,
-                    nameZh: "双吃风车港", nameEn: "Double-Atari Harbor",
+                    nameZh: "双吃浅滩", nameEn: "Double Atari Ford",
                     descZh: "一箭双雕的双打吃绝技", descEn: "Mastering Double Atari",
                     rankRange: "21K–20K",
                     nodes: [
                         CampaignNode(id: "s1-harbor-1", titleZh: "双打吃入门三连", titleEn: "Double Atari Set A", rankBadge: "21K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["cap-04", "pk-cap-11", "pk-ex-07"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["cap-04", "pk-cap-11", "pk-ex-07", "cap-03", "dojo-cap-04", "exp-r1-26", "exp-r1-27", "exp-r1-48", "exp-r1-50", "exp-r1-54"], forceExam: false)),
                         CampaignNode(id: "s1-harbor-2", titleZh: "目数与贴目初认识", titleEn: "First Territory Count", rankBadge: "21K",
                                      kind: .miniDrill(kind: .countingQuiz, startOffset: 0, questionCount: 2)),
                         CampaignNode(id: "s1-harbor-3", titleZh: "边线与大块双打吃", titleEn: "Group Double Atari", rankBadge: "20K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-12", "pk-cap-13", "dojo-cap-05"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-cap-12", "pk-cap-13", "dojo-cap-05", "exp-r1-55", "pk-cap-09", "pk-cap-10", "pk-ex-06", "pk-lad-02", "pk-open-01", "dojo-cap-03"], forceExam: false)),
                         CampaignNode(id: "s1-harbor-4", titleZh: "7路先吃五子快棋", titleEn: "7×7 Five-Stone Duel", rankBadge: "20K",
                                      kind: .tacticalScenario(scenarioId: "scn-s1-rescue")),
                         CampaignNode(id: "s1-harbor-5", titleZh: "风车港考场小测", titleEn: "Harbor Exam Set", rankBadge: "20K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["cap-04-w", "pk-cap-11-r90", "pk-cap-14"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["cap-04-w", "pk-cap-11-r90", "pk-cap-14", "exp-r1-23", "exp-r1-24", "exp-r1-25", "exp-r1-45", "exp-r1-46", "exp-r1-47", "exp-r1-49", "exp-r1-52", "pk-cap-08", "pk-ex-05", "pk-ex-09", "cap-02"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .rabbit, boardSize: .seven, ruleSet: .captureRace(target: 5),
@@ -299,32 +325,33 @@ enum StarYiCampaign {
                         titleZh: "灵巧小兔 · 7路先吃5子", titleEn: "Swift Rabbit · 7×7 Capture 5",
                         taglineZh: "瞄准双打吃，先吃满 5 颗白子！", taglineEn: "Spot double ataris to capture 5 stones!"
                     ),
-                    mapX: mapSlots[3].0, mapY: mapSlots[3].1
+                    mapX: 0.76, mapY: 0.52,
+                    pathToNextWaypoints: [CGPoint(x: 0.79, y: 0.44)]
                 ),
                 CampaignIsland(
                     id: "s1-lighthouse", seaId: "sea-1", orderInSea: 4,
-                    nameZh: "双瞳灯塔岛", nameEn: "Twin-Eye Lighthouse",
+                    nameZh: "金星风车", nameEn: "Golden Star Mill",
                     descZh: "两只真眼活棋与 9 路起航", descEn: "Two True Eyes & 9×9 Debut",
                     rankRange: "21K–20K",
                     nodes: [
                         CampaignNode(id: "s1-light-1", titleZh: "做出两只真眼", titleEn: "Make Two True Eyes", rankBadge: "21K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-01", "pk-lad-02", "pk-lad-03"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-01", "pk-lad-02", "pk-lad-03", "cap-03", "dojo-cap-04", "exp-r1-26", "exp-r1-27", "exp-r1-48", "exp-r1-50", "exp-r1-54"], forceExam: false)),
                         CampaignNode(id: "s1-light-2", titleZh: "布局金角银边小测", titleEn: "Opening Big Points", rankBadge: "20K",
                                      kind: .miniDrill(kind: .openingPicker, startOffset: 0, questionCount: 2)),
                         CampaignNode(id: "s1-light-3", titleZh: "识破假眼与救命反提", titleEn: "False Eye & Rescues", rankBadge: "20K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-09", "pk-cap-15", "pk-ex-10"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-09", "pk-cap-15", "pk-ex-10", "exp-r1-55", "pk-cap-09", "pk-cap-10", "pk-ex-06", "pk-open-01", "dojo-cap-03", "exp-r1-23"], forceExam: false)),
                         CampaignNode(id: "s1-light-4", titleZh: "9路开局与边线守空", titleEn: "9×9 Opening & Border", rankBadge: "20K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-open-01", "pk-open-02", "pk-end-01"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-open-01", "pk-open-02", "pk-end-01", "exp-r1-24", "exp-r1-25", "exp-r1-45", "exp-r1-46", "exp-r1-47", "exp-r1-49", "exp-r1-52"], forceExam: false)),
                         CampaignNode(id: "s1-light-5", titleZh: "浅滩毕业综合试炼", titleEn: "Sea 1 Graduation Exam", rankBadge: "20K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-01", "pk-lad-01-w", "dojo-cap-07", "dojo-cap-08"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-01", "pk-lad-01-w", "dojo-cap-07", "dojo-cap-08", "pk-cap-08", "pk-ex-05", "cap-02", "dojo-cap-02", "exp-r1-20", "exp-r1-21", "exp-r1-22", "exp-r1-42", "exp-r1-43", "exp-r1-44", "exp-r1-51"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .rabbit, boardSize: .nine, ruleSet: .standard,
                         coachingStyle: .standard, timeControl: .unlimited,
-                        titleZh: "灯塔守卫 · 9路围空首战", titleEn: "Lighthouse Guardian · First 9×9",
+                        titleZh: "风车守卫 · 9路围空首战", titleEn: "Windmill Guardian · First 9×9",
                         taglineZh: "第一盘完整 9 路围空对局，征服第一海域！", taglineEn: "Win your first full 9×9 territory game!"
                     ),
-                    mapX: mapSlots[4].0, mapY: mapSlots[4].1
+                    mapX: 0.82, mapY: 0.36
                 )
             ]
         ),
@@ -348,15 +375,15 @@ enum StarYiCampaign {
                     rankRange: "19K–16K",
                     nodes: [
                         CampaignNode(id: "s2-wind-1", titleZh: "征子楼梯四连追", titleEn: "Ladder Chase Set", rankBadge: "18K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-02", "tac-03", "pk-tac-03"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-02", "tac-03", "pk-tac-03", "cap-05", "dojo-cap-08", "dojo-open-01", "end-01", "exp-r2-09", "exp-r2-10", "exp-r2-11", "exp-r2-16", "exp-r2-17", "lad-02", "pk-ex-12", "pk-ex-15", "pk-lad-04", "dojo-cap-07", "dojo-lad-01", "dojo-lad-02", "exp-r2-06"], forceExam: false)),
                         CampaignNode(id: "s2-wind-2", titleZh: "征子盲算：成不成？", titleEn: "Ladder Blind Reading", rankBadge: "17K",
                                      kind: .miniDrill(kind: .ladderReading, startOffset: 0, questionCount: 3)),
                         CampaignNode(id: "s2-wind-3", titleZh: "天罗地网 · 枷吃特训", titleEn: "Classic Net (Geta) Set", rankBadge: "17K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["cap-05", "pk-tac-04", "pk-tac-05", "pk-ex-12"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["cap-05", "pk-tac-04", "pk-tac-05", "pk-ex-12", "exp-r2-12", "exp-r2-13", "exp-r2-14", "exp-r2-15", "exp-r2-18", "exp-r2-19", "pk-ex-13", "pk-lad-05", "dojo-lad-03", "dojo-tac-01", "exp-r2-20", "exp-r2-21", "exp-r2-22", "exp-r2-23", "exp-r2-27", "lad-03"], forceExam: false)),
                         CampaignNode(id: "s2-wind-4", titleZh: "围歼孤棋：实战追捕", titleEn: "Live Capture Hunt", rankBadge: "17K",
                                      kind: .tacticalScenario(scenarioId: "scn-s2-hunt")),
                         CampaignNode(id: "s2-wind-5", titleZh: "征枷考场终极测", titleEn: "Ladder & Net Exam", rankBadge: "16K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-06", "dojo-tac-01", "cap-05-w"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-06", "dojo-tac-01", "cap-05-w", "pk-ex-14", "pk-ex-16", "pk-lad-06", "pk-open-03", "pk-race-01", "pk-tac-07", "tac-01", "dojo-lad-04", "dojo-race-01", "dojo-tac-02", "end-02", "exp-r2-24"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .fox, boardSize: .nine, ruleSet: .standard,
@@ -364,7 +391,8 @@ enum StarYiCampaign {
                         titleZh: "机敏狐狸 · 9路征枷战", titleEn: "Clever Fox · 9×9 Duel",
                         taglineZh: "狐狸最爱设征子陷阱，识破它赢下 9 路对局！", taglineEn: "Outread the Fox's ladders and nets!"
                     ),
-                    mapX: mapSlots[0].0, mapY: mapSlots[0].1
+                    mapX: 0.23, mapY: 0.68,
+                    pathToNextWaypoints: [CGPoint(x: 0.19, y: 0.53), CGPoint(x: 0.21, y: 0.43)]
                 ),
                 CampaignIsland(
                     id: "s2-canyon", seaId: "sea-2", orderInSea: 1,
@@ -373,15 +401,15 @@ enum StarYiCampaign {
                     rankRange: "16K–14K",
                     nodes: [
                         CampaignNode(id: "s2-canyon-1", titleZh: "弃子反杀 · 倒扑三连", titleEn: "Snapback Mastery", rankBadge: "16K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["tac-01", "pk-tac-07", "pk-tac-08", "pk-ex-13"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["tac-01", "pk-tac-07", "pk-tac-08", "pk-ex-13", "dojo-lad-03", "dojo-tac-01", "exp-r2-20", "exp-r2-21", "exp-r2-22", "exp-r2-23", "exp-r2-27", "lad-03", "pk-ex-14", "pk-ex-16", "pk-lad-06", "pk-open-03", "pk-race-01", "pk-tac-05", "pk-tac-06", "dojo-lad-02"], forceExam: false)),
                         CampaignNode(id: "s2-canyon-2", titleZh: "棋谱捉虫 · 识破恶手", titleEn: "Blunder Spotter", rankBadge: "15K",
                                      kind: .miniDrill(kind: .blunderSpotter, startOffset: 1, questionCount: 3)),
                         CampaignNode(id: "s2-canyon-3", titleZh: "致命断点 · 接不归", titleEn: "Connect & Die Set", rankBadge: "15K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["tac-02", "pk-tac-09", "pk-tac-10", "pk-ex-11"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["tac-02", "pk-tac-09", "pk-tac-10", "pk-ex-11", "dojo-lad-04", "dojo-race-01", "dojo-tac-02", "end-02", "exp-r2-24", "exp-r2-25", "exp-r2-28", "pk-ex-18", "pk-ex-19", "pk-lad-07", "pk-lad-08", "tac-03", "exp-r2-12", "exp-r2-13", "exp-r2-14", "exp-r2-15"], forceExam: false)),
                         CampaignNode(id: "s2-canyon-4", titleZh: "连环滚打包收与挖断", titleEn: "Rolling Squeeze & Wedge", rankBadge: "14K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-11", "pk-ex-14", "pk-tac-12"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-11", "pk-ex-14", "pk-tac-12", "exp-r2-18", "exp-r2-19", "pk-lad-05", "pk-tac-03", "pk-tac-04", "cap-05", "dojo-cap-08", "dojo-open-01", "end-01", "exp-r2-09", "exp-r2-10", "exp-r2-11", "exp-r2-16", "exp-r2-17", "lad-02", "pk-ex-12", "pk-ex-15"], forceExam: false)),
                         CampaignNode(id: "s2-canyon-5", titleZh: "峡谷手筋无辅助考场", titleEn: "Canyon Tesuji Exam", rankBadge: "14K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-tac-02", "dojo-tac-03", "dojo-tac-04"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-tac-02", "dojo-tac-03", "dojo-tac-04", "pk-lad-04", "pk-tac-02", "dojo-cap-07", "dojo-lad-01", "exp-r2-06", "exp-r2-07", "exp-r2-08", "exp-r2-26", "cap-04", "dojo-cap-06", "exp-r2-03", "exp-r2-04"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .fox, boardSize: .nine, ruleSet: .standard,
@@ -389,7 +417,8 @@ enum StarYiCampaign {
                         titleZh: "峡谷狐狸 · 10分钟快棋", titleEn: "Canyon Fox · 10m Match",
                         taglineZh: "首次启用围棋计时钟，用倒扑手筋击败狐狸！", taglineEn: "Beat the Fox with a 10-minute clock!"
                     ),
-                    mapX: mapSlots[1].0, mapY: mapSlots[1].1
+                    mapX: 0.32, mapY: 0.37,
+                    pathToNextWaypoints: [CGPoint(x: 0.43, y: 0.45)]
                 ),
                 CampaignIsland(
                     id: "s2-lake", seaId: "sea-2", orderInSea: 2,
@@ -398,15 +427,15 @@ enum StarYiCampaign {
                     rankRange: "16K–14K",
                     nodes: [
                         CampaignNode(id: "s2-lake-1", titleZh: "直三曲三做活点杀", titleEn: "Straight & Bent Three", rankBadge: "16K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["lad-01", "pk-lad-04", "lad-03", "pk-lad-05"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["lad-01", "pk-lad-04", "lad-03", "pk-lad-05", "dojo-lad-03", "dojo-tac-01", "exp-r2-20", "exp-r2-21", "exp-r2-22", "exp-r2-23", "exp-r2-27", "pk-ex-14", "pk-ex-16", "pk-lad-06", "pk-open-03", "pk-race-01", "pk-tac-05", "pk-tac-06", "pk-tac-07", "tac-01"], forceExam: false)),
                         CampaignNode(id: "s2-lake-2", titleZh: "绝境做活：保住角上黑龙", titleEn: "Live Dragon Rescue", rankBadge: "15K",
                                      kind: .tacticalScenario(scenarioId: "scn-s2-live")),
                         CampaignNode(id: "s2-lake-3", titleZh: "丁四与刀把五秘籍", titleEn: "Pyramid 4 & Bulky 5", rankBadge: "15K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-06", "pk-lad-07", "pk-lad-08", "pk-lad-09"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-06", "pk-lad-07", "pk-lad-08", "pk-lad-09", "dojo-lad-04", "dojo-race-01", "dojo-tac-02", "end-02", "exp-r2-24", "exp-r2-25", "exp-r2-28", "pk-ex-18", "pk-ex-19", "pk-tac-08", "pk-tac-09", "pk-tac-10", "tac-02", "tac-03", "dojo-lad-02", "exp-r2-12"], forceExam: false)),
                         CampaignNode(id: "s2-lake-4", titleZh: "征子远程引征进阶", titleEn: "Distant Ladder Breakers", rankBadge: "14K",
                                      kind: .miniDrill(kind: .ladderReading, startOffset: 3, questionCount: 3)),
                         CampaignNode(id: "s2-lake-5", titleZh: "双月湖死活考场", titleEn: "Lake L&D Exam", rankBadge: "14K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-15", "pk-ex-16", "pk-ex-17"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-15", "pk-ex-16", "pk-ex-17", "exp-r2-13", "exp-r2-14", "exp-r2-15", "exp-r2-18", "exp-r2-19", "pk-ex-13", "pk-tac-03", "pk-tac-04", "cap-05", "dojo-cap-08", "dojo-open-01", "end-01"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .deer, boardSize: .nine, ruleSet: .standard,
@@ -414,7 +443,8 @@ enum StarYiCampaign {
                         titleZh: "林间灵鹿 · 12K 守湖战", titleEn: "Jade Deer · 12K Guardian",
                         taglineZh: "灵鹿步法轻灵，守好自己的两眼活棋！", taglineEn: "Outplay the 12K Jade Deer on 9×9!"
                     ),
-                    mapX: mapSlots[2].0, mapY: mapSlots[2].1
+                    mapX: 0.49, mapY: 0.54,
+                    pathToNextWaypoints: [CGPoint(x: 0.59, y: 0.60)]
                 ),
                 CampaignIsland(
                     id: "s2-temple", seaId: "sea-2", orderInSea: 3,
@@ -423,15 +453,15 @@ enum StarYiCampaign {
                     rankRange: "15K–13K",
                     nodes: [
                         CampaignNode(id: "s2-temple-1", titleZh: "对杀先紧外气三连", titleEn: "Outside Liberties Set", rankBadge: "15K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-01", "pk-race-02", "pk-ex-18"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-01", "pk-race-02", "pk-ex-18", "dojo-lad-04", "dojo-race-01", "dojo-tac-02", "end-02", "exp-r2-24", "exp-r2-25", "exp-r2-28", "pk-ex-19", "pk-lad-07", "pk-lad-08", "pk-tac-08", "pk-tac-09", "pk-tac-10", "tac-02", "tac-03", "dojo-lad-03", "dojo-tac-01"], forceExam: false)),
                         CampaignNode(id: "s2-temple-2", titleZh: "9路形势与目数判断", titleEn: "9×9 Counting Quiz", rankBadge: "14K",
                                      kind: .miniDrill(kind: .countingQuiz, startOffset: 2, questionCount: 2)),
                         CampaignNode(id: "s2-temple-3", titleZh: "关键补断与夹渡联络", titleEn: "Vital Connections", rankBadge: "13K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["end-01", "pk-tac-13", "tac-04"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["end-01", "pk-tac-13", "tac-04", "exp-r2-20", "exp-r2-21", "exp-r2-22", "exp-r2-23", "exp-r2-27", "lad-03", "pk-ex-14", "pk-ex-16", "pk-lad-06", "pk-open-03", "pk-tac-05", "pk-tac-06", "pk-tac-07", "tac-01", "dojo-lad-02", "exp-r2-12", "exp-r2-13"], forceExam: false)),
                         CampaignNode(id: "s2-temple-4", titleZh: "9路中盘激战实战", titleEn: "9×9 Capture Showdown", rankBadge: "13K",
                                      kind: .tacticalScenario(scenarioId: "scn-s2-race")),
                         CampaignNode(id: "s2-temple-5", titleZh: "古寺对杀考场测", titleEn: "Temple Race Exam", rankBadge: "13K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-race-01", "end-02-w", "pk-end-02"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-race-01", "end-02-w", "pk-end-02", "exp-r2-14", "exp-r2-15", "exp-r2-18", "exp-r2-19", "pk-ex-13", "pk-lad-05", "pk-tac-03", "pk-tac-04", "cap-05", "dojo-cap-08", "dojo-open-01", "exp-r2-09"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .deer, boardSize: .nine, ruleSet: .standard,
@@ -439,7 +469,8 @@ enum StarYiCampaign {
                         titleZh: "林间灵鹿 · 读秒对杀战", titleEn: "Jade Deer · Byoyomi Match",
                         taglineZh: "体验正式围棋读秒，在对杀中冷静紧外气！", taglineEn: "Stay calm in byoyomi and win the race!"
                     ),
-                    mapX: mapSlots[3].0, mapY: mapSlots[3].1
+                    mapX: 0.65, mapY: 0.67,
+                    pathToNextWaypoints: [CGPoint(x: 0.65, y: 0.54), CGPoint(x: 0.69, y: 0.46)]
                 ),
                 CampaignIsland(
                     id: "s2-summit", seaId: "sea-2", orderInSea: 4,
@@ -448,15 +479,15 @@ enum StarYiCampaign {
                     rankRange: "13K–12K",
                     nodes: [
                         CampaignNode(id: "s2-summit-1", titleZh: "梅花五攻防秘境", titleEn: "Crossed Five Mastery", rankBadge: "13K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-10", "pk-lad-11", "pk-tac-14"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-10", "pk-lad-11", "pk-tac-14", "dojo-lad-04", "dojo-race-01", "dojo-tac-02", "end-02", "exp-r2-24", "exp-r2-25", "exp-r2-28", "pk-ex-18", "pk-ex-19", "pk-lad-07", "pk-lad-08", "pk-tac-08", "pk-tac-09", "pk-tac-10", "tac-02", "tac-03", "dojo-lad-03"], forceExam: false)),
                         CampaignNode(id: "s2-summit-2", titleZh: "13路布局选大场", titleEn: "13×13 Opening Picker", rankBadge: "13K",
                                      kind: .miniDrill(kind: .openingPicker, startOffset: 1, questionCount: 3)),
                         CampaignNode(id: "s2-summit-3", titleZh: "立二拆三与边线收官", titleEn: "Extensions & Endgame", rankBadge: "12K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-open-03", "pk-open-04", "pk-open-03-m", "pk-ex-21"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-open-03", "pk-open-04", "pk-ex-21", "dojo-tac-01", "exp-r2-20", "pk-open-03-m", "exp-r2-21", "exp-r2-22", "exp-r2-23", "exp-r2-27", "lad-03", "pk-ex-14", "pk-ex-16", "pk-lad-06", "pk-race-01", "pk-tac-05", "pk-tac-06", "pk-tac-07", "tac-01", "dojo-lad-02"], forceExam: false)),
                         CampaignNode(id: "s2-summit-4", titleZh: "星位小飞挂定式入门", titleEn: "Star-Point Knight Joseki", rankBadge: "12K",
                                      kind: .josekiTrial(courseId: "jos-star-knight")),
                         CampaignNode(id: "s2-summit-5", titleZh: "进阶群岛毕业大考", titleEn: "Sea 2 Graduation Exam", rankBadge: "12K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["tac-05", "pk-ex-19", "pk-ex-20", "pk-ex-22"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["tac-05", "pk-ex-19", "pk-ex-20", "pk-ex-22", "exp-r2-12", "exp-r2-13", "exp-r2-14", "exp-r2-15", "exp-r2-18", "exp-r2-19", "pk-ex-13", "pk-lad-05", "pk-tac-03", "pk-tac-04", "cap-05"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .panda, boardSize: .thirteen, ruleSet: .standard,
@@ -464,17 +495,17 @@ enum StarYiCampaign {
                         titleZh: "沉稳熊猫 · 13路晋级战", titleEn: "Wise Panda · 13×13 Boss",
                         taglineZh: "迈入 13 路棋盘，打败 10K 熊猫开启手筋秘境！", taglineEn: "Step onto 13×13 and defeat the 10K Panda!"
                     ),
-                    mapX: mapSlots[4].0, mapY: mapSlots[4].1
+                    mapX: 0.76, mapY: 0.40
                 )
             ]
         ),
 
         // =========================================================================
-        // REGION 3: 金色沙漠 (14K - 8K) — Single-Digit Kyu Breakthrough (9×9 & 13×13)
+        // REGION 3: 双月镜湖 (14K - 8K) — Single-Digit Kyu Breakthrough (9×9 & 13×13)
         // =========================================================================
         CampaignSea(
-            id: "sea-3", index: 2, emoji: "🏜️", mapImageName: "RegionMap3",
-            nameZh: "金色沙漠 · 古迹沙海", nameEn: "Region 3 · Golden Desert",
+            id: "sea-3", index: 2, emoji: "🪷", mapImageName: "RegionMap3",
+            nameZh: "双月镜湖 · 月桥水岸", nameEn: "Region 3 · Mirror Lake",
             subtitleZh: "缩眼破假眼、有眼杀无眼、大伸腿官子与定式破骗招（突破 8K）",
             subtitleEn: "Eye reduction, false eyes, capturing races, Monkey Jump & Joseki",
             rankRange: "14K–8K", minRankValue: 8, maxRankValue: 14,
@@ -483,20 +514,20 @@ enum StarYiCampaign {
             islands: [
                 CampaignIsland(
                     id: "s3-pine", seaId: "sea-3", orderInSea: 0,
-                    nameZh: "绿洲渡沙井", nameEn: "Oasis Bridge Well",
+                    nameZh: "松影渡口", nameEn: "Pine Ferry",
                     descZh: "一路扳渡、封口反吃与长征子", descEn: "1st-Line Connect & Long Ladders",
                     rankRange: "11K–10K",
                     nodes: [
                         CampaignNode(id: "s3-pine-1", titleZh: "一路扳渡与跨断", titleEn: "1st-Line Connect & Cut", rankBadge: "11K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-15", "pk-ex-23", "pk-tac-16"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-15", "pk-ex-23", "pk-tac-16", "dojo-tac-06", "end-04", "exp-r3-09", "exp-r3-10", "exp-r3-11", "pk-lad-12", "pk-race-03", "dojo-end-02", "dojo-lad-06", "dojo-lad-07", "dojo-open-03", "dojo-race-03", "dojo-tac-05", "dojo-tac-07", "exp-r3-06", "exp-r3-07", "exp-r3-08", "exp-r3-12", "exp-r3-13", "lad-05", "pk-end-03", "pk-ex-20"], forceExam: false)),
                         CampaignNode(id: "s3-pine-2", titleZh: "长征子与双不入气", titleEn: "Long Ladder & Double Shortage", rankBadge: "10K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-17", "pk-tac-18", "dojo-tac-06"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-17", "pk-tac-18", "dojo-tac-06", "pk-lad-13", "pk-open-05", "pk-race-04", "dojo-tac-08", "exp-r3-14", "exp-r3-15", "exp-r3-16", "pk-ex-24", "pk-ex-26", "pk-ex-28", "pk-ex-30", "pk-ex-32", "pk-lad-14", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-ex-22", "pk-lad-11", "pk-lad-15"], forceExam: false)),
                         CampaignNode(id: "s3-pine-3", titleZh: "棋谱捉虫 · 级位防随手", titleEn: "SDK Blunder Spotter", rankBadge: "10K",
                                      kind: .miniDrill(kind: .blunderSpotter, startOffset: 3, questionCount: 3)),
                         CampaignNode(id: "s3-pine-4", titleZh: "9路官子翻盘实战", titleEn: "9×9 Endgame Comeback", rankBadge: "10K",
                                      kind: .tacticalScenario(scenarioId: "scn-s3-endgame")),
                         CampaignNode(id: "s3-pine-5", titleZh: "青松岛手筋考场", titleEn: "Pine Sanctum Exam", rankBadge: "10K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["end-03", "end-04", "dojo-tac-07"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["end-03", "end-04", "dojo-tac-07", "pk-open-06", "pk-race-05", "pk-tac-14", "pk-tac-19", "tac-05", "dojo-race-02", "dojo-tac-04", "exp-r3-03", "exp-r3-04", "exp-r3-05", "pk-ex-21", "pk-lad-10", "pk-open-04", "pk-tac-13", "tac-04", "dojo-end-01", "dojo-lad-05"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .panda, boardSize: .thirteen, ruleSet: .standard,
@@ -504,24 +535,25 @@ enum StarYiCampaign {
                         titleZh: "沉稳熊猫 · 13路联络战", titleEn: "Wise Panda · 13×13 Match",
                         taglineZh: "在 13 路边角攻防中灵活联络与封锁！", taglineEn: "Master side connections on 13×13!"
                     ),
-                    mapX: mapSlots[0].0, mapY: mapSlots[0].1
+                    mapX: 0.20, mapY: 0.64,
+                    pathToNextWaypoints: [CGPoint(x: 0.23, y: 0.49)]
                 ),
                 CampaignIsland(
                     id: "s3-forge", seaId: "sea-3", orderInSea: 1,
-                    nameZh: "日晷石碑阵", nameEn: "Sundial Monolith Ruins",
+                    nameZh: "落樱湖岸", nameEn: "Blossom Shore",
                     descZh: "扑破假眼、缩小眼位与葡萄六", descEn: "False Eyes, Reduction & Rabbitty 6",
                     rankRange: "11K–8K",
                     nodes: [
                         CampaignNode(id: "s3-forge-1", titleZh: "扑破假眼与一路缩眼", titleEn: "False Eye & Eye Reduction", rankBadge: "10K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-12", "pk-lad-13", "pk-ex-26", "pk-ex-27"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-12", "pk-lad-13", "pk-ex-26", "pk-ex-27", "dojo-end-02", "dojo-lad-07", "dojo-open-03", "dojo-race-03", "dojo-tac-07", "exp-r3-12", "exp-r3-13", "pk-end-03", "pk-open-05", "pk-race-04", "pk-tac-16", "pk-tac-17", "dojo-tac-06", "dojo-tac-08", "end-04", "exp-r3-09", "exp-r3-10", "exp-r3-11", "exp-r3-14", "exp-r3-15", "exp-r3-16"], forceExam: false)),
                         CampaignNode(id: "s3-forge-2", titleZh: "葡萄六（花六）攻防", titleEn: "Rabbitty Six Vital Points", rankBadge: "9K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-14", "pk-lad-15", "dojo-lad-08"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-14", "pk-lad-15", "dojo-lad-08", "pk-ex-24", "pk-ex-28", "pk-ex-30", "pk-ex-32", "pk-tac-18", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-open-06", "pk-race-05", "pk-tac-19", "pk-ex-23", "pk-race-03", "pk-tac-15", "dojo-lad-06", "dojo-tac-05", "exp-r3-06", "exp-r3-07", "exp-r3-08", "lad-05"], forceExam: false)),
                         CampaignNode(id: "s3-forge-3", titleZh: "闪电眼力 · 级位速判", titleEn: "Speed Tactics Flash", rankBadge: "9K",
                                      kind: .miniDrill(kind: .speedLiberties, startOffset: 2, questionCount: 4)),
                         CampaignNode(id: "s3-forge-4", titleZh: "屠龙演练：歼灭白龙", titleEn: "Slay the Invader Duel", rankBadge: "8K",
                                      kind: .tacticalScenario(scenarioId: "scn-s3-kill")),
                         CampaignNode(id: "s3-forge-5", titleZh: "熔炉死活考场", titleEn: "Forge L&D Exam", rankBadge: "8K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-19", "pk-ex-24", "end-05"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-19", "pk-ex-24", "end-05", "pk-ex-20", "pk-ex-22", "pk-lad-11", "pk-tac-14", "tac-05", "dojo-race-02", "dojo-tac-04", "end-03", "exp-r3-03", "exp-r3-04", "exp-r3-05", "pk-ex-21", "pk-lad-10", "pk-open-04", "pk-tac-13", "tac-04", "dojo-end-01"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .crane, boardSize: .nine, ruleSet: .standard,
@@ -529,24 +561,25 @@ enum StarYiCampaign {
                         titleZh: "清风白鹤 · 9路死活快战", titleEn: "Wind Crane · 9×9 L&D Duel",
                         taglineZh: "5K 白鹤算路犀利，精准缩眼破眼取胜！", taglineEn: "Outread the 5K Crane in sharp local fights!"
                     ),
-                    mapX: mapSlots[1].0, mapY: mapSlots[1].1
+                    mapX: 0.31, mapY: 0.36,
+                    pathToNextWaypoints: [CGPoint(x: 0.42, y: 0.45)]
                 ),
                 CampaignIsland(
                     id: "s3-river", seaId: "sea-3", orderInSea: 2,
-                    nameZh: "流沙双子塔", nameEn: "Twin Sand Towers",
+                    nameZh: "双月棋洲", nameEn: "Twin Moon Islet",
                     descZh: "有眼杀无眼、一路延气与大眼杀小眼", descEn: "Eye vs No-Eye & Big-Eye Races",
                     rankRange: "11K–6K",
                     nodes: [
                         CampaignNode(id: "s3-river-1", titleZh: "有眼杀无眼专精", titleEn: "Eye Beats No-Eye", rankBadge: "10K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-03", "pk-ex-29", "dojo-race-02"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-03", "pk-ex-29", "dojo-race-02", "dojo-end-02", "dojo-lad-07", "dojo-open-03", "dojo-race-03", "dojo-tac-07", "exp-r3-12", "exp-r3-13", "pk-end-03", "pk-lad-13", "pk-open-05", "pk-race-04", "pk-tac-16", "pk-tac-17", "dojo-tac-06", "dojo-tac-08", "end-04", "exp-r3-09", "exp-r3-10", "exp-r3-11", "exp-r3-14", "exp-r3-15", "exp-r3-16"], forceExam: false)),
                         CampaignNode(id: "s3-river-2", titleZh: "角部立下延气妙手", titleEn: "Corner Liberty Extension", rankBadge: "9K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-04", "pk-ex-28", "dojo-race-03"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-04", "pk-ex-28", "dojo-race-03", "pk-ex-24", "pk-ex-26", "pk-ex-30", "pk-ex-32", "pk-lad-14", "pk-tac-18", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-lad-15", "pk-open-06", "pk-race-05", "pk-tac-19", "pk-ex-23", "pk-lad-12", "pk-tac-15", "dojo-lad-06", "dojo-tac-05", "exp-r3-06"], forceExam: false)),
                         CampaignNode(id: "s3-river-3", titleZh: "扑破眼与大眼杀小眼", titleEn: "Throw-In & Big-Eye Races", rankBadge: "7K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-05", "pk-race-06", "dojo-race-04"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-race-05", "pk-race-06", "dojo-race-04", "exp-r3-07", "exp-r3-08", "lad-05", "pk-ex-20", "pk-ex-22", "pk-lad-11", "pk-tac-14", "tac-05", "dojo-tac-04", "end-03", "exp-r3-03", "exp-r3-04", "exp-r3-05", "pk-ex-21", "pk-lad-10", "pk-open-04", "pk-tac-13", "tac-04", "dojo-end-01", "dojo-lad-05", "dojo-open-02", "dojo-tac-03"], forceExam: false)),
                         CampaignNode(id: "s3-river-4", titleZh: "破骗招：点三三反击课", titleEn: "Anti-Trick: 3-3 Cut", rankBadge: "8K",
                                      kind: .josekiTrial(courseId: "jos-trick-33-cut")),
                         CampaignNode(id: "s3-river-5", titleZh: "长河对杀无辅助考场", titleEn: "River Capturing Exam", rankBadge: "6K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-race-05", "pk-race-04-w", "pk-race-05-r90"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-race-05", "pk-race-04-w", "pk-race-05-r90", "exp-r3-01", "exp-r3-02", "lad-04", "pk-end-02", "pk-ex-17", "pk-lad-09", "pk-race-02", "pk-tac-11", "pk-tac-12", "dojo-lad-04", "dojo-race-01", "dojo-tac-02", "end-02", "exp-r2-24", "exp-r2-25", "exp-r2-28", "pk-ex-18"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .crane, boardSize: .thirteen, ruleSet: .standard,
@@ -554,24 +587,25 @@ enum StarYiCampaign {
                         titleZh: "清风白鹤 · 13路对杀战", titleEn: "Wind Crane · 13×13 Match",
                         taglineZh: "在 13 路对杀中用「有眼杀无眼」压制白鹤！", taglineEn: "Outlast the 5K Crane on 13×13!"
                     ),
-                    mapX: mapSlots[2].0, mapY: mapSlots[2].1
+                    mapX: 0.50, mapY: 0.56,
+                    pathToNextWaypoints: [CGPoint(x: 0.60, y: 0.45)]
                 ),
                 CampaignIsland(
                     id: "s3-pagoda", seaId: "sea-3", orderInSea: 3,
-                    nameZh: "黄金金字塔", nameEn: "Golden Pyramid Sanctum",
+                    nameZh: "涟漪石径", nameEn: "Ripple Walk",
                     descZh: "星位点三三、小飞挂与 13/19 路布局", descEn: "Modern Joseki & Opening Sense",
                     rankRange: "10K–5K",
                     nodes: [
                         CampaignNode(id: "s3-pagoda-1", titleZh: "现代 AI 点三三定式", titleEn: "Modern 3-3 Joseki", rankBadge: "9K",
                                      kind: .josekiTrial(courseId: "jos-33-modern")),
                         CampaignNode(id: "s3-pagoda-2", titleZh: "挂角守角与 19 路选点", titleEn: "Corner Enclosures & 19×19", rankBadge: "8K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-open-05", "pk-open-06", "pk-ex-30", "pk-open-07"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-open-05", "pk-open-06", "pk-ex-30", "pk-open-07", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-lad-15", "pk-race-05", "pk-tac-19", "dojo-tac-08", "exp-r3-14", "exp-r3-15", "exp-r3-16", "pk-ex-24", "pk-ex-26", "pk-ex-28", "pk-ex-32", "pk-lad-14", "pk-tac-18", "dojo-end-02", "dojo-lad-07"], forceExam: false)),
                         CampaignNode(id: "s3-pagoda-3", titleZh: "破骗招：小飞挂靠断反击", titleEn: "Anti-Trick: Overplay Refutation", rankBadge: "7K",
                                      kind: .josekiTrial(courseId: "jos-trick-knight-wedge")),
                         CampaignNode(id: "s3-pagoda-4", titleZh: "13路孤棋治孤实战", titleEn: "13×13 Sabaki Survival", rankBadge: "6K",
                                      kind: .tacticalScenario(scenarioId: "scn-s3-live13")),
                         CampaignNode(id: "s3-pagoda-5", titleZh: "飞檐塔布局与中盘考", titleEn: "Pagoda Exam Set", rankBadge: "5K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-31", "pk-tac-20", "pk-tac-21", "pk-ex-25"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-ex-31", "pk-tac-20", "pk-tac-21", "pk-ex-25", "dojo-open-03", "dojo-race-03", "dojo-tac-07", "exp-r3-12", "exp-r3-13", "pk-end-03", "pk-lad-13", "pk-race-04", "pk-tac-16", "pk-tac-17", "dojo-tac-06", "end-04", "exp-r3-09", "exp-r3-10", "exp-r3-11", "pk-ex-23"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .crane, boardSize: .thirteen, ruleSet: .standard,
@@ -579,24 +613,25 @@ enum StarYiCampaign {
                         titleZh: "清风白鹤 · 13路布局战", titleEn: "Wind Crane · 13×13 Opening",
                         taglineZh: "活用星位定式和大场意识正面击败白鹤！", taglineEn: "Apply Joseki & whole-board vision on 13×13!"
                     ),
-                    mapX: mapSlots[3].0, mapY: mapSlots[3].1
+                    mapX: 0.70, mapY: 0.35,
+                    pathToNextWaypoints: [CGPoint(x: 0.77, y: 0.43), CGPoint(x: 0.80, y: 0.50)]
                 ),
                 CampaignIsland(
                     id: "s3-sanctum", seaId: "sea-3", orderInSea: 4,
-                    nameZh: "星砂神殿顶", nameEn: "Star-Sand Citadel",
+                    nameZh: "月桥灯岸", nameEn: "Moonbridge Lantern",
                     descZh: "大伸腿、一路潜入与 5K 冲刺大考", descEn: "Monkey Jump & 5K Mastery",
                     rankRange: "8K–5K",
                     nodes: [
                         CampaignNode(id: "s3-sanctum-1", titleZh: "大伸腿与一路潜入", titleEn: "Monkey Jump & Edge Clamp", rankBadge: "8K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-end-03", "pk-end-04", "pk-ex-32", "pk-end-05"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-end-03", "pk-end-04", "pk-ex-32", "pk-end-05", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-lad-15", "pk-open-06", "pk-race-05", "pk-tac-19", "dojo-tac-08", "exp-r3-14", "exp-r3-15", "exp-r3-16", "pk-ex-24", "pk-ex-26", "pk-ex-28", "pk-ex-30", "pk-lad-14", "pk-tac-18", "dojo-end-02", "dojo-lad-07"], forceExam: false)),
                         CampaignNode(id: "s3-sanctum-2", titleZh: "角部扩大成直四活棋", titleEn: "Corner Life Expansion", rankBadge: "7K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-16", "pk-lad-17", "pk-lad-18"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-lad-16", "pk-lad-17", "pk-lad-18", "dojo-open-03", "dojo-race-03", "dojo-tac-07", "exp-r3-12", "exp-r3-13", "pk-lad-13", "pk-open-05", "pk-race-04", "pk-tac-16", "pk-tac-17", "dojo-tac-06", "end-04", "exp-r3-09", "exp-r3-10", "exp-r3-11", "pk-ex-23", "pk-lad-12", "pk-race-03", "pk-tac-15", "dojo-lad-06", "dojo-tac-05", "exp-r3-06"], forceExam: false)),
                         CampaignNode(id: "s3-sanctum-3", titleZh: "小目经典托退定式", titleEn: "Komoku Attach & Extend", rankBadge: "6K",
                                      kind: .josekiTrial(courseId: "jos-komoku-knight")),
                         CampaignNode(id: "s3-sanctum-4", titleZh: "目数与形势精准判断", titleEn: "Precise Territory Quiz", rankBadge: "6K",
                                      kind: .miniDrill(kind: .countingQuiz, startOffset: 0, questionCount: 4)),
                         CampaignNode(id: "s3-sanctum-5", titleZh: "手筋秘境 5K 毕业大考", titleEn: "Sea 3 · 5K Exam", rankBadge: "5K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-22", "pk-ex-33", "dojo-lad-09", "dojo-end-03"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-tac-22", "pk-ex-33", "dojo-lad-09", "dojo-end-03", "exp-r3-07", "exp-r3-08", "lad-05", "pk-ex-20", "pk-ex-22", "pk-lad-11", "pk-tac-14", "tac-05", "dojo-race-02", "dojo-tac-04", "end-03", "exp-r3-03", "exp-r3-04", "exp-r3-05", "pk-ex-21", "pk-lad-10"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .tiger, boardSize: .thirteen, ruleSet: .standard,
@@ -604,7 +639,7 @@ enum StarYiCampaign {
                         titleZh: "猛虎教头 · 3K 守关战", titleEn: "Fierce Tiger · 3K Boss",
                         taglineZh: "击败 3K 猛虎，推开冲段云海的大门！", taglineEn: "Defeat the 3K Tiger to unlock the Dan Cloud Sea!"
                     ),
-                    mapX: mapSlots[4].0, mapY: mapSlots[4].1
+                    mapX: 0.83, mapY: 0.60
                 )
             ]
         ),
@@ -628,15 +663,15 @@ enum StarYiCampaign {
                     rankRange: "4K–2K",
                     nodes: [
                         CampaignNode(id: "s4-mist-1", titleZh: "冷静求生 · 角部双活", titleEn: "Corner Seki Survival", rankBadge: "4K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-01", "pk-ex-37", "dojo-lad-10"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-01", "pk-ex-37", "dojo-lad-10", "dojo-open-04", "exp-r4-07", "exp-r4-08", "pk-ex-34", "pk-ex-35", "dojo-lad-09", "dojo-race-05", "exp-r4-05", "exp-r4-06", "exp-r4-09", "exp-r4-10", "pk-dan-02", "pk-dan-03", "pk-ex-31", "pk-ex-33", "pk-ex-36", "pk-lad-18", "pk-tac-22", "dojo-end-03", "dojo-tac-09", "dojo-tac-10", "exp-r4-03", "exp-r4-04", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05"], forceExam: false)),
                         CampaignNode(id: "s4-mist-2", titleZh: "盘角曲四与六目活形", titleEn: "Bent Four & Six-Space Life", rankBadge: "3K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-02", "pk-dan-03", "pk-ex-34"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-02", "pk-dan-03", "pk-ex-34", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "pk-end-05", "pk-lad-17", "pk-open-07", "pk-race-06", "pk-tac-21", "exp-r4-01", "exp-r4-02", "pk-ex-25", "pk-ex-27", "pk-ex-29", "pk-lad-16", "pk-tac-20", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-lad-15", "pk-open-06", "pk-race-05"], forceExam: false)),
                         CampaignNode(id: "s4-mist-3", titleZh: "小目一间高挂定式", titleEn: "Komoku High Approach", rankBadge: "3K",
                                      kind: .josekiTrial(courseId: "jos-komoku-high")),
                         CampaignNode(id: "s4-mist-4", titleZh: "13路精算收官逆转", titleEn: "13×13 Precision Endgame", rankBadge: "3K",
                                      kind: .tacticalScenario(scenarioId: "scn-s4-endgame")),
                         CampaignNode(id: "s4-mist-5", titleZh: "云雾屿二一路考场", titleEn: "2-1 Vital Point Exam", rankBadge: "2K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-04", "pk-dan-05", "pk-ex-36"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-04", "pk-dan-05", "pk-ex-36", "pk-tac-19", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90", "dojo-lad-10-r90", "exp-r4-09-r90", "exp-r4-10-r90", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-02-r90", "pk-dan-03-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "pk-ex-36-r90", "dojo-open-04-r90", "exp-r4-07-r90", "exp-r4-08-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .tiger, boardSize: .nineteen, ruleSet: .standard,
@@ -644,7 +679,8 @@ enum StarYiCampaign {
                         titleZh: "猛虎教头 · 19路冲段战", titleEn: "Fierce Tiger · 19×19 Duel",
                         taglineZh: "正式踏上 19 路全场棋盘，正面击败 3K 猛虎！", taglineEn: "Step onto full 19×19 and defeat the 3K Tiger!"
                     ),
-                    mapX: mapSlots[0].0, mapY: mapSlots[0].1
+                    mapX: 0.21, mapY: 0.66,
+                    pathToNextWaypoints: [CGPoint(x: 0.34, y: 0.61), CGPoint(x: 0.42, y: 0.57)]
                 ),
                 CampaignIsland(
                     id: "s4-flame", seaId: "sea-4", orderInSea: 1,
@@ -653,15 +689,15 @@ enum StarYiCampaign {
                     rankRange: "2K–1D",
                     nodes: [
                         CampaignNode(id: "s4-flame-1", titleZh: "冲段紧气次序与缩眼", titleEn: "1K Liberty Order & Kill", rankBadge: "1K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-06", "pk-dan-07", "pk-ex-35"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-06", "pk-dan-07", "pk-ex-35", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "dojo-lad-10", "exp-r4-09", "exp-r4-10", "pk-dan-02", "pk-dan-03", "pk-ex-36", "dojo-open-04", "exp-r4-07", "exp-r4-08", "pk-dan-01", "pk-ex-34", "dojo-lad-09", "dojo-race-05", "exp-r4-05", "exp-r4-06", "pk-ex-31", "pk-ex-33"], forceExam: false)),
                         CampaignNode(id: "s4-flame-2", titleZh: "逆收双倍大官子", titleEn: "Reverse Sente Mastery", rankBadge: "1K",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-08", "dojo-end-04", "pk-dan-08-w"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-08", "dojo-end-04", "pk-lad-18", "pk-tac-22", "dojo-end-03", "pk-dan-08-w", "dojo-tac-09", "exp-r4-03", "exp-r4-04", "pk-end-05", "pk-lad-17", "pk-open-07", "pk-race-06", "pk-tac-21", "exp-r4-01", "exp-r4-02", "pk-ex-25", "pk-ex-27", "pk-ex-29", "pk-lad-16", "pk-tac-20", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-lad-15", "pk-open-06", "pk-race-05"], forceExam: false)),
                         CampaignNode(id: "s4-flame-3", titleZh: "星位双挂冷静活角", titleEn: "Defending Double Approach", rankBadge: "1D",
                                      kind: .josekiTrial(courseId: "jos-double-approach")),
                         CampaignNode(id: "s4-flame-4", titleZh: "棋谱捉虫 · 高段精算", titleEn: "High-Kyu Blunder Fix", rankBadge: "1K",
                                      kind: .miniDrill(kind: .blunderSpotter, startOffset: 4, questionCount: 2)),
                         CampaignNode(id: "s4-flame-5", titleZh: "初段准入无辅助考", titleEn: "Shodan Prep Exam", rankBadge: "1D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-09", "pk-dan-10", "pk-ex-38", "pk-ex-39"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-09", "pk-dan-10", "pk-ex-38", "pk-ex-39", "pk-tac-19", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90", "dojo-lad-10-r90", "exp-r4-09-r90", "exp-r4-10-r90", "pk-dan-02-r90", "pk-dan-03-r90", "pk-ex-36-r90", "dojo-open-04-r90", "exp-r4-07-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .dragon, boardSize: .thirteen, ruleSet: .standard,
@@ -669,7 +705,8 @@ enum StarYiCampaign {
                         titleZh: "星弈青龙 · 13路初段试炼", titleEn: "Star Dragon · 13×13 Shodan",
                         taglineZh: "迎战业余初段青龙，守住每一口关键气！", taglineEn: "Challenge the 1D Star Dragon on 13×13!"
                     ),
-                    mapX: mapSlots[1].0, mapY: mapSlots[1].1
+                    mapX: 0.50, mapY: 0.56,
+                    pathToNextWaypoints: [CGPoint(x: 0.56, y: 0.46)]
                 ),
                 CampaignIsland(
                     id: "s4-azure", seaId: "sea-4", orderInSea: 2,
@@ -678,15 +715,15 @@ enum StarYiCampaign {
                     rankRange: "1D–2D",
                     nodes: [
                         CampaignNode(id: "s4-azure-1", titleZh: "段位角部方四攻防", titleEn: "Dan Corner Square-Four", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-11", "pk-dan-12", "dojo-lad-11"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-11", "pk-dan-12", "dojo-lad-11", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "dojo-lad-10", "exp-r4-09", "exp-r4-10", "pk-dan-02", "pk-dan-03", "pk-ex-36", "dojo-open-04", "exp-r4-07", "exp-r4-08", "pk-dan-01", "pk-ex-34", "pk-ex-35", "dojo-lad-09", "dojo-race-05", "exp-r4-05"], forceExam: false)),
                         CampaignNode(id: "s4-azure-2", titleZh: "弃子滚包与延气精算", titleEn: "Sacrifice Squeeze & Race", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-13", "pk-dan-14", "dojo-lad-12"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-13", "pk-dan-14", "dojo-lad-12", "exp-r4-06", "pk-ex-31", "pk-ex-33", "pk-lad-18", "pk-tac-22", "dojo-end-03", "dojo-tac-09", "exp-r4-03", "exp-r4-04", "pk-end-05", "pk-lad-17", "pk-open-07", "pk-race-06", "pk-tac-21", "exp-r4-01", "exp-r4-02", "pk-ex-25", "pk-ex-27", "pk-ex-29", "pk-lad-16", "pk-tac-20", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04"], forceExam: false)),
                         CampaignNode(id: "s4-azure-3", titleZh: "初段中盘屠龙对杀", titleEn: "1D Midgame Capture Fight", rankBadge: "1D",
                                      kind: .tacticalScenario(scenarioId: "scn-s4-danfight")),
                         CampaignNode(id: "s4-azure-4", titleZh: "双挂守角与大局观", titleEn: "2D Opening & Balance", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-15", "pk-dan-11-w", "pk-dan-12-r90"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-15", "pk-dan-11-w", "pk-dan-12-r90", "pk-lad-15", "pk-open-06", "pk-race-05", "pk-tac-19", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90", "dojo-lad-10-r90", "exp-r4-09-r90", "exp-r4-10-r90", "pk-dan-02-r90", "pk-dan-03-r90", "pk-ex-36-r90", "dojo-open-04-r90", "exp-r4-07-r90", "exp-r4-08-r90", "pk-dan-01-r90", "pk-ex-34-r90"], forceExam: false)),
                         CampaignNode(id: "s4-azure-5", titleZh: "青龙台段位考场", titleEn: "Dragon Arena Exam", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-tac-10", "dojo-race-06", "pk-dan-13-m"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["dojo-tac-10", "dojo-race-06", "pk-dan-13-m", "pk-ex-35-r90", "dojo-lad-09-r90", "dojo-race-05-r90", "exp-r4-05-r90", "exp-r4-06-r90", "pk-ex-31-r90", "pk-ex-33-r90", "pk-lad-18-r90", "pk-tac-22-r90", "dojo-end-03-r90", "dojo-tac-09-r90", "exp-r4-03-r90", "exp-r4-04-r90", "pk-end-05-r90", "pk-lad-17-r90", "pk-open-07-r90", "pk-race-06-r90", "pk-tac-21-r90", "exp-r4-01-r90", "exp-r4-02-r90", "pk-ex-25-r90", "pk-ex-27-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .dragon, boardSize: .nineteen, ruleSet: .standard,
@@ -694,7 +731,8 @@ enum StarYiCampaign {
                         titleZh: "星弈青龙 · 19路初段决战", titleEn: "Star Dragon · 19×19 Shodan",
                         taglineZh: "在 19 路堂堂正正战胜青龙，加冕业余初段！", taglineEn: "Defeat the 1D Star Dragon on full 19×19!"
                     ),
-                    mapX: mapSlots[2].0, mapY: mapSlots[2].1
+                    mapX: 0.65, mapY: 0.38,
+                    pathToNextWaypoints: [CGPoint(x: 0.74, y: 0.50)]
                 ),
                 CampaignIsland(
                     id: "s4-citadel", seaId: "sea-4", orderInSea: 3,
@@ -703,15 +741,15 @@ enum StarYiCampaign {
                     rankRange: "3D–4D",
                     nodes: [
                         CampaignNode(id: "s4-citadel-1", titleZh: "三段盘角曲四与封头", titleEn: "3D Bent-4 & Full Seal", rankBadge: "3D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17", "pk-dan-18", "pk-dan-16"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17", "pk-dan-18", "pk-dan-16", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "dojo-lad-10", "exp-r4-09", "exp-r4-10", "pk-dan-02", "pk-dan-03", "pk-ex-36", "dojo-open-04", "exp-r4-07", "exp-r4-08", "pk-dan-01", "pk-ex-34", "pk-ex-35", "dojo-lad-09", "dojo-race-05", "exp-r4-05"], forceExam: false)),
                         CampaignNode(id: "s4-citadel-2", titleZh: "三段收官巅峰对决", titleEn: "3D Master Endgame Duel", rankBadge: "3D",
                                      kind: .tacticalScenario(scenarioId: "scn-s4-master")),
                         CampaignNode(id: "s4-citadel-3", titleZh: "四段大眼对杀与梅花五", titleEn: "4D Races & Crossed-5", rankBadge: "4D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-19", "pk-dan-20", "pk-ex-40"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-19", "pk-dan-20", "pk-ex-40", "exp-r4-06", "pk-ex-31", "pk-ex-33", "pk-lad-18", "pk-tac-22", "dojo-end-03", "dojo-tac-09", "exp-r4-03", "exp-r4-04", "pk-end-05", "pk-lad-17", "pk-open-07", "pk-race-06", "pk-tac-21", "exp-r4-01", "exp-r4-02", "pk-ex-25", "pk-ex-27", "pk-ex-29", "pk-lad-16", "pk-tac-20", "dojo-lad-08", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04"], forceExam: false)),
                         CampaignNode(id: "s4-citadel-4", titleZh: "征子斜线全盘心算", titleEn: "Master Ladder Vision", rankBadge: "3D",
                                      kind: .miniDrill(kind: .ladderReading, startOffset: 2, questionCount: 4)),
                         CampaignNode(id: "s4-citadel-5", titleZh: "朱雀城无辅助大考", titleEn: "Phoenix Citadel Exam", rankBadge: "4D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17-w", "pk-dan-18-r90", "pk-dan-19-m"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17-w", "pk-dan-18-r90", "pk-dan-19-m", "pk-lad-15", "pk-open-06", "pk-race-05", "pk-tac-19", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90", "dojo-lad-10-r90", "exp-r4-09-r90", "exp-r4-10-r90", "pk-dan-02-r90", "pk-dan-03-r90", "pk-ex-36-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .phoenix, boardSize: .nineteen, ruleSet: .standard,
@@ -719,7 +757,8 @@ enum StarYiCampaign {
                         titleZh: "赤焰朱雀 · 19路三段战", titleEn: "Crimson Phoenix · 3D Boss",
                         taglineZh: "面对 3D 朱雀大师的凌厉攻势，展现段位计算力！", taglineEn: "Overcome the 3D Phoenix on 19×19!"
                     ),
-                    mapX: mapSlots[3].0, mapY: mapSlots[3].1
+                    mapX: 0.79, mapY: 0.58,
+                    pathToNextWaypoints: [CGPoint(x: 0.89, y: 0.46), CGPoint(x: 0.85, y: 0.36)]
                 ),
                 CampaignIsland(
                     id: "s4-zenith", seaId: "sea-4", orderInSea: 4,
@@ -728,15 +767,15 @@ enum StarYiCampaign {
                     rankRange: "4D–5D",
                     nodes: [
                         CampaignNode(id: "s4-zenith-1", titleZh: "五段角部缩眼绝杀", titleEn: "5D Eye Collapse Set", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22", "pk-dan-23"], forceExam: false)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22", "pk-dan-23", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "dojo-lad-10", "exp-r4-09", "exp-r4-10", "pk-dan-02", "pk-dan-03", "pk-ex-36", "dojo-open-04", "exp-r4-07", "exp-r4-08", "pk-dan-01", "pk-ex-34", "pk-ex-35", "dojo-lad-09", "dojo-race-05", "exp-r4-05"], forceExam: false)),
                         CampaignNode(id: "s4-zenith-2", titleZh: "五段变向镜像试炼", titleEn: "5D Mirrored Reading", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-w", "pk-dan-22-r90", "pk-dan-23-m"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-w", "pk-dan-22-r90", "pk-dan-23-m", "exp-r4-06", "pk-ex-31", "pk-ex-33", "pk-lad-18", "pk-tac-22", "dojo-end-03", "dojo-tac-09", "exp-r4-03", "exp-r4-04", "pk-end-05", "pk-lad-17", "pk-open-07", "pk-race-06", "pk-tac-21", "exp-r4-01", "exp-r4-02", "pk-ex-25", "pk-ex-27", "pk-ex-29", "pk-lad-16", "pk-tac-20", "dojo-lad-08"], forceExam: true)),
                         CampaignNode(id: "s4-zenith-3", titleZh: "高段布局大场全览", titleEn: "Master Opening Sense", rankBadge: "4D",
                                      kind: .miniDrill(kind: .openingPicker, startOffset: 0, questionCount: 4)),
                         CampaignNode(id: "s4-zenith-4", titleZh: "全盘无辅助混合死活", titleEn: "Grandmaster Mixed Exam", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-20-wm", "pk-dan-19-r90", "pk-dan-17-r180", "pk-dan-21-r180"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-20-wm", "pk-dan-19-r90", "pk-dan-17-r180", "pk-dan-21-r180", "dojo-race-04", "end-05", "exp-r3-17", "exp-r3-18", "pk-end-04", "pk-lad-15", "pk-open-06", "pk-race-05", "pk-tac-19", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90"], forceExam: true)),
                         CampaignNode(id: "s4-zenith-5", titleZh: "星辰殿终极五段考", titleEn: "Zenith 5D Final Exam", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22-w", "pk-dan-23-wm", "pk-dan-20-r90"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22-w", "pk-dan-23-wm", "pk-dan-20-r90", "dojo-lad-10-r90", "exp-r4-09-r90", "exp-r4-10-r90", "pk-dan-02-r90", "pk-dan-03-r90", "pk-ex-36-r90", "dojo-open-04-r90", "exp-r4-07-r90", "exp-r4-08-r90", "pk-dan-01-r90", "pk-ex-34-r90", "pk-ex-35-r90", "dojo-lad-09-r90", "dojo-race-05-r90", "exp-r4-05-r90", "exp-r4-06-r90", "pk-ex-31-r90", "pk-ex-33-r90", "pk-lad-18-r90", "pk-tac-22-r90", "dojo-end-03-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .kirin, boardSize: .nineteen, ruleSet: .standard,
@@ -744,7 +783,7 @@ enum StarYiCampaign {
                         titleZh: "玉角麒麟 · 19路五段终极战", titleEn: "Celestial Kirin · 5D Final",
                         taglineZh: "登顶冰峰雪巅，迎战 5D 麒麟的雪山试炼！", taglineEn: "Face the 5D Kirin atop Frost Peak!"
                     ),
-                    mapX: mapSlots[4].0, mapY: mapSlots[4].1
+                    mapX: 0.84, mapY: 0.27
                 )
             ]
         ),
@@ -768,15 +807,15 @@ enum StarYiCampaign {
                     rankRange: "1D–2D",
                     nodes: [
                         CampaignNode(id: "s5-forge-1", titleZh: "熔炉淬火 · 角部方四", titleEn: "Forge Corner Square-4", rankBadge: "1D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-09", "pk-dan-10", "pk-dan-11", "pk-ex-38"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-09", "pk-dan-10", "pk-dan-11", "pk-ex-38", "dojo-end-04", "dojo-lad-11", "dojo-race-06", "exp-r5-01", "exp-r5-02", "pk-ex-39", "dojo-lad-12", "exp-r4-13", "exp-r4-14", "exp-r4-15", "exp-r5-03", "exp-r5-04", "exp-r5-05", "pk-dan-06", "pk-dan-07", "pk-dan-08", "pk-dan-12", "pk-dan-13", "pk-dan-14", "pk-dan-15", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "exp-r5-06", "exp-r5-07", "exp-r5-08"], forceExam: true)),
                         CampaignNode(id: "s5-forge-2", titleZh: "黑曜变向 · 执白反杀", titleEn: "Obsidian White-to-Kill", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-11-w", "pk-dan-12-w", "pk-dan-13-w", "dojo-lad-11"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-11-w", "pk-dan-12-w", "pk-dan-13-w", "dojo-lad-11", "pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-40", "exp-r5-09", "exp-r5-10", "exp-r5-11", "pk-dan-19", "pk-dan-20", "exp-r5-12", "exp-r5-13", "exp-r5-14", "exp-r5-15", "pk-dan-04", "pk-dan-05", "pk-dan-21", "pk-dan-22", "pk-dan-23", "pk-ex-37", "dojo-lad-12-r90", "exp-r5-03-r90", "exp-r5-04-r90", "exp-r5-05-r90", "pk-dan-11-r90", "pk-dan-12-r90", "pk-dan-13-r90"], forceExam: true)),
                         CampaignNode(id: "s5-forge-3", titleZh: "星位双挂破招精解", titleEn: "Double-Approach Counter", rankBadge: "2D",
                                      kind: .josekiTrial(courseId: "jos-double-approach")),
                         CampaignNode(id: "s5-forge-4", titleZh: "19路中盘屠龙死斗", titleEn: "Midgame Dragon Slay", rankBadge: "2D",
                                      kind: .tacticalScenario(scenarioId: "scn-s4-danfight")),
                         CampaignNode(id: "s5-forge-5", titleZh: "黑曜石熔炉四题大考", titleEn: "Obsidian Forge Exam", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-12-r90", "pk-dan-14-m", "pk-dan-15-wm", "pk-ex-39"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-12-r90", "pk-dan-14-m", "pk-dan-15-wm", "pk-ex-39", "dojo-end-04-r90", "pk-dan-14-r90", "pk-dan-15-r90", "dojo-lad-11-r90", "dojo-race-06-r90", "exp-r5-01-r90", "exp-r5-02-r90", "exp-r5-06-r90", "exp-r5-07-r90", "exp-r5-08-r90", "pk-dan-09-r90", "pk-dan-10-r90", "pk-dan-16-r90", "pk-dan-17-r90", "pk-dan-18-r90", "pk-ex-38-r90", "pk-ex-39-r90", "pk-ex-40-r90", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "exp-r5-09-r90", "exp-r5-10-r90", "exp-r5-11-r90", "pk-dan-06-r90", "pk-dan-07-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .dragon, boardSize: .nineteen, ruleSet: .standard,
@@ -784,7 +823,8 @@ enum StarYiCampaign {
                         titleZh: "熔岩青龙 · 19路快棋试炼", titleEn: "Magma Dragon · 19×19 Fast",
                         taglineZh: "5分钟+20秒读秒！在熔炉烈焰中正面击败 1D 青龙！", taglineEn: "5m + 20s byoyomi! Defeat the 1D Dragon on 19×19!"
                     ),
-                    mapX: mapSlots[0].0, mapY: mapSlots[0].1
+                    mapX: 0.23, mapY: 0.68,
+                    pathToNextWaypoints: [CGPoint(x: 0.20, y: 0.49)]
                 ),
                 CampaignIsland(
                     id: "s5-bridge", seaId: "sea-5", orderInSea: 1,
@@ -793,15 +833,15 @@ enum StarYiCampaign {
                     rankRange: "2D–3D",
                     nodes: [
                         CampaignNode(id: "s5-bridge-1", titleZh: "断桥弃子滚包四连", titleEn: "Inferno Squeeze Set", rankBadge: "2D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-13", "pk-dan-14", "pk-dan-15", "dojo-lad-12"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-13", "pk-dan-14", "pk-dan-15", "dojo-lad-12", "exp-r5-03", "exp-r5-04", "exp-r5-05", "pk-dan-11", "pk-dan-12", "dojo-end-04", "dojo-lad-11", "dojo-race-06", "exp-r5-01", "exp-r5-02", "exp-r5-06", "exp-r5-07", "exp-r5-08", "pk-dan-09", "pk-dan-10", "pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-38", "pk-ex-39", "pk-ex-40", "exp-r4-13", "exp-r4-14", "exp-r4-15", "exp-r5-09", "exp-r5-10"], forceExam: true)),
                         CampaignNode(id: "s5-bridge-2", titleZh: "三段盘角曲四与封头", titleEn: "3D Bent-4 & Full Seal", rankBadge: "3D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-40"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-40", "exp-r5-11", "pk-dan-19", "pk-dan-20", "exp-r5-12", "exp-r5-13", "exp-r5-14", "exp-r5-15", "pk-dan-21", "pk-dan-22", "pk-dan-23", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "exp-r5-06-r90", "exp-r5-07-r90", "exp-r5-08-r90", "pk-dan-16-r90", "pk-dan-17-r90", "pk-dan-18-r90", "pk-ex-40-r90"], forceExam: true)),
                         CampaignNode(id: "s5-bridge-3", titleZh: "小飞夹击骗招反击", titleEn: "Anti-Trick Wedge Counter", rankBadge: "3D",
                                      kind: .josekiTrial(courseId: "jos-trick-knight-wedge")),
                         CampaignNode(id: "s5-bridge-4", titleZh: "高段全盘心算盲测", titleEn: "Dan Blind Ladder Vision", rankBadge: "3D",
                                      kind: .miniDrill(kind: .ladderReading, startOffset: 2, questionCount: 4)),
                         CampaignNode(id: "s5-bridge-5", titleZh: "断魂桥镜像无辅助考", titleEn: "Inferno Bridge Exam", rankBadge: "3D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-16-r90", "pk-dan-17-w", "pk-dan-18-m", "dojo-tac-10"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-16-r90", "pk-dan-17-w", "pk-dan-18-m", "dojo-tac-10", "dojo-lad-12-r90", "exp-r5-03-r90", "exp-r5-04-r90", "exp-r5-05-r90", "exp-r5-09-r90", "exp-r5-10-r90", "exp-r5-11-r90", "pk-dan-11-r90", "pk-dan-12-r90", "pk-dan-13-r90", "pk-dan-14-r90", "pk-dan-15-r90", "pk-dan-19-r90", "pk-dan-20-r90", "dojo-end-04-r90", "dojo-lad-11-r90", "dojo-race-06-r90", "exp-r5-01-r90", "exp-r5-02-r90", "exp-r5-12-r90", "exp-r5-13-r90", "exp-r5-14-r90", "exp-r5-15-r90", "pk-dan-09-r90", "pk-dan-10-r90", "pk-dan-21-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .phoenix, boardSize: .nineteen, ruleSet: .standard,
@@ -809,7 +849,8 @@ enum StarYiCampaign {
                         titleZh: "烈焰朱雀 · 19路三段激战", titleEn: "Inferno Phoenix · 3D Match",
                         taglineZh: "快棋读秒迎战 3D 朱雀，一步随手即坠熔岩！", taglineEn: "Face the 3D Phoenix in tight byoyomi — zero blunders!"
                     ),
-                    mapX: mapSlots[1].0, mapY: mapSlots[1].1
+                    mapX: 0.25, mapY: 0.30,
+                    pathToNextWaypoints: [CGPoint(x: 0.40, y: 0.14), CGPoint(x: 0.60, y: 0.14)]
                 ),
                 CampaignIsland(
                     id: "s5-altar", seaId: "sea-5", orderInSea: 2,
@@ -818,15 +859,15 @@ enum StarYiCampaign {
                     rankRange: "3D–4D",
                     nodes: [
                         CampaignNode(id: "s5-altar-1", titleZh: "赤龙坛大眼杀小眼", titleEn: "Altar Big-Eye Races", rankBadge: "3D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17-r180", "pk-dan-18-wm", "pk-dan-19", "dojo-race-06"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17-r180", "pk-dan-18-wm", "pk-dan-19", "dojo-race-06", "exp-r5-06", "exp-r5-07", "exp-r5-08", "pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-40", "dojo-lad-12", "exp-r5-03", "exp-r5-04", "exp-r5-05", "exp-r5-09", "exp-r5-10", "exp-r5-11", "pk-dan-11", "pk-dan-12", "pk-dan-13", "pk-dan-14", "pk-dan-15", "pk-dan-20", "dojo-end-04", "dojo-lad-11", "exp-r5-01", "exp-r5-02", "exp-r5-12", "exp-r5-13"], forceExam: true)),
                         CampaignNode(id: "s5-altar-2", titleZh: "四段梅花五与精密紧气", titleEn: "4D Crossed-5 & Tight Races", rankBadge: "4D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-19-w", "pk-dan-20", "pk-dan-20-r90", "dojo-end-04"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-19-w", "pk-dan-20", "dojo-end-04", "exp-r5-14", "exp-r5-15", "pk-dan-20-r90", "pk-dan-21", "pk-dan-22", "pk-dan-23", "pk-dan-09", "pk-dan-10", "pk-ex-38", "pk-ex-39", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "exp-r5-09-r90", "exp-r5-10-r90", "exp-r5-11-r90", "pk-dan-19-r90", "exp-r5-06-r90"], forceExam: true)),
                         CampaignNode(id: "s5-altar-3", titleZh: "三段收官逆转巅峰战", titleEn: "3D Master Endgame Duel", rankBadge: "4D",
                                      kind: .tacticalScenario(scenarioId: "scn-s4-master")),
                         CampaignNode(id: "s5-altar-4", titleZh: "全盘恶手秒杀捉虫", titleEn: "Master Blunder Execution", rankBadge: "4D",
                                      kind: .miniDrill(kind: .blunderSpotter, startOffset: 3, questionCount: 3)),
                         CampaignNode(id: "s5-altar-5", titleZh: "赤龙坛四段高压考场", titleEn: "Dragon Altar 4D Exam", rankBadge: "4D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-19-m", "pk-dan-20-w", "pk-dan-20-wm", "pk-dan-21"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-19-m", "pk-dan-20-w", "pk-dan-21", "exp-r5-07-r90", "exp-r5-08-r90", "pk-dan-20-wm", "exp-r5-12-r90", "exp-r5-13-r90", "exp-r5-14-r90", "exp-r5-15-r90", "pk-dan-16-r90", "pk-dan-17-r90", "pk-dan-18-r90", "pk-dan-21-r90", "pk-dan-22-r90", "pk-dan-23-r90", "pk-ex-40-r90", "dojo-lad-12-r90", "exp-r5-03-r90", "exp-r5-04-r90", "exp-r5-05-r90", "pk-dan-11-r90", "pk-dan-12-r90", "pk-dan-13-r90", "pk-dan-14-r90", "pk-dan-15-r90", "dojo-end-04-r90", "dojo-lad-11-r90", "dojo-race-06-r90", "exp-r5-01-r90"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .phoenix, boardSize: .nineteen, ruleSet: .standard,
@@ -834,7 +875,8 @@ enum StarYiCampaign {
                         titleZh: "赤龙朱雀 · 19路超快棋", titleEn: "Crimson Phoenix · 19×19 Blitz",
                         taglineZh: "3分钟+15秒超快棋！在高压读秒中杀穿 3D 朱雀！", taglineEn: "3m + 15s Blitz on 19×19 against the 3D Phoenix!"
                     ),
-                    mapX: mapSlots[2].0, mapY: mapSlots[2].1
+                    mapX: 0.75, mapY: 0.29,
+                    pathToNextWaypoints: [CGPoint(x: 0.80, y: 0.49)]
                 ),
                 CampaignIsland(
                     id: "s5-citadel", seaId: "sea-5", orderInSea: 3,
@@ -843,15 +885,15 @@ enum StarYiCampaign {
                     rankRange: "4D–5D",
                     nodes: [
                         CampaignNode(id: "s5-citadel-1", titleZh: "焚天城五段缩眼绝杀", titleEn: "Citadel 5D Eye Collapse", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22", "pk-dan-23", "pk-dan-19-r90"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22", "pk-dan-23", "pk-dan-19-r90", "exp-r5-12", "exp-r5-13", "exp-r5-14", "exp-r5-15", "exp-r5-09", "exp-r5-10", "exp-r5-11", "pk-dan-19", "pk-dan-20", "exp-r5-06", "exp-r5-07", "exp-r5-08", "pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-40", "dojo-lad-12", "exp-r5-03", "exp-r5-04", "exp-r5-05", "pk-dan-11", "pk-dan-12", "pk-dan-13", "pk-dan-14", "pk-dan-15", "dojo-end-04"], forceExam: true)),
                         CampaignNode(id: "s5-citadel-2", titleZh: "全盘反转 · 执白五段考", titleEn: "Inverted 5D White Exam", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-w", "pk-dan-22-w", "pk-dan-23-w", "pk-dan-20-r180"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-w", "pk-dan-22-w", "pk-dan-23-w", "pk-dan-20-r180", "dojo-lad-11", "dojo-race-06", "exp-r5-01", "exp-r5-02", "pk-dan-09", "pk-dan-10", "pk-ex-38", "pk-ex-39", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "exp-r5-12-r90", "exp-r5-13-r90", "exp-r5-14-r90", "exp-r5-15-r90", "pk-dan-21-r90", "pk-dan-22-r90"], forceExam: true)),
                         CampaignNode(id: "s5-citadel-3", titleZh: "旋转镜像魔鬼死活阵", titleEn: "Mirrored L&D Crucible", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-r90", "pk-dan-22-r90", "pk-dan-23-m", "pk-dan-18-r180"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-r90", "pk-dan-22-r90", "pk-dan-23-m", "pk-dan-18-r180", "exp-r5-09-r90", "pk-dan-23-r90", "exp-r5-10-r90", "exp-r5-11-r90", "pk-dan-20-r90", "exp-r5-06-r90", "exp-r5-07-r90", "exp-r5-08-r90", "pk-dan-16-r90", "pk-dan-17-r90", "pk-dan-18-r90", "pk-ex-40-r90", "dojo-lad-12-r90", "exp-r5-03-r90", "exp-r5-04-r90", "exp-r5-05-r90", "pk-dan-11-r90", "pk-dan-12-r90", "pk-dan-13-r90", "pk-dan-14-r90", "pk-dan-15-r90", "dojo-end-04-r90", "dojo-lad-11-r90", "dojo-race-06-r90", "exp-r5-01-r90", "exp-r5-02-r90"], forceExam: true)),
                         CampaignNode(id: "s5-citadel-4", titleZh: "高段全局大场生死抉择", titleEn: "Grandmaster Opening Vision", rankBadge: "5D",
                                      kind: .miniDrill(kind: .openingPicker, startOffset: 0, questionCount: 4)),
                         CampaignNode(id: "s5-citadel-5", titleZh: "朱雀焚天五题生死考", titleEn: "Flame Citadel 5Q Exam", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-wm", "pk-dan-22-m", "pk-dan-23-r90", "pk-dan-20-m", "pk-dan-17-wm"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-wm", "pk-dan-22-m", "pk-dan-23-r90", "pk-dan-20-m", "pk-dan-17-wm", "pk-dan-09-r90", "pk-dan-10-r90", "pk-ex-38-r90", "pk-ex-39-r90", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90", "exp-r5-12-w", "exp-r5-13-w", "exp-r5-14-w", "exp-r5-15-w", "exp-r5-09-w", "exp-r5-10-w", "exp-r5-11-w", "pk-dan-19-w", "pk-dan-20-w"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .kirin, boardSize: .nineteen, ruleSet: .standard,
@@ -859,7 +901,8 @@ enum StarYiCampaign {
                         titleZh: "焚天麒麟 · 19路五段前哨", titleEn: "Flame Kirin · 5D Vanguard",
                         taglineZh: "直面全盛状态 5D 麒麟！用无懈可击的计算力杀出重围！", taglineEn: "Confront the 5D Kirin in a fierce 19×19 battle!"
                     ),
-                    mapX: mapSlots[3].0, mapY: mapSlots[3].1
+                    mapX: 0.76, mapY: 0.69,
+                    pathToNextWaypoints: [CGPoint(x: 0.64, y: 0.60)]
                 ),
                 CampaignIsland(
                     id: "s5-caldera", seaId: "sea-5", orderInSea: 4,
@@ -868,15 +911,15 @@ enum StarYiCampaign {
                     rankRange: "5D+",
                     nodes: [
                         CampaignNode(id: "s5-caldera-1", titleZh: "炼狱第一试 · 绝境求生", titleEn: "Crucible I · Abyss Survival", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-r180", "pk-dan-22-r180", "pk-dan-23-r180", "pk-dan-20-wm"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-r180", "pk-dan-22-r180", "pk-dan-23-r180", "pk-dan-20-wm", "exp-r5-12", "exp-r5-13", "exp-r5-14", "exp-r5-15", "pk-dan-21", "pk-dan-22", "pk-dan-23", "exp-r5-09", "exp-r5-10", "exp-r5-11", "pk-dan-19", "pk-dan-20", "exp-r5-06", "exp-r5-07", "exp-r5-08", "pk-dan-16", "pk-dan-17", "pk-dan-18", "pk-ex-40", "dojo-lad-12", "exp-r5-03", "exp-r5-04", "exp-r5-05", "pk-dan-11", "pk-dan-12", "pk-dan-13"], forceExam: true)),
                         CampaignNode(id: "s5-caldera-2", titleZh: "炼狱第二试 · 执白屠龙", titleEn: "Crucible II · White Slayer", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-wm", "pk-dan-22-wm", "pk-dan-23-wm", "pk-dan-19-wm"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21-wm", "pk-dan-22-wm", "pk-dan-23-wm", "pk-dan-19-wm", "pk-dan-14", "pk-dan-15", "dojo-end-04", "dojo-lad-11", "dojo-race-06", "exp-r5-01", "exp-r5-02", "pk-dan-09", "pk-dan-10", "pk-ex-38", "pk-ex-39", "exp-r4-13", "exp-r4-14", "exp-r4-15", "pk-dan-06", "pk-dan-07", "pk-dan-08", "dojo-tac-10", "exp-r4-11", "exp-r4-12", "pk-dan-04", "pk-dan-05", "pk-ex-37", "exp-r5-12-r90", "exp-r5-13-r90", "exp-r5-14-r90"], forceExam: true)),
                         CampaignNode(id: "s5-caldera-3", titleZh: "炼狱第三试 · 镜像迷宫", titleEn: "Crucible III · Mirror Maze", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17-m", "pk-dan-18-m", "pk-dan-19-m", "pk-dan-21-m", "pk-dan-22-m"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-17-m", "pk-dan-18-m", "pk-dan-19-m", "pk-dan-21-m", "pk-dan-22-m", "exp-r5-15-r90", "pk-dan-21-r90", "pk-dan-22-r90", "pk-dan-23-r90", "exp-r5-09-r90", "exp-r5-10-r90", "exp-r5-11-r90", "pk-dan-19-r90", "pk-dan-20-r90", "exp-r5-06-r90", "exp-r5-07-r90", "exp-r5-08-r90", "pk-dan-16-r90", "pk-dan-17-r90", "pk-dan-18-r90", "pk-ex-40-r90", "dojo-lad-12-r90", "exp-r5-03-r90", "exp-r5-04-r90", "exp-r5-05-r90", "pk-dan-11-r90", "pk-dan-12-r90", "pk-dan-13-r90", "pk-dan-14-r90", "pk-dan-15-r90"], forceExam: true)),
                         CampaignNode(id: "s5-caldera-4", titleZh: "炼狱第四试 · 旋风五连杀", titleEn: "Crucible IV · Cyclone 5Q", rankBadge: "5D",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-16-r90", "pk-dan-18-r90", "pk-dan-20-r90", "pk-dan-22-r90", "pk-dan-23-r90"], forceExam: true)),
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-16-r90", "pk-dan-18-r90", "pk-dan-20-r90", "pk-dan-22-r90", "pk-dan-23-r90", "dojo-end-04-r90", "dojo-lad-11-r90", "dojo-race-06-r90", "exp-r5-01-r90", "exp-r5-02-r90", "pk-dan-09-r90", "pk-dan-10-r90", "pk-ex-38-r90", "pk-ex-39-r90", "exp-r4-13-r90", "exp-r4-14-r90", "exp-r4-15-r90", "pk-dan-06-r90", "pk-dan-07-r90", "pk-dan-08-r90", "dojo-tac-10-r90", "exp-r4-11-r90", "exp-r4-12-r90", "pk-dan-04-r90", "pk-dan-05-r90", "pk-ex-37-r90", "exp-r5-12-w", "exp-r5-13-w", "exp-r5-14-w", "exp-r5-15-w"], forceExam: true)),
                         CampaignNode(id: "s5-caldera-5", titleZh: "天元终极考 · 棋圣加冕", titleEn: "Tengen Final · Grandmaster", rankBadge: "5D+",
-                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22-w", "pk-dan-23-wm", "pk-dan-20-r180", "pk-dan-19-r90"], forceExam: true))
+                                     kind: .puzzleGauntlet(puzzleIds: ["pk-dan-21", "pk-dan-22-w", "pk-dan-23-wm", "pk-dan-20-r180", "pk-dan-19-r90", "pk-dan-21-w", "pk-dan-23-w", "exp-r5-09-w", "exp-r5-10-w", "exp-r5-11-w", "pk-dan-19-w", "pk-dan-20-w", "exp-r5-06-w", "exp-r5-07-w", "exp-r5-08-w", "pk-dan-16-w", "pk-dan-17-w", "pk-dan-18-w", "pk-ex-40-w", "dojo-lad-12-w", "exp-r5-03-w", "exp-r5-04-w", "exp-r5-05-w", "pk-dan-11-w", "pk-dan-12-w", "pk-dan-13-w", "pk-dan-14-w", "pk-dan-15-w", "dojo-end-04-w", "dojo-lad-11-w"], forceExam: true))
                     ],
                     boss: CampaignBossConfig(
                         difficulty: .kirin, boardSize: .nineteen, ruleSet: .standard,
@@ -884,7 +927,7 @@ enum StarYiCampaign {
                         titleZh: "天元麒麟王 · 19路极速终战", titleEn: "Tengen Kirin · 5D Blitz Final",
                         taglineZh: "3分钟+15秒读秒！登顶火山之巅，击败 5D 麒麟王加冕星弈棋圣！", taglineEn: "3m + 15s Blitz! Defeat the 5D Kirin atop the Volcano!"
                     ),
-                    mapX: mapSlots[4].0, mapY: mapSlots[4].1
+                    mapX: 0.50, mapY: 0.48
                 )
             ]
         )
@@ -910,6 +953,19 @@ enum StarYiCampaign {
         allNodes.first { $0.id == id }
     }
 
+    static func island(containingNodeId nodeId: String) -> CampaignIsland? {
+        allIslands.first { $0.nodes.contains(where: { $0.id == nodeId }) }
+    }
+
+    static func nextNode(after nodeId: String) -> CampaignNode? {
+        guard let island = island(containingNodeId: nodeId),
+              let idx = island.nodes.firstIndex(where: { $0.id == nodeId }),
+              idx + 1 < island.nodes.count else {
+            return nil
+        }
+        return island.nodes[idx + 1]
+    }
+
     static func nextIsland(after island: CampaignIsland) -> CampaignIsland? {
         guard let idx = allIslands.firstIndex(where: { $0.id == island.id }), idx + 1 < allIslands.count else {
             return nil
@@ -918,6 +974,56 @@ enum StarYiCampaign {
     }
 
     // MARK: - Progress, Stars, Mastery & Unlock Logic
+
+    static func clearedSections(for node: CampaignNode, progress: PuzzleProgressStore) -> Set<Int> {
+        let total = node.sectionCount
+        // Backwards compatibility: if the whole node already has stars (legacy save or direct clear),
+        // treat all sections as cleared so existing learners keep their unlocked progression.
+        if (progress.campaignNodeStars[node.id] ?? 0) > 0 {
+            return Set(0..<total)
+        }
+        var cleared = progress.campaignNodeClearedSections[node.id] ?? []
+        cleared = cleared.filter { $0 >= 0 && $0 < total }
+        // Also credit any section whose individual puzzles are all already solved.
+        if case .puzzleGauntlet = node.kind {
+            for idx in 0..<total where !cleared.contains(idx) {
+                let slice = node.puzzleIds(forSection: idx)
+                if !slice.isEmpty && slice.allSatisfy({ (progress.starsByPuzzleId[$0] ?? 0) > 0 }) {
+                    cleared.insert(idx)
+                }
+            }
+        }
+        return cleared
+    }
+
+    static func clearedSectionCount(for node: CampaignNode, progress: PuzzleProgressStore) -> Int {
+        clearedSections(for: node, progress: progress).count
+    }
+
+    static func nextSectionIndex(for node: CampaignNode, progress: PuzzleProgressStore) -> Int {
+        let cleared = clearedSections(for: node, progress: progress)
+        for idx in 0..<node.sectionCount where !cleared.contains(idx) {
+            return idx
+        }
+        return 0
+    }
+
+    static func solvedPuzzleCount(for island: CampaignIsland, progress: PuzzleProgressStore) -> Int {
+        island.nodes.reduce(0) { acc, node in
+            guard case .puzzleGauntlet = node.kind else { return acc }
+            let cleared = clearedSections(for: node, progress: progress)
+            var count = 0
+            for idx in 0..<node.sectionCount {
+                let slice = node.puzzleIds(forSection: idx)
+                if cleared.contains(idx) {
+                    count += slice.count
+                } else {
+                    count += slice.filter { (progress.starsByPuzzleId[$0] ?? 0) > 0 }.count
+                }
+            }
+            return acc + count
+        }
+    }
 
     static func stars(for node: CampaignNode, progress: PuzzleProgressStore) -> Int {
         if let direct = progress.campaignNodeStars[node.id], direct > 0 {

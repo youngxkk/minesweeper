@@ -18,10 +18,25 @@ struct HomeView: View {
     @State private var selectedCoachingStyle: AICoachingStyle = .standard
     @State private var logoFloating = false
     @State private var logoBounceScale: CGFloat = 1.0
+    @State private var lastLogoTapDate: Date = .distantPast
+    @AppStorage("homeBackdropIndex") private var homeBackdropIndex: Int = 0
     @State private var showHandicapScale = false
     @State private var showStatusGuide = false
     @State private var showInitialPlacementSheet = false
     @State private var hasAppeared = false
+
+    private static let homeBackdropNames = [
+        "HomeBackdrop",
+        "HomeBackdrop2",
+        "HomeBackdrop3",
+        "HomeBackdrop4"
+    ]
+
+    private var activeBackdropName: String {
+        let count = Self.homeBackdropNames.count
+        let safeIndex = ((homeBackdropIndex % count) + count) % count
+        return Self.homeBackdropNames[safeIndex]
+    }
 
     private func boardSizeDescription(_ size: BoardSize) -> String {
         if UIDevice.current.userInterfaceIdiom == .phone && (size == .nine || size == .thirteen) {
@@ -40,18 +55,28 @@ struct HomeView: View {
 
     var body: some View {
         ZStack {
-            // 1. Vibrant, bright Nintendo Switch Party full-bleed backdrop
+            // 1. Vibrant, bright Nintendo Switch Party full-bleed backdrop (double-tap logo easter egg switches scenes)
             GeometryReader { fullGeo in
-                Image("HomeBackdrop")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: fullGeo.size.width, height: fullGeo.size.height)
-                    .clipped()
+                ZStack {
+                    Image(activeBackdropName)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: fullGeo.size.width, height: fullGeo.size.height)
+                        .clipped()
+                        .id(activeBackdropName)
+                        .transition(.opacity)
+                }
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.55), value: activeBackdropName)
             }
             .ignoresSafeArea()
 
-            // 2. Cheerful floating sunlit bokeh star sparkles
-            FloatingPartySparklesView()
+            // 2. Cheerful floating sunlit bokeh star sparkles (paused whenever hidden, in sheet, or inactive)
+            FloatingPartySparklesView(
+                isPaused: !appState.navigationPath.isEmpty
+                    || appState.showSettingsSheet
+                    || showInitialPlacementSheet
+                    || showHandicapScale
+            )
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
@@ -93,26 +118,26 @@ struct HomeView: View {
                                 if isCompact {
                                     VStack(spacing: 24) {
                                         aiPlayHeroColumn(height: heroHeight, isCompact: true)
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.04, reduceMotion: reduceMotion, offsetY: 54, initialScale: 0.95, animation: MotionToken.homePortalEntrance))
                                         islandsHeroColumn(height: heroHeight, isCompact: true)
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.11, reduceMotion: reduceMotion, offsetY: 58, initialScale: 0.95, animation: MotionToken.homePortalEntrance))
                                     }
                                     VStack(spacing: 20) {
                                         tabletopTwoPlayerModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.17, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
                                         dailyChallengeModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2 + MotionToken.gridStagger, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.23, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
                                         codexModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2 + MotionToken.gridStagger * 2, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.29, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
                                         sgfDojoModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2 + MotionToken.gridStagger * 3, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.35, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
                                     }
                                 } else {
                                     HStack(alignment: .top, spacing: 36) {
                                         aiPlayHeroColumn(height: heroHeight, isCompact: false)
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.04, reduceMotion: reduceMotion, offsetY: 54, initialScale: 0.95, animation: MotionToken.homePortalEntrance))
                                         islandsHeroColumn(height: heroHeight, isCompact: false)
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.11, reduceMotion: reduceMotion, offsetY: 58, initialScale: 0.95, animation: MotionToken.homePortalEntrance))
                                     }
                                     .zIndex(5)
 
@@ -121,13 +146,13 @@ struct HomeView: View {
                                         spacing: 20
                                     ) {
                                         tabletopTwoPlayerModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.17, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
                                         dailyChallengeModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2 + MotionToken.gridStagger, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.23, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
                                         codexModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2 + MotionToken.gridStagger * 2, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.29, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
                                         sgfDojoModuleCard
-                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: MotionToken.itemStagger * 2 + MotionToken.gridStagger * 3, reduceMotion: reduceMotion))
+                                            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.35, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
                                     }
                                 }
                             }
@@ -171,101 +196,134 @@ struct HomeView: View {
                     logoFloating = true
                 }
             }
-            if !hasAppeared {
-                hasAppeared = true
-                let isUITest = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"] != nil
-                if !isUITest
-                    && !appState.puzzleProgress.didCompletePlacement
-                    && appState.savedGames.isEmpty
-                    && appState.puzzleProgress.starsByPuzzleId.isEmpty {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                        showInitialPlacementSheet = true
-                    }
-                }
+            if !hasAppeared && appState.isLaunchSplashRevealing {
+                triggerColdLaunchEntrance()
+            }
+        }
+        .onChange(of: appState.isLaunchSplashRevealing) { _, revealing in
+            if revealing && !hasAppeared {
+                triggerColdLaunchEntrance()
+            }
+        }
+    }
+
+    private func triggerColdLaunchEntrance() {
+        hasAppeared = true
+        let isUITest = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"] != nil
+        if !isUITest
+            && !appState.puzzleProgress.didCompletePlacement
+            && appState.savedGames.isEmpty
+            && appState.puzzleProgress.starsByPuzzleId.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+                guard appState.navigationPath.isEmpty,
+                      !appState.showSettingsSheet,
+                      !appState.puzzleProgress.didCompletePlacement else { return }
+                showInitialPlacementSheet = true
             }
         }
     }
 
     private var initialPlacementOnboardingSheet: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    Text("🧭").font(.system(size: 48))
-                    Text(l10n.localized(
-                        zh: "欢迎来到星弈围棋！选择你的棋力",
-                        en: "Welcome to StarYi Go! Choose Your Level",
-                        ja: "StarYi Goへようこそ！棋力を選ぼう",
-                        ko: "StarYi Go에 오신 걸 환영해요! 기력을 선택하세요",
-                        zhHant: "歡迎來到星弈圍棋！選擇你的棋力"
-                    ))
-                        .font(.system(size: 22, weight: .black, design: .rounded))
-                        .foregroundColor(AppTheme.inkPrimary)
-                    Text(l10n.localized(
-                        zh: "选定后将自动为你匹配最合适的默认棋盘路数、AI 陪练和闯关海域，随时可在首页或地图切换。",
-                        en: "We'll tailor your starting board size, AI sparring partner, and campaign Sea. You can change anytime.",
-                        ja: "選んだ棋力に合わせて最適な碁盤サイズ・AI相手・冒険海域を自動設定します。いつでも変更できます。",
-                        ko: "선택한 기력에 맞춰 최적의 바둑판 크기, AI 대국 상대, 모험 해역을 자동 설정해요. 언제든 바꿀 수 있어요.",
-                        zhHant: "選定後將自動為你匹配最合適的預設棋盤路數、AI 陪練和闖關海域，隨時可在首頁或地圖切換。"
-                    ))
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
-                        .foregroundColor(AppTheme.inkSecondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 12)
+        ZStack(alignment: .topLeading) {
+            AppTheme.brightArenaBackground
+                .ignoresSafeArea()
 
-                    ForEach(StarYiCampaign.placementOptions) { opt in
-                        Button {
-                            appState.applyPlacementChoice(opt)
-                            selectedSize = appState.settings.preferredBoardSize
-                            selectedDifficulty = appState.settings.preferredDifficulty
-                            showInitialPlacementSheet = false
-                            SoundAndHapticsManager.shared.playSuccess()
-                            SoundAndHapticsManager.shared.playVoice(.welcome, delay: 0.16)
-                        } label: {
-                            HStack(spacing: 14) {
-                                Text(opt.emoji).font(.system(size: 32))
-                                VStack(alignment: .leading, spacing: 3) {
-                                    HStack(spacing: 8) {
-                                        Text(localizedPlacementTitle(opt))
-                                            .font(.system(size: 16, weight: .black, design: .rounded))
-                                            .foregroundColor(AppTheme.inkPrimary)
-                                        Text(opt.rankLabel)
-                                            .font(.system(size: 11.5, weight: .black, design: .rounded))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 9)
-                                            .padding(.vertical, 3)
-                                            .background(Capsule().fill(AppTheme.skyBottom))
-                                    }
-                                    Text(localizedPlacementDesc(opt))
-                                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                                        .foregroundColor(AppTheme.inkSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .black))
-                                    .foregroundColor(AppTheme.skyBottom)
-                            }
-                            .padding(16)
+            ScrollView {
+                VStack(spacing: 12) {
+                    VStack(spacing: 5) {
+                        if let logoImg = UIImage(named: "LaunchEmblem.png") {
+                            Image(uiImage: logoImg)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 100, height: 100)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 4, whiteBorderWidth: 2.5, pressStyle: .card))
+                        Text(l10n.localized(
+                            zh: "欢迎来到星弈围棋！选择你的棋力",
+                            en: "Welcome to StarYi Go! Choose Your Level",
+                            ja: "StarYi Goへようこそ！棋力を選ぼう",
+                            ko: "StarYi Go에 오신 걸 환영해요! 기력을 선택하세요",
+                            zhHant: "歡迎來到星弈圍棋！選擇你的棋力"
+                        ))
+                            .font(AppFont.rounded(size: 20, weight: .black))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text(l10n.localized(
+                            zh: "选定后将自动为你匹配最合适的默认棋盘路数、AI 陪练和闯关海域，随时可在首页或地图切换。",
+                            en: "We'll tailor your starting board size, AI sparring partner, and campaign Sea. You can change anytime.",
+                            ja: "選んだ棋力に合わせて最適な碁盤サイズ・AI相手・冒険海域を自動設定します。いつでも変更できます。",
+                            ko: "선택한 기력에 맞춰 최적의 바둑판 크기, AI 대국 상대, 모험 해역을 자동 설정해요. 언제든 바꿀 수 있어요.",
+                            zhHant: "選定後將自動為你匹配最合適的預設棋盤路數、AI 陪練和闖關海域，隨時可在首頁或地圖切換。"
+                        ))
+                            .font(AppFont.rounded(size: 12.5, weight: .bold))
+                            .foregroundColor(AppTheme.inkSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                    }
+
+                    VStack(spacing: 10) {
+                        ForEach(StarYiCampaign.placementOptions) { opt in
+                            Button {
+                                appState.applyPlacementChoice(opt)
+                                selectedSize = appState.settings.preferredBoardSize
+                                selectedDifficulty = appState.settings.preferredDifficulty
+                                showInitialPlacementSheet = false
+                                SoundAndHapticsManager.shared.playSuccess()
+                                SoundAndHapticsManager.shared.playVoice(.welcome, delay: 0.16)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Text(opt.emoji).font(AppFont.rounded(size: 30, weight: .regular))
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(spacing: 8) {
+                                            Text(localizedPlacementTitle(opt))
+                                                .font(AppFont.rounded(size: 15.5, weight: .black))
+                                                .foregroundColor(AppTheme.inkPrimary)
+                                            Text(opt.rankLabel)
+                                                .font(AppFont.rounded(size: 11, weight: .black))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 2.5)
+                                                .background(Capsule().fill(AppTheme.skyBottom))
+                                        }
+                                        Text(localizedPlacementDesc(opt))
+                                            .font(AppFont.rounded(size: 12, weight: .semibold))
+                                            .foregroundColor(AppTheme.inkSecondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13.5, weight: .black, design: .rounded))
+                                        .foregroundColor(AppTheme.skyBottom)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 14.5)
+                            }
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 4, whiteBorderWidth: 2.5, pressStyle: .card))
+                        }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.top, 36)
+                .padding(.bottom, 16)
             }
-            .background(AppTheme.brightArenaBackground)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(l10n.localized(
-                        zh: "稍后再说",
-                        en: "Later",
-                        ja: "あとで",
-                        ko: "나중에",
-                        zhHant: "稍後再說"
-                    )) {
-                        appState.markPlacementDismissed()
-                        showInitialPlacementSheet = false
-                    }
-                }
+
+            Button {
+                appState.markPlacementDismissed()
+                showInitialPlacementSheet = false
+            } label: {
+                Text(l10n.localized(
+                    zh: "稍后再说",
+                    en: "Later",
+                    ja: "あとで",
+                    ko: "나중에",
+                    zhHant: "稍後再說"
+                ))
+                .font(AppFont.rounded(size: 14, weight: .bold))
+                .foregroundColor(AppTheme.skyBottom)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(AppTheme.skyTop.opacity(0.14)))
             }
+            .buttonStyle(.plain)
+            .padding(.top, 14)
+            .padding(.leading, 16)
         }
     }
 
@@ -289,11 +347,11 @@ struct HomeView: View {
     private func localizedPlacementDesc(_ opt: PlacementOption) -> String {
         switch opt.id {
         case "pl-30k":
-            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "呼吸点と石取りを覚えたて。第1海域・碧の海島から楽しくスタート", ko: "활로와 따내기를 막 배웠다면 1해역·푸른 해섬에서 가볍게 시작해요", zhHant: "剛認識棋盤、氣與提子，從第一區域·碧藍海島輕鬆起步")
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "呼吸点と石取りを覚えたて。第1海域・風車の草原から楽しくスタート", ko: "활로와 따내기를 막 배웠다면 1해역·바람개비 초원에서 가볍게 시작해요", zhHant: "剛認識棋盤、氣與提子，從第一區域·風起棋丘輕鬆起步")
         case "pl-18k":
             return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "両アタリやシチョウがわかるなら第2海域・翡翠の森へ直行！", ko: "양단수와 축을 안다면 바로 2해역·비취 숲으로 출항!", zhHant: "已會雙打吃與征子，直接飛往第二區域·翡翠森林")
         case "pl-10k":
-            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "死活と攻め合いに慣れたら第3海域・黄金砂漠へ！", ko: "사활과 수상전에 익숙하다면 3해역·황금 사막으로!", zhHant: "熟悉死活與對殺，直奔第三區域·金色沙漠")
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "死活と攻め合いに慣れたら第3海域・双月の鏡湖へ！", ko: "사활과 수상전에 익숙하다면 3해역·쌍월 거울호수으로!", zhHant: "熟悉死活與對殺，直奔第三區域·雙月鏡湖")
         case "pl-5k":
             return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "有段者を目指して第4海域・白銀雪山へ挑もう！", ko: "아마 유단자에 도전한다면 4해역·백은 설산으로!", zhHant: "衝刺業餘段位，直闖第四區域·凜冬雪山")
         case "pl-1d":
@@ -306,23 +364,65 @@ struct HomeView: View {
     // MARK: - Centered Super Mario Party-Style Localized Game Logo
 
     private func homeTitleLogo(height: CGFloat) -> some View {
-        Image(l10n.language.isChinese ? "HomeLogoZH" : "HomeLogoEN")
+        let homeLogoName: String = {
+            switch l10n.language.resolvedCode {
+            case "zh-Hans", "zh-Hant": return "HomeLogoZH"
+            case "ja": return "HomeLogoJA"
+            case "ko": return "HomeLogoKO"
+            default: return "HomeLogoEN"
+            }
+        }()
+
+        return Image(homeLogoName)
             .resizable()
             .interpolation(.high)
             .scaledToFit()
             .frame(height: height)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: HomeLogoFramePreferenceKey.self,
+                        value: proxy.frame(in: .global)
+                    )
+                }
+            )
             .shadow(color: Color(red: 0.04, green: 0.20, blue: 0.48).opacity(0.30), radius: 18, x: 0, y: 10)
             .scaleEffect((logoFloating ? 1.018 : 0.992) * logoBounceScale)
             .offset(y: logoFloating ? -4 : 4)
+            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.02, reduceMotion: reduceMotion, offsetY: -18, initialScale: 0.92, animation: MotionToken.homePortalEntrance))
             .contentShape(Rectangle())
             .onTapGesture {
-                SoundAndHapticsManager.shared.playUITap()
-                withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
-                    logoBounceScale = 1.07
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
-                        logoBounceScale = 1.0
+                let now = Date()
+                let isDoubleTap = now.timeIntervalSince(lastLogoTapDate) <= 0.42
+                if isDoubleTap {
+                    lastLogoTapDate = .distantPast
+                    SoundAndHapticsManager.shared.playWonderMoment()
+                    let nextIndex = (homeBackdropIndex + 1) % Self.homeBackdropNames.count
+                    if reduceMotion {
+                        homeBackdropIndex = nextIndex
+                    } else {
+                        withAnimation(.easeInOut(duration: 0.55)) {
+                            homeBackdropIndex = nextIndex
+                        }
+                    }
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.42)) {
+                        logoBounceScale = 1.11
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.55)) {
+                            logoBounceScale = 1.0
+                        }
+                    }
+                } else {
+                    lastLogoTapDate = now
+                    SoundAndHapticsManager.shared.playUITap()
+                    withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
+                        logoBounceScale = 1.07
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
+                            logoBounceScale = 1.0
+                        }
                     }
                 }
             }
@@ -347,15 +447,15 @@ struct HomeView: View {
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(appState.profile.nickname)
-                                .font(.system(size: isCompact ? 13 : 15, weight: .heavy, design: .rounded))
+                                .font(AppFont.rounded(size: isCompact ? 13 : 15, weight: .heavy))
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .lineLimit(1)
                             HStack(spacing: 5) {
                                 Text(l10n.t("rank.label", appState.profile.rankString))
-                                    .font(.system(size: 11, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 11, weight: .black))
                                     .foregroundColor(AppTheme.skyBottom)
                                 Text("Lv.\(appState.profile.adventureLevel)")
-                                    .font(.system(size: 10, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 10, weight: .black))
                                     .foregroundColor(AppTheme.mintBottom)
                             }
                             .lineLimit(1)
@@ -376,6 +476,7 @@ struct HomeView: View {
                 .accessibilityHint(l10n.localized(zh: "打开围棋航海护照", en: "Open Go Sailor Passport", ja: "航海パスポートを開く", ko: "바둑 항해 여권 열기", zhHant: "開啟圍棋航海護照"))
                 .accessibilityIdentifier("HomePassportButton")
             }
+            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.04, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
             Spacer()
 
@@ -390,10 +491,10 @@ struct HomeView: View {
                     HStack(spacing: 10) {
                         HStack(spacing: 4) {
                             Image(systemName: "star.fill")
-                                .font(.system(size: 13, weight: .black))
+                                .font(.system(size: 13, weight: .black, design: .rounded))
                                 .foregroundStyle(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
                             Text("\(appState.puzzleProgress.totalStars)")
-                                .font(.system(size: 14, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 14, weight: .black))
                                 .monospacedDigit()
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .lineLimit(1)
@@ -406,7 +507,7 @@ struct HomeView: View {
                             HStack(spacing: 4) {
                                 StarCoinBadgeView(size: 16)
                                 Text("\(appState.profile.starCoins)")
-                                    .font(.system(size: 14, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 14, weight: .black))
                                     .monospacedDigit()
                                     .foregroundColor(AppTheme.sunBottom)
                                     .lineLimit(1)
@@ -417,10 +518,10 @@ struct HomeView: View {
                                 Divider().frame(height: 15)
                                 HStack(spacing: 3) {
                                     Image(systemName: "flame.fill")
-                                        .font(.system(size: 13, weight: .black))
+                                        .font(.system(size: 13, weight: .black, design: .rounded))
                                         .foregroundColor(AppTheme.coralBottom)
                                     Text("\(appState.profile.dailyStreak)")
-                                        .font(.system(size: 14, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 14, weight: .black))
                                         .monospacedDigit()
                                         .foregroundColor(AppTheme.coralBottom)
                                         .lineLimit(1)
@@ -445,7 +546,7 @@ struct HomeView: View {
                                         .frame(width: 20, height: 20)
                                 }
                                 Text("\(done)/\(target)")
-                                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                                    .font(AppFont.rounded(size: 13, weight: .heavy))
                                     .monospacedDigit()
                                     .foregroundColor(AppTheme.inkPrimary)
                                     .lineLimit(1)
@@ -487,6 +588,7 @@ struct HomeView: View {
                         .presentationDetents([.medium])
                         .presentationDragIndicator(.visible)
                 }
+                .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.10, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
                 if isCompact {
                     GameCircleButton(
@@ -499,13 +601,14 @@ struct HomeView: View {
                     }
                     .accessibilityLabel(l10n.localized(zh: "拍照判胜负", en: "Photo Judge", ja: "写真判定", ko: "사진 판정", zhHant: "拍照判勝負"))
                     .accessibilityIdentifier("HomePhotoJudgeButton")
+                    .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.92, animation: MotionToken.homeTopBarEntrance))
                 } else {
                     Button {
                         appState.navigationPath.append(.photoJudge)
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "camera.viewfinder")
-                                .font(.system(size: 15, weight: .black))
+                                .font(.system(size: 15, weight: .black, design: .rounded))
                             Text(l10n.localized(
                                 zh: "拍照判胜负",
                                 en: "Photo Judge",
@@ -513,7 +616,7 @@ struct HomeView: View {
                                 ko: "사진 판정",
                                 zhHant: "拍照判勝負"
                             ))
-                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .black))
                         }
                         .foregroundColor(.white)
                         .shadow(color: AppTheme.grapeRim.opacity(0.45), radius: 1, y: 1.5)
@@ -522,6 +625,7 @@ struct HomeView: View {
                     }
                     .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
                     .accessibilityIdentifier("HomePhotoJudgeButton")
+                    .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
                 }
 
                 GameCircleButton(
@@ -532,6 +636,9 @@ struct HomeView: View {
                 ) {
                     appState.updateSettings { $0.bgmEnabled.toggle() }
                 }
+                .accessibilityLabel(l10n.t("settings.feedback.bgm"))
+                .accessibilityValue(l10n.t(appState.settings.bgmEnabled ? "common.on" : "common.off"))
+                .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.21, reduceMotion: reduceMotion, offsetY: -68, initialScale: 0.90, animation: MotionToken.homeTopBarEntrance))
 
                 GameCircleButton(
                     icon: appState.settings.soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill",
@@ -541,6 +648,9 @@ struct HomeView: View {
                 ) {
                     appState.updateSettings { $0.soundEnabled.toggle() }
                 }
+                .accessibilityLabel(l10n.t("settings.feedback.sound"))
+                .accessibilityValue(l10n.t(appState.settings.soundEnabled ? "common.on" : "common.off"))
+                .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.26, reduceMotion: reduceMotion, offsetY: -68, initialScale: 0.90, animation: MotionToken.homeTopBarEntrance))
 
                 GameCircleButton(
                     icon: "gearshape.fill",
@@ -556,6 +666,7 @@ struct HomeView: View {
                     appState.showSettingsSheet = true
                 }
                 .accessibilityLabel(l10n.t("home.settings"))
+                .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.31, reduceMotion: reduceMotion, offsetY: -68, initialScale: 0.90, animation: MotionToken.homeTopBarEntrance))
             }
         }
     }
@@ -572,7 +683,7 @@ struct HomeView: View {
                     ko: "진행도와 보상",
                     zhHant: "我的進度與獎勵"
                 ))
-                .font(.system(size: 17, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 17, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
 
                 Spacer()
@@ -581,7 +692,7 @@ struct HomeView: View {
                     showStatusGuide = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(AppTheme.inkSecondary.opacity(0.6))
                 }
                 .buttonStyle(.plain)
@@ -610,7 +721,7 @@ struct HomeView: View {
                     }
                 ) {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 18, weight: .black))
+                        .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundStyle(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
                 }
 
@@ -661,7 +772,7 @@ struct HomeView: View {
                     action: nil
                 ) {
                     Image(systemName: "flame.fill")
-                        .font(.system(size: 18, weight: .black))
+                        .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.coralBottom)
                 }
 
@@ -729,11 +840,11 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
 
                     Text(valueText)
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .monospacedDigit()
                         .foregroundColor(valueColor)
                         .padding(.horizontal, 7)
@@ -748,7 +859,7 @@ struct HomeView: View {
                             action()
                         } label: {
                             Text(actionTitle)
-                                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 11.5, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
@@ -759,7 +870,7 @@ struct HomeView: View {
                 }
 
                 Text(description)
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -794,12 +905,12 @@ struct HomeView: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(l10n.t("home.aiCard.start"))
-                            .font(.system(size: height < 140 ? 26 : 32, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: height < 140 ? 26 : 32, weight: .black))
                             .foregroundColor(.white)
                             .shadow(color: AppTheme.skyRim.opacity(0.55), radius: 2, y: 2)
 
                         Text(ruleSummarySubtitle)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .bold))
                             .foregroundColor(Color.white.opacity(0.94))
                             .lineLimit(1)
 
@@ -808,7 +919,7 @@ struct HomeView: View {
                             Text("·")
                             Text("\(l10n.t(selectedDifficulty.nameKey)) \(selectedDifficulty.rankBadge)")
                         }
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 4)
@@ -1078,18 +1189,18 @@ struct HomeView: View {
                             .frame(width: height < 140 ? 60 : 74, height: height < 140 ? 60 : 74)
                             .shadow(color: AppTheme.sunRim.opacity(0.35), radius: 8, y: 4)
                         Image(systemName: "map.fill")
-                            .font(.system(size: height < 140 ? 26 : 32, weight: .black))
+                            .font(.system(size: height < 140 ? 26 : 32, weight: .black, design: .rounded))
                             .foregroundStyle(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
                     }
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(l10n.t("home.puzzleCard.title"))
-                            .font(.system(size: height < 140 ? 26 : 32, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: height < 140 ? 26 : 32, weight: .black))
                             .foregroundColor(.white)
                             .shadow(color: AppTheme.sunRim.opacity(0.55), radius: 2, y: 2)
 
                         Text(l10n.t("home.hero.questSubtitle"))
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .bold))
                             .foregroundColor(Color.white.opacity(0.95))
                             .lineLimit(1)
 
@@ -1100,7 +1211,7 @@ struct HomeView: View {
                             ko: "\(totalWorlds)대 세계 · \(totalStages)구역 · \(clearedNodes)/\(totalNodes) 클리어",
                             zhHant: "\(totalWorlds)大世界 · \(totalStages)站 · 已通 \(clearedNodes)/\(totalNodes) 關"
                         ))
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .heavy))
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 4)
@@ -1256,13 +1367,13 @@ struct HomeView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(l10n.t("home.twoPlayerCard.title"))
-                            .font(.system(size: 17, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 17, weight: .black))
                             .foregroundColor(.white)
                             .shadow(color: AppTheme.mintRim.opacity(0.45), radius: 1, y: 1.5)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                         Text(l10n.t("home.twoPlayerCard.subtitle"))
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .bold))
                             .foregroundColor(Color.white.opacity(0.92))
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1316,7 +1427,7 @@ struct HomeView: View {
                         .overlay(Circle().strokeBorder(Color.white, lineWidth: 1.5))
 
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .black))
+                        .font(.system(size: 13, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.mintBottom)
                 }
                 .frame(width: 44, height: 44)
@@ -1358,19 +1469,19 @@ struct HomeView: View {
                     .frame(width: 46, height: 46)
                     .shadow(color: rimColor.opacity(0.30), radius: 5, y: 2)
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .black))
+                    .font(.system(size: 20, weight: .black, design: .rounded))
                     .foregroundStyle(LinearGradient(colors: iconColors, startPoint: .top, endPoint: .bottom))
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 17, weight: .black))
                     .foregroundColor(.white)
                     .shadow(color: rimColor.opacity(0.45), radius: 1, y: 1.5)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(subtitle)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 11, weight: .bold))
                     .foregroundColor(Color.white.opacity(0.92))
                     .lineLimit(1)
             }
@@ -1392,15 +1503,15 @@ struct HomeView: View {
         HStack(spacing: 5) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: 11, weight: .black, design: .rounded))
                     .foregroundColor(accent)
             }
             Text(title)
-                .font(.system(size: isCompact ? 11.5 : 12.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .heavy))
                 .foregroundColor(AppTheme.inkPrimary)
                 .lineLimit(1)
             Image(systemName: trailingIcon)
-                .font(.system(size: 9, weight: .black))
+                .font(.system(size: 9, weight: .black, design: .rounded))
                 .foregroundColor(accent.opacity(0.8))
         }
         .padding(.horizontal, isCompact ? 10 : 13)
@@ -1417,6 +1528,9 @@ struct HomeView: View {
 
 /// Cheerful Mario Party sunlit floating sparkle particles.
 private struct FloatingPartySparklesView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var isPaused: Bool = false
+
     private struct Sparkle {
         let xFrac: Double
         let yStart: Double
@@ -1441,29 +1555,31 @@ private struct FloatingPartySparklesView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            Canvas { context, size in
-                for s in sparkles {
-                    let yProgress = 1.0 - fmod(s.yStart + t * s.speed, 1.0)
-                    let x = size.width * s.xFrac + CGFloat(sin(t * 1.1 + s.phase) * s.swayAmp)
-                    let y = size.height * yProgress
-                    let edgeFade = sin(yProgress * .pi)
-                    let twinkle = 0.55 + 0.45 * sin(t * 2.6 + s.phase)
-                    let alpha = max(0, edgeFade * twinkle * 0.75)
+        if !reduceMotion {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                Canvas { context, size in
+                    for s in sparkles {
+                        let yProgress = 1.0 - fmod(s.yStart + t * s.speed, 1.0)
+                        let x = size.width * s.xFrac + CGFloat(sin(t * 1.1 + s.phase) * s.swayAmp)
+                        let y = size.height * yProgress
+                        let edgeFade = sin(yProgress * .pi)
+                        let twinkle = 0.55 + 0.45 * sin(t * 2.6 + s.phase)
+                        let alpha = max(0, edgeFade * twinkle * 0.75)
 
-                    let glowR = s.radius * 2.6
-                    let glowRect = CGRect(x: x - glowR, y: y - glowR, width: glowR * 2, height: glowR * 2)
-                    let tint: Color = s.isGold ? Color(red: 1.0, green: 0.92, blue: 0.45) : .white
-                    context.fill(
-                        Path(ellipseIn: glowRect),
-                        with: .radialGradient(
-                            Gradient(colors: [tint.opacity(alpha), tint.opacity(0)]),
-                            center: CGPoint(x: x, y: y),
-                            startRadius: 0,
-                            endRadius: glowR
+                        let glowR = s.radius * 2.6
+                        let glowRect = CGRect(x: x - glowR, y: y - glowR, width: glowR * 2, height: glowR * 2)
+                        let tint: Color = s.isGold ? Color(red: 1.0, green: 0.92, blue: 0.45) : .white
+                        context.fill(
+                            Path(ellipseIn: glowRect),
+                            with: .radialGradient(
+                                Gradient(colors: [tint.opacity(alpha), tint.opacity(0)]),
+                                center: CGPoint(x: x, y: y),
+                                startRadius: 0,
+                                endRadius: glowR
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

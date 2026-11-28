@@ -354,6 +354,70 @@ final class PhotoBoardRecognizerTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(accuracy, 0.90, "Rotated wood-on-wood 9x9 board should auto-align cleanly, got accuracy \(accuracy)")
     }
 
+    func test19x19BoardWithThickDarkFrameAndDenseStonesNeverMisdetectsAs7x7() {
+        var expected = GoBoardState(size: 19, komi: 7.5)
+        // Dense endgame cluster including all 4 outermost corners and edges
+        for r in 0..<19 {
+            for c in 0..<19 {
+                if (r == 0 || r == 18 || c == 0 || c == 18) && (r + c) % 3 == 0 {
+                    expected.grid[expected.index(row: r, col: c)] = (r % 2 == 0) ? .black : .white
+                } else if r >= 3 && r <= 7 && c >= 3 && c <= 7 {
+                    expected.grid[expected.index(row: r, col: c)] = .white
+                } else if r >= 11 && r <= 15 && c >= 11 && c <= 15 {
+                    expected.grid[expected.index(row: r, col: c)] = .black
+                }
+            }
+        }
+        expected.grid[expected.index(row: 0, col: 0)] = .black
+        expected.grid[expected.index(row: 0, col: 18)] = .white
+        expected.grid[expected.index(row: 18, col: 18)] = .black
+        expected.grid[expected.index(row: 18, col: 0)] = .white
+
+        let baseBoard = renderSyntheticWoodBoard(state: expected, side: 760, insetFraction: 0.05)
+        // Wrap with a thick dark outer wooden border on a clean light tabletop
+        let canvasSize = CGSize(width: 1200, height: 900)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = true
+        let framedPhoto = UIGraphicsImageRenderer(size: canvasSize, format: format).image { ctx in
+            let cg = ctx.cgContext
+            cg.setFillColor(UIColor(red: 0.93, green: 0.94, blue: 0.95, alpha: 1.0).cgColor)
+            cg.fill(CGRect(origin: .zero, size: canvasSize))
+
+            let boardSide: CGFloat = 720
+            let origin = CGPoint(x: (canvasSize.width - boardSide) * 0.5, y: (canvasSize.height - boardSide) * 0.5)
+            let frameRect = CGRect(origin: origin, size: CGSize(width: boardSide, height: boardSide))
+            cg.setFillColor(UIColor(red: 0.16, green: 0.10, blue: 0.06, alpha: 1.0).cgColor)
+            cg.fill(frameRect.insetBy(dx: -12, dy: -12))
+            baseBoard.draw(in: frameRect)
+        }
+
+        let detected = GoBoardPhotoRecognizer.autoDetectBoardAndGrid(
+            in: framedPhoto,
+            candidates: [.nineteen, .thirteen, .nine, .seven]
+        )
+        XCTAssertEqual(detected.boardSize, .nineteen, "Clean-background 19x19 board with thick frame must NEVER misdetect as 7x7")
+
+        // Also verify zero-inset direct grid-corner alignment (the exact mode used by the calibration handles)
+        let directGridCorners = detected.corners.insetBy(detected.gridInsetFraction)
+        let recognized = GoBoardPhotoRecognizer.recognizeBoard(
+            from: framedPhoto,
+            corners: directGridCorners,
+            boardSize: .nineteen,
+            gridInsetFraction: 0.0,
+            komi: 7.5
+        )
+        XCTAssertTrue(recognized.usedNeuralStoneClassifier, "Should use bundled StarPointStoneClassifier CoreML CNN for stone classification")
+        var matches = 0
+        for i in 0..<(19 * 19) {
+            if recognized.boardState.grid[i] == expected.grid[i] {
+                matches += 1
+            }
+        }
+        let accuracy = Double(matches) / 361.0
+        XCTAssertGreaterThanOrEqual(accuracy, 0.98, "Zero-inset direct grid-corner alignment on 19x19 (incl. corner stones) should reach >=98%, got \(accuracy)")
+    }
+
     // MARK: - Synthetic Wooden Go Board Renderer
 
     private func renderBoardOnTabletop(boardImage: UIImage, canvasSize: CGSize) -> UIImage {

@@ -103,8 +103,15 @@ final class SoundAndHapticsManager {
             if !voiceEnabled { stopVoice() }
         }
     }
-    /// Active voice pack language code (`"zh"`, `"en"`, `"ja"`, `"ko"`).
-    var voiceLanguageCode: String = "zh"
+    /// Active voice pack language code (`"en"`, `"zh"`, `"ja"`, `"ko"`). Defaults to `"en"`.
+    var voiceLanguageCode: String = "en" {
+        didSet {
+            let normalized = AppLanguage.voiceLanguageCode(forResolvedCode: voiceLanguageCode)
+            if voiceLanguageCode != normalized {
+                voiceLanguageCode = normalized
+            }
+        }
+    }
     var zenDojoMode: Bool = false {
         didSet {
             if zenDojoMode { stopVoice() }
@@ -341,11 +348,14 @@ private final class GameAudioPlayback: @unchecked Sendable {
     private let queue = DispatchQueue(label: "StarYiGo.audio", qos: .userInitiated)
     private var players: [String: [AVAudioPlayer]] = [:]
     private var voicePlayers: [String: AVAudioPlayer] = [:]
+    private var voiceCacheOrder: [String] = []
+    private let maxVoiceCacheCount = 16
     private var activeVoicePlayer: AVAudioPlayer?
     private var pendingVoiceWorkItem: DispatchWorkItem?
     private var pendingUnduckWorkItem: DispatchWorkItem?
     private var lastVoiceVariant: [VoiceCue: Int] = [:]
     private var isBGMDUcked: Bool = false
+    private var bgmPrepared: Bool = false
     private var bgmPlayers: [MusicMood: AVAudioPlayer] = [:]
     private var bgmTargetVolumes: [MusicMood: Float] = [
         .island: 0.16,
@@ -360,8 +370,29 @@ private final class GameAudioPlayback: @unchecked Sendable {
         queue.async {
             self.configureAudioSession()
             self.prepareSynthesizedSounds()
-            self.prepareAdaptiveBGM()
             self.observeAudioInterruptions()
+            self.observeMemoryWarnings()
+        }
+    }
+
+    private func ensureBGMPrepared() {
+        guard !bgmPrepared else { return }
+        bgmPrepared = true
+        prepareAdaptiveBGM()
+    }
+
+    private func observeMemoryWarnings() {
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.queue.async {
+                guard let self else { return }
+                let active = self.activeVoicePlayer
+                self.voicePlayers = self.voicePlayers.filter { $0.value === active }
+                self.voiceCacheOrder = Array(self.voicePlayers.keys)
+            }
         }
     }
 
@@ -375,11 +406,58 @@ private final class GameAudioPlayback: @unchecked Sendable {
                   let info = notification.userInfo,
                   let typeRaw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else { return }
-            if type == .ended {
+            switch type {
+            case .began:
                 self.queue.async {
-                    try? AVAudioSession.sharedInstance().setActive(true)
-                    self.applyMusicState(mood: self.lastMood, tensionLayer: self.lastTension)
+                    self.pendingVoiceWorkItem?.cancel()
+                    self.pendingUnduckWorkItem?.cancel()
+                    self.activeVoicePlayer?.stop()
+                    self.activeVoicePlayer = nil
+                    self.isBGMDUcked = false
+                    for (_, player) in self.bgmPlayers where player.isPlaying {
+                        player.pause()
+                    }
+                    self.tensionPlayer?.pause()
                 }
+            case .ended:
+                let optionsRaw = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+                let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
+                if options.contains(.shouldResume) {
+                    self.queue.async {
+                        try? AVAudioSession.sharedInstance().setActive(true)
+                        self.applyMusicState(mood: self.lastMood, tensionLayer: self.lastTension)
+                    }
+                }
+            @unknown default:
+                break
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let self,
+                  let info = notification.userInfo,
+                  let reasonRaw = info[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw),
+                  reason == .oldDeviceUnavailable else { return }
+            self.queue.async {
+                self.activeVoicePlayer?.stop()
+                self.activeVoicePlayer = nil
+                self.duckBGM(false)
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.silenceSecondaryAudioHintNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.queue.async {
+                self.applyMusicState(mood: self.lastMood, tensionLayer: self.lastTension)
             }
         }
     }
@@ -393,9 +471,19 @@ private final class GameAudioPlayback: @unchecked Sendable {
     }
 
     private func applyMusicState(mood currentMood: MusicMood, tensionLayer: Bool) {
+        // Yield BGM gracefully if the user is playing Apple Music / Spotify in the background.
+        let effectiveMood: MusicMood = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint
+            ? .none
+            : currentMood
+        if effectiveMood != .none {
+            try? AVAudioSession.sharedInstance().setActive(true)
+            ensureBGMPrepared()
+        }
+        guard bgmPrepared else { return }
+
         let duckScale: Float = isBGMDUcked ? 0.38 : 1.0
         for (mood, player) in bgmPlayers {
-            if mood == currentMood {
+            if mood == effectiveMood {
                 let target = (bgmTargetVolumes[mood] ?? 0.15) * duckScale
                 if !player.isPlaying {
                     player.volume = 0.0
@@ -405,7 +493,8 @@ private final class GameAudioPlayback: @unchecked Sendable {
             } else if player.isPlaying {
                 player.setVolume(0.0, fadeDuration: 0.50)
                 let fadingPlayer = player
-                queue.asyncAfter(deadline: .now() + 0.55) {
+                queue.asyncAfter(deadline: .now() + 0.55) { [weak self] in
+                    guard let self else { return }
                     if self.lastMood != mood && fadingPlayer.volume <= 0.01 {
                         fadingPlayer.pause()
                     }
@@ -414,7 +503,7 @@ private final class GameAudioPlayback: @unchecked Sendable {
         }
 
         if let tp = tensionPlayer {
-            if tensionLayer && currentMood == .match {
+            if tensionLayer && effectiveMood == .match {
                 if !tp.isPlaying {
                     tp.volume = 0.0
                     tp.play()
@@ -422,7 +511,8 @@ private final class GameAudioPlayback: @unchecked Sendable {
                 tp.setVolume(0.11 * duckScale, fadeDuration: 0.65)
             } else if tp.isPlaying {
                 tp.setVolume(0.0, fadeDuration: 0.45)
-                queue.asyncAfter(deadline: .now() + 0.50) {
+                queue.asyncAfter(deadline: .now() + 0.50) { [weak self] in
+                    guard let self else { return }
                     if !self.lastTension && tp.volume <= 0.01 {
                         tp.pause()
                     }
@@ -518,7 +608,25 @@ private final class GameAudioPlayback: @unchecked Sendable {
         }
     }
 
+    private func cacheVoicePlayer(_ player: AVAudioPlayer, forKey key: String) {
+        voicePlayers[key] = player
+        voiceCacheOrder.removeAll { $0 == key }
+        voiceCacheOrder.append(key)
+        var guardIterations = 0
+        while voiceCacheOrder.count > maxVoiceCacheCount && guardIterations < voiceCacheOrder.count {
+            let evicted = voiceCacheOrder.removeFirst()
+            if voicePlayers[evicted] === activeVoicePlayer {
+                // Keep active voice player tracked in LRU order instead of leaking it out of `voiceCacheOrder`
+                voiceCacheOrder.append(evicted)
+                guardIterations += 1
+            } else {
+                voicePlayers.removeValue(forKey: evicted)
+            }
+        }
+    }
+
     private func resolveVoicePlayer(for cue: VoiceCue, languageCode: String) -> AVAudioPlayer? {
+        let languageCode = AppLanguage.voiceLanguageCode(forResolvedCode: languageCode)
         let count = max(1, cue.variantCount)
         let chosenVariant: Int
         if count == 1 {
@@ -532,10 +640,12 @@ private final class GameAudioPlayback: @unchecked Sendable {
 
         let resourceName = "voice_\(languageCode)_\(cue.filePrefix)_\(chosenVariant)"
         if let cached = voicePlayers[resourceName] {
+            voiceCacheOrder.removeAll { $0 == resourceName }
+            voiceCacheOrder.append(resourceName)
             return cached
         }
         if let loaded = loadVoiceAsset(resourceName: resourceName, languageCode: languageCode) {
-            voicePlayers[resourceName] = loaded
+            cacheVoicePlayer(loaded, forKey: resourceName)
             return loaded
         }
         // Fallback to variant 1 if a higher variant is missing
@@ -543,7 +653,7 @@ private final class GameAudioPlayback: @unchecked Sendable {
             let fallbackName = "voice_\(languageCode)_\(cue.filePrefix)_1"
             if let cached = voicePlayers[fallbackName] { return cached }
             if let loaded = loadVoiceAsset(resourceName: fallbackName, languageCode: languageCode) {
-                voicePlayers[fallbackName] = loaded
+                cacheVoicePlayer(loaded, forKey: fallbackName)
                 return loaded
             }
         }
@@ -552,7 +662,7 @@ private final class GameAudioPlayback: @unchecked Sendable {
             let enFallbackName = "voice_en_\(cue.filePrefix)_1"
             if let cached = voicePlayers[enFallbackName] { return cached }
             if let loaded = loadVoiceAsset(resourceName: enFallbackName, languageCode: "en") {
-                voicePlayers[enFallbackName] = loaded
+                cacheVoicePlayer(loaded, forKey: enFallbackName)
                 return loaded
             }
         }

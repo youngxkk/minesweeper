@@ -420,12 +420,12 @@ struct StarCoinBadgeView: View {
                 )
 
             Image(systemName: "star.fill")
-                .font(.system(size: size * 0.46, weight: .black))
+                .font(.system(size: size * 0.46, weight: .black, design: .rounded))
                 .foregroundColor(Color(red: 0.76, green: 0.44, blue: 0.02))
                 .offset(y: size * 0.03)
 
             Image(systemName: "star.fill")
-                .font(.system(size: size * 0.46, weight: .black))
+                .font(.system(size: size * 0.46, weight: .black, design: .rounded))
                 .foregroundColor(Color(red: 1.0, green: 0.98, blue: 0.78))
         }
         .frame(width: size, height: size)

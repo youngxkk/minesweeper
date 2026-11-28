@@ -1,0 +1,27 @@
+{
+  "Inputs" : {
+    "spatial" : {
+      "MLFeatureShortDescription" : "--"
+    },
+    "global_in" : {
+      "MLFeatureShortDescription" : "--"
+    }
+  },
+  "Outputs" : {
+    "policy" : {
+      "MLFeatureShortDescription" : "--"
+    },
+    "value" : {
+      "MLFeatureShortDescription" : "--"
+    },
+    "ownership" : {
+      "MLFeatureShortDescription" : "--"
+    }
+  },
+  "TrainingInputs" : {
+
+  },
+  "States" : {
+
+  }
+}

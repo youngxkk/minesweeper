@@ -45,8 +45,8 @@ struct ParentalGateOverlay: View {
     let onCancel: () -> Void
     let onSuccess: () -> Void
 
-    @State private var lhs: Int = Int.random(in: 4...9)
-    @State private var rhs: Int = Int.random(in: 6...9)
+    @State private var lhs: Int = Int.random(in: 13...27)
+    @State private var rhs: Int = Int.random(in: 12...19)
     @State private var answerText: String = ""
     @State private var showError: Bool = false
     @FocusState private var isInputFocused: Bool
@@ -65,7 +65,7 @@ struct ParentalGateOverlay: View {
 
             VStack(spacing: 16) {
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 36, weight: .black))
+                    .font(.system(size: 36, weight: .black, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [AppTheme.skyTop, AppTheme.skyBottom],
@@ -84,7 +84,7 @@ struct ParentalGateOverlay: View {
                             zhHant: "家長驗證"
                         )
                     )
-                    .font(.system(size: 21, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 21, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                     Text(
@@ -96,14 +96,14 @@ struct ParentalGateOverlay: View {
                             zhHant: "為保護小朋友安全，請家長輸入下方算術題的結果後再繼續："
                         )
                     )
-                    .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 13.5, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Text("\(lhs) × \(rhs) = ?")
-                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 28, weight: .black))
                     .foregroundColor(AppTheme.skyBottom)
                     .padding(.horizontal, 22)
                     .padding(.vertical, 10)
@@ -122,7 +122,7 @@ struct ParentalGateOverlay: View {
                     text: $answerText
                 )
                 .keyboardType(.numberPad)
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 18, weight: .heavy))
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
                 .focused($isInputFocused)
@@ -152,7 +152,7 @@ struct ParentalGateOverlay: View {
                             zhHant: "答案不太對，已換一道新題目，請再試一次。"
                         )
                     )
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.coralBottom)
                     .multilineTextAlignment(.center)
                 }
@@ -163,7 +163,7 @@ struct ParentalGateOverlay: View {
                         onCancel()
                     } label: {
                         Text(l10n.t("common.cancel"))
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
@@ -183,7 +183,7 @@ struct ParentalGateOverlay: View {
                         verifyAnswer()
                     } label: {
                         Text(l10n.t("common.ok"))
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
@@ -227,6 +227,7 @@ struct ParentalGateOverlay: View {
             }
         }
         .zIndex(950)
+        .accessibilityAddTraits(.isModal)
     }
 
     private func verifyAnswer() {
@@ -237,8 +238,8 @@ struct ParentalGateOverlay: View {
         } else {
             showError = true
             answerText = ""
-            lhs = Int.random(in: 4...9)
-            rhs = Int.random(in: 6...9)
+            lhs = Int.random(in: 13...27)
+            rhs = Int.random(in: 12...19)
         }
     }
 }

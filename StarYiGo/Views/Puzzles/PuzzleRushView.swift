@@ -8,6 +8,7 @@ import SwiftUI
 struct PuzzleRushView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     enum RushMode: String, CaseIterable {
         case blitz3m   // 3 minutes, 3 hearts
@@ -149,7 +150,7 @@ struct PuzzleRushView: View {
                         let mm = secondsRemaining / 60
                         let ss = secondsRemaining % 60
                         Text(String(format: "⏱ %d:%02d", mm, ss))
-                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                            .font(AppFont.rounded(size: 14, weight: .black))
                             .foregroundColor(secondsRemaining <= 20 ? .white : AppTheme.coralBottom)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
@@ -158,7 +159,7 @@ struct PuzzleRushView: View {
                     HStack(spacing: 3) {
                         ForEach(0..<3, id: \.self) { i in
                             Image(systemName: i < hearts ? "heart.fill" : "heart")
-                                .font(.system(size: 15, weight: .black))
+                                .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundColor(i < hearts ? AppTheme.coralBottom : AppTheme.subtleBorder)
                         }
                     }
@@ -174,7 +175,7 @@ struct PuzzleRushView: View {
 
     private var lobbyCard: some View {
         VStack(spacing: 18) {
-            Text("🔥").font(.system(size: 56))
+            Text("🔥").font(AppFont.rounded(size: 56, weight: .regular))
             Text(l10n.localized(
                 zh: "测测你的真实棋力上限！",
                 en: "Test Your True Reading Ceiling!",
@@ -182,7 +183,7 @@ struct PuzzleRushView: View {
                 ko: "당신의 진짜 기력 한계를 테스트해 보세요!",
                 zhHant: "測測你的真實棋力上限！"
             ))
-                .font(.system(size: 24, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 24, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
             Text(l10n.localized(
                 zh: "从 30K 启蒙起步，每答对一题难度自动递增直至 5D！自动旋转与黑白互换防止背图，拥有 3 颗心容错。无论 25K、15K 还是高段，都能打出自己的极限纪录！",
@@ -191,7 +192,7 @@ struct PuzzleRushView: View {
                 ko: "30K 입문부터 시작해 1문제 맞힐 때마다 5D까지 자동으로 난이도가 상승합니다! 자동 회전·흑백 반전으로 암기를 방지하고 하트 3개로 도전하세요. 초급부터 고단자까지 한계 기록에 도전!",
                 zhHant: "從 30K 啟蒙起步，每答對一題難度自動遞增直至 5D！自動旋轉與黑白互換防止背圖，擁有 3 顆心容錯。無論 25K、15K 還是高段，都能打出自己的極限紀錄！"
             ))
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 14, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
 
@@ -217,7 +218,7 @@ struct PuzzleRushView: View {
                     l10n.localized(zh: "立即开始无尽冲关！", en: "Start Puzzle Rush!", ja: "連続挑戦をスタート！", ko: "무한 연속 도전 시작!", zhHant: "立即開始無盡衝關！"),
                     systemImage: "flame.fill"
                 )
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -233,7 +234,7 @@ struct PuzzleRushView: View {
                     l10n.localized(zh: "全球排行榜 (Game Center)", en: "Global Leaderboards (Game Center)", ja: "世界ランキング (Game Center)", ko: "글로벌 랭킹 (Game Center)", zhHant: "全球排行榜 (Game Center)"),
                     systemImage: "trophy.fill"
                 )
-                .font(.system(size: 13.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13.5, weight: .black))
                 .foregroundColor(AppTheme.skyBottom)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
@@ -255,13 +256,13 @@ struct PuzzleRushView: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 20, weight: .black))
+                    .font(.system(size: 20, weight: .black, design: .rounded))
                     .foregroundColor(selected ? .white : AppTheme.skyBottom)
                 Text(title)
-                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 15, weight: .black))
                     .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                 Text(subtitle)
-                    .font(.system(size: 11.5, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 11.5, weight: .bold))
                     .foregroundColor(selected ? .white.opacity(0.92) : AppTheme.inkSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -306,20 +307,20 @@ struct PuzzleRushView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(l10n.localized(zh: "当前连闯", en: "Solved", ja: "連続正解", ko: "연속 정답", zhHant: "當前連闖"))
-                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .heavy))
                         .foregroundColor(AppTheme.inkSecondary)
                     Text("\(score)")
-                        .font(.system(size: 40, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 40, weight: .black))
                         .foregroundColor(AppTheme.coralBottom)
                 }
                 Spacer()
                 if let p = currentPuzzle {
                     VStack(alignment: .trailing, spacing: 4) {
                         Text(l10n.localized(zh: "本题难度", en: "Current Rank", ja: "問題レベル", ko: "문제 난이도", zhHant: "本題難度"))
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .bold))
                             .foregroundColor(AppTheme.inkSecondary)
                         Text(p.rankBadge)
-                            .font(.system(size: 20, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 20, weight: .black))
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 5)
@@ -333,17 +334,17 @@ struct PuzzleRushView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(p.category.localizedTitle(l10n))
-                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .black))
                             .foregroundColor(AppTheme.skyBottom)
                         Spacer()
                         Text(effectiveColor == .black
                              ? l10n.localized(zh: "⚫️ 黑先", en: "⚫️ Black", ja: "⚫️ 黒番", ko: "⚫️ 흑선", zhHant: "⚫️ 黑先")
                              : l10n.localized(zh: "⚪️ 白先", en: "⚪️ White", ja: "⚪️ 白番", ko: "⚪️ 백선", zhHant: "⚪️ 白先"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                     }
                     Text(p.category.localizedTitle(l10n))
-                        .font(.system(size: 17, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 17, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text(effectiveColor == .black
                          ? l10n.localized(
@@ -360,7 +361,7 @@ struct PuzzleRushView: View {
                              ko: "백선: 힌트 없이 바둑판의 최선수를 빠르게 찾아보세요!",
                              zhHant: "白先：不依賴提示，迅速找出盤面最佳一手！"
                          ))
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -374,27 +375,27 @@ struct PuzzleRushView: View {
 
     private var finishedCard: some View {
         VStack(spacing: 16) {
-            Text(score >= 15 ? "🏆" : (score >= 8 ? "🌟" : "🔥")).font(.system(size: 56))
+            Text(score >= 15 ? "🏆" : (score >= 8 ? "🌟" : "🔥")).font(AppFont.rounded(size: 56, weight: .regular))
             Text(l10n.localized(zh: "本次冲关成绩", en: "Puzzle Rush Complete!", ja: "今回の連続挑戦の成績", ko: "이번 연속 도전 성적", zhHant: "本次衝關成績"))
-                .font(.system(size: 24, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 24, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
 
             HStack(spacing: 24) {
                 VStack(spacing: 2) {
                     Text("\(score)")
-                        .font(.system(size: 40, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 40, weight: .black))
                         .foregroundColor(AppTheme.coralBottom)
                     Text(l10n.localized(zh: "答对题数", en: "Solved", ja: "正解数", ko: "정답 수", zhHant: "答對題數"))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
                 Divider().frame(height: 44)
                 VStack(spacing: 2) {
                     Text(highestRankBadge)
-                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 32, weight: .black))
                         .foregroundColor(AppTheme.grapeBottom)
                     Text(l10n.localized(zh: "触达最高棋力", en: "Peak Rank", ja: "到達最高棋力", ko: "도달 최고 기력", zhHant: "觸達最高棋力"))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
             }
@@ -408,7 +409,7 @@ struct PuzzleRushView: View {
                         l10n.localized(zh: "再来一局破纪录", en: "Play Again", ja: "もう一度挑戦して記録更新", ko: "다시 도전해 기록 경신", zhHant: "再來一局破紀錄"),
                         systemImage: "flame.fill"
                     )
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -419,7 +420,7 @@ struct PuzzleRushView: View {
                     appState.popRoute()
                 } label: {
                     Text(l10n.localized(zh: "返回地图", en: "Back to Map", ja: "マップへ戻る", ko: "지도로 돌아가기", zhHant: "返回地圖"))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -448,6 +449,7 @@ struct PuzzleRushView: View {
         if rushMode == .blitz3m {
             rushTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
                 Task { @MainActor in
+                    guard scenePhase == .active, phase == .running else { return }
                     if secondsRemaining > 1 {
                         secondsRemaining -= 1
                     } else {
@@ -512,6 +514,9 @@ struct PuzzleRushView: View {
                     if let c = opp.comment?.uppercased() {
                         if c.contains("WRONG") { markWrong(puzzle: p) }
                         else if c.contains("CORRECT") { markCorrect(puzzle: p) }
+                        else if opp.children.isEmpty { markWrong(puzzle: p) }
+                    } else if opp.children.isEmpty {
+                        markWrong(puzzle: p)
                     }
                 }
             }

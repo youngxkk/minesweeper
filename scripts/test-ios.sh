@@ -18,7 +18,7 @@ mkdir -p "$result_dir"
 
 case "$mode" in
   pr) selection=(-skip-testing:StarYiGoTests/NightlyAITests -skip-testing:StarYiGoTests/UpgradeInstallationTests) ;;
-  device) selection=(-only-testing:StarYiGoUITests/StarYiGoUITests/testChineseNineteenLineBoardOnPhoneAndPad) ;;
+  device) selection=(-only-testing:StarYiGoUITests/StarYiGoUITests/testChineseNineteenLineBoardOnPad) ;;
   ai|nightly) selection=(-only-testing:StarYiGoTests/NightlyAITests) ;;
   *) echo "Usage: $0 [pr|ai|device]" >&2; exit 2 ;;
 esac
@@ -46,7 +46,7 @@ versions = sorted(
     if (ver := parse_ios_version(runtime)) is not None
 )
 for version, devices in reversed(versions):
-    if not (17, 6) <= version <= sdk_version:
+    if not (18, 0) <= version <= sdk_version:
         continue
     for device in devices:
         if device["name"].startswith("iPad"):

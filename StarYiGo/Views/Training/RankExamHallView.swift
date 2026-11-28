@@ -12,7 +12,7 @@ struct RankExamHallView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.morningDojo
 
             VStack(spacing: 14) {
                 HStack {
@@ -54,21 +54,21 @@ struct RankExamHallView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(spec.rankCode)
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(certified ? AppTheme.mintBottom : AppTheme.skyBottom))
 
                 Text(spec.title(isChinese: l10n.language.isChinese))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Spacer()
 
                 if certified {
                     Image(systemName: "rosette")
-                        .font(.system(size: 22, weight: .black))
+                        .font(.system(size: 22, weight: .black, design: .rounded))
                         .foregroundColor(AppTheme.sunBottom)
                 }
             }
@@ -84,7 +84,7 @@ struct RankExamHallView: View {
                     ),
                     systemImage: writtenOK ? "checkmark.circle.fill" : "circle"
                 )
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .bold))
                 .foregroundColor(writtenOK ? AppTheme.mintBottom : AppTheme.inkSecondary)
 
                 Spacer()
@@ -99,7 +99,7 @@ struct RankExamHallView: View {
                     ),
                     systemImage: matchOK ? "checkmark.circle.fill" : "circle"
                 )
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .bold))
                 .foregroundColor(matchOK ? AppTheme.mintBottom : AppTheme.inkSecondary)
             }
 
@@ -110,7 +110,7 @@ struct RankExamHallView: View {
                 ko: "\(spec.boardSize.rawValue)줄 바둑판 · 실전 시험 (보조 없음/무르기 금지) · \(spec.timeControl.displayLabel(isChinese: false))",
                 zhHant: "\(spec.boardSize.rawValue)路 · 考場脫拐（無輔助/禁悔棋）· \(spec.timeControl.displayLabel(isChinese: true))"
             ))
-                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .font(AppFont.rounded(size: 11.5, weight: .semibold))
                 .foregroundColor(AppTheme.inkSecondary)
 
             HStack(spacing: 10) {
@@ -123,7 +123,7 @@ struct RankExamHallView: View {
                             : l10n.localized(zh: "考死活笔试", en: "Take Written Test", ja: "詰碁筆記を受験", ko: "사활 필기 응시", zhHant: "考死活筆試"),
                         systemImage: "pencil.and.list.clipboard"
                     )
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(writtenOK ? AppTheme.inkPrimary : .white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -134,7 +134,7 @@ struct RankExamHallView: View {
                     appState.startRankExamMatch(spec: spec)
                 } label: {
                     Label(l10n.localized(zh: "开始定级赛", en: "Play Exam Match", ja: "認定対局を開始", ko: "승급 대국 시작", zhHant: "開始定級賽"), systemImage: "flag.checkered")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -160,6 +160,8 @@ struct RankExamWrittenTestView: View {
     @State private var activeTransform: PuzzleTransform = .identity
     @State private var questionLocked: Bool = false
     @State private var lastResultCorrect: Bool? = nil
+    @State private var didStartExam: Bool = false
+    @State private var stepTask: Task<Void, Never>?
 
     private var l10n: L10n { appState.l10n }
 
@@ -174,7 +176,7 @@ struct RankExamWrittenTestView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.morningDojo
 
             VStack(spacing: 14) {
                 HStack {
@@ -209,6 +211,7 @@ struct RankExamWrittenTestView: View {
                             GoBoardView(
                                 boardState: boardState,
                                 theme: appState.settings.boardTheme,
+                                stoneStyle: appState.settings.stoneStyle,
                                 cropRegion: activeTransform.apply(to: puzzle.cropRegion, boardSize: puzzle.boardSize),
                                 showCoordinates: true,
                                 showMoveNumbers: false,
@@ -224,7 +227,7 @@ struct RankExamWrittenTestView: View {
 
                             VStack(spacing: 8) {
                                 Text(puzzle.prompt(l10n, activeColor: activeTransform.apply(to: puzzle.playerColor)))
-                                    .font(.system(size: 15, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 15, weight: .black))
                                     .foregroundColor(AppTheme.inkPrimary)
                                     .multilineTextAlignment(.center)
 
@@ -232,7 +235,7 @@ struct RankExamWrittenTestView: View {
                                     Text(ok
                                          ? l10n.localized(zh: "✓ 本题答对！", en: "✓ Correct!", ja: "✓ 正解！", ko: "✓ 정답!", zhHant: "✓ 本題答對！")
                                          : l10n.localized(zh: "✕ 本题失误", en: "✕ Incorrect", ja: "✕ 不正解", ko: "✕ 오답", zhHant: "✕ 本題失誤"))
-                                        .font(.system(size: 14, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 14, weight: .black))
                                         .foregroundColor(ok ? AppTheme.mintBottom : AppTheme.coralBottom)
                                 }
                             }
@@ -245,24 +248,32 @@ struct RankExamWrittenTestView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { loadQuestion(0) }
+        .onAppear {
+            guard !didStartExam else { return }
+            didStartExam = true
+            loadQuestion(0)
+        }
+        .onDisappear {
+            stepTask?.cancel()
+            stepTask = nil
+        }
     }
 
     private var examSummaryCard: some View {
         let passed = correctCount >= spec.requiredPuzzlePass
         return VStack(spacing: 14) {
-            Text(passed ? "🎓" : "📚").font(.system(size: 56))
+            Text(passed ? "🎓" : "📚").font(AppFont.rounded(size: 56, weight: .regular))
             Text(passed
                  ? l10n.localized(zh: "恭喜通过 \(spec.rankCode) 死活笔试！", en: "Passed \(spec.rankCode) Written Test!", ja: "\(spec.rankCode) 筆記試験に合格！", ko: "\(spec.rankCode) 사활 필기시험 합격!", zhHant: "恭喜通過 \(spec.rankCode) 死活筆試！")
                  : l10n.localized(zh: "答对 \(correctCount)/\(puzzles.count) 题（需 \(spec.requiredPuzzlePass) 题及格）", en: "Scored \(correctCount)/\(puzzles.count) (Need \(spec.requiredPuzzlePass))", ja: "\(correctCount)/\(puzzles.count) 問正解（合格ライン \(spec.requiredPuzzlePass) 問）", ko: "\(correctCount)/\(puzzles.count)문제 정답 (합격 기준 \(spec.requiredPuzzlePass)문제)", zhHant: "答對 \(correctCount)/\(puzzles.count) 題（需 \(spec.requiredPuzzlePass) 題及格）"))
-                .font(.system(size: 20, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 20, weight: .black))
                 .foregroundColor(passed ? AppTheme.mintBottom : AppTheme.coralBottom)
                 .multilineTextAlignment(.center)
 
             Text(passed
                  ? l10n.localized(zh: "太棒了！再赢下对应定级实战赛即可获得官方 \(spec.rankCode) 认证！", en: "Awesome! Complete your timed promotion match series to earn \(spec.rankCode)!", ja: "素晴らしい！あとは認定対局シリーズをクリアすれば公式 \(spec.rankCode) を獲得できます！", ko: "훌륭해요! 승급 대국 시리즈까지 통과하면 공식 \(spec.rankCode) 인증을 획득합니다!", zhHant: "太棒了！再贏下對應定級實戰賽即可獲得官方 \(spec.rankCode) 認證！")
                  : l10n.localized(zh: "再去分级题库练练手，很快就能一次通关！", en: "Practice a few more puzzles in the Dojo and try again!", ja: "道場の詰碁でもう少し練習して再挑戦しましょう！", ko: "도장 문제집에서 조금 더 연습하고 다시 도전해 보세요!", zhHant: "再去分級題庫練練手，很快就能一次通關！"))
-                .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 13.5, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
 
@@ -270,7 +281,7 @@ struct RankExamWrittenTestView: View {
                 appState.popRoute()
             } label: {
                 Text(l10n.localized(zh: "返回考级室", en: "Back to Exam Hall", ja: "試験室に戻る", ko: "시험실로 돌아가기", zhHant: "返回考級室"))
-                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 15, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
@@ -325,10 +336,13 @@ struct RankExamWrittenTestView: View {
             concludeQuestion(correct: true)
             return
         }
-        if let opp = next.children.randomElement(), let oppMv = opp.move {
+        let oppCandidates = next.children.filter { $0.move?.color == color.opposite }
+        if let opp = oppCandidates.randomElement(), let oppMv = opp.move {
             questionLocked = true
-            Task {
+            stepTask?.cancel()
+            stepTask = Task {
                 try? await Task.sleep(nanoseconds: 340_000_000)
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     if case .success(let oppOut) = boardState.applying(action: oppMv.action, color: oppMv.color) {
                         boardState = oppOut.nextState
@@ -364,8 +378,10 @@ struct RankExamWrittenTestView: View {
                 SoundAndHapticsManager.shared.playVoice(.wrong, delay: 0.10)
             }
         }
-        Task {
+        stepTask?.cancel()
+        stepTask = Task {
             try? await Task.sleep(nanoseconds: 850_000_000)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 loadQuestion(currentIdx + 1)
             }

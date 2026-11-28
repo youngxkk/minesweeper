@@ -15,6 +15,31 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
+    static func resolvedCode(forPreferredLanguages preferredLanguages: [String]) -> String {
+        guard let preferred = preferredLanguages.first?.lowercased(), !preferred.isEmpty else {
+            return "en"
+        }
+        if preferred.hasPrefix("zh-hant") || preferred.hasPrefix("zh_hant")
+            || preferred.hasPrefix("zh-tw") || preferred.hasPrefix("zh_tw")
+            || preferred.hasPrefix("zh-hk") || preferred.hasPrefix("zh_hk")
+            || preferred.hasPrefix("zh-mo") || preferred.hasPrefix("zh_mo") {
+            return "zh-Hant"
+        }
+        if preferred.hasPrefix("zh") { return "zh-Hans" }
+        if preferred.hasPrefix("ja") { return "ja" }
+        if preferred.hasPrefix("ko") { return "ko" }
+        // English is the base/default language for all other locales (e.g. es, fr, de, etc.).
+        return "en"
+    }
+
+    static func voiceLanguageCode(forResolvedCode code: String) -> String {
+        let normalized = code.lowercased()
+        if normalized.hasPrefix("zh") { return "zh" }
+        if normalized.hasPrefix("ja") { return "ja" }
+        if normalized.hasPrefix("ko") { return "ko" }
+        return "en"
+    }
+
     var resolvedCode: String {
         switch self {
         case .zhHans: return "zh-Hans"
@@ -23,15 +48,13 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
         case .ja: return "ja"
         case .ko: return "ko"
         case .system:
-            let preferred = Locale.preferredLanguages.first ?? "en"
-            if preferred.hasPrefix("zh-Hant") || preferred.hasPrefix("zh-TW") || preferred.hasPrefix("zh-HK") {
-                return "zh-Hant"
-            }
-            if preferred.hasPrefix("zh") { return "zh-Hans" }
-            if preferred.hasPrefix("ja") { return "ja" }
-            if preferred.hasPrefix("ko") { return "ko" }
-            return "en"
+            return Self.resolvedCode(forPreferredLanguages: Locale.preferredLanguages)
         }
+    }
+
+    /// Bundled kid-voice pack code (`"en"`, `"zh"`, `"ja"`, `"ko"`), always defaulting to `"en"`.
+    var voiceLanguageCode: String {
+        Self.voiceLanguageCode(forResolvedCode: resolvedCode)
     }
 
     var isChinese: Bool {
@@ -66,6 +89,38 @@ enum AppLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 }
 
+private final class L10nBundleCache: @unchecked Sendable {
+    static let shared = L10nBundleCache()
+    private let lock = NSLock()
+    private var cache: [String: Bundle] = [:]
+
+    func bundle(for code: String) -> Bundle {
+        lock.lock()
+        if let existing = cache[code] {
+            lock.unlock()
+            return existing
+        }
+        lock.unlock()
+
+        let resolved: Bundle
+        if let path = Bundle.main.path(forResource: code, ofType: "lproj"),
+           let localized = Bundle(path: path) {
+            resolved = localized
+        } else if code != "en",
+                  let fallbackPath = Bundle.main.path(forResource: "en", ofType: "lproj"),
+                  let fallback = Bundle(path: fallbackPath) {
+            resolved = fallback
+        } else {
+            resolved = Bundle.main
+        }
+
+        lock.lock()
+        cache[code] = resolved
+        lock.unlock()
+        return resolved
+    }
+}
+
 struct L10n: Sendable {
     let language: AppLanguage
 
@@ -74,16 +129,7 @@ struct L10n: Sendable {
     }
 
     private var bundle: Bundle {
-        let code = language.resolvedCode
-        if let path = Bundle.main.path(forResource: code, ofType: "lproj"),
-           let localized = Bundle(path: path) {
-            return localized
-        }
-        if let fallbackPath = Bundle.main.path(forResource: "en", ofType: "lproj"),
-           let fallback = Bundle(path: fallbackPath) {
-            return fallback
-        }
-        return Bundle.main
+        L10nBundleCache.shared.bundle(for: language.resolvedCode)
     }
 
     func t(_ key: String) -> String {
@@ -92,12 +138,8 @@ struct L10n: Sendable {
             return val
         }
         // Graceful fallback to English bundle before falling back to key
-        if let enPath = Bundle.main.path(forResource: "en", ofType: "lproj"),
-           let enBundle = Bundle(path: enPath) {
-            let enVal = enBundle.localizedString(forKey: key, value: key, table: nil)
-            return enVal
-        }
-        return key
+        let enBundle = L10nBundleCache.shared.bundle(for: "en")
+        return enBundle.localizedString(forKey: key, value: key, table: nil)
     }
 
     func t(_ key: String, _ args: CVarArg...) -> String {

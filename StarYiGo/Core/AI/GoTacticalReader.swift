@@ -37,6 +37,7 @@ enum GoTacticalReader {
         let attacker = defender.opposite
 
         var steps: [BoardPoint] = []
+        var nodesRemaining = 256
         let escaped = searchDefenderEscape(
             state: state,
             targetIdx: idx,
@@ -44,6 +45,7 @@ enum GoTacticalReader {
             attacker: attacker,
             depth: 0,
             maxDepth: maxDepth,
+            nodesRemaining: &nodesRemaining,
             outSteps: &steps
         )
         return escaped ? .escaped(steps: steps) : .captured(steps: steps)
@@ -89,9 +91,11 @@ enum GoTacticalReader {
         attacker: StoneColor,
         depth: Int,
         maxDepth: Int,
+        nodesRemaining: inout Int,
         outSteps: inout [BoardPoint]
     ) -> Bool {
-        guard depth < maxDepth else { return true }
+        guard depth < maxDepth, nodesRemaining > 0 else { return true }
+        nodesRemaining -= 1
         guard let group = state.groupAndLiberties(at: targetIdx) else { return false }
         if group.liberties.count >= 3 { return true }
         if group.liberties.count == 0 { return false }
@@ -106,7 +110,7 @@ enum GoTacticalReader {
                         let capPt = state.point(for: capLib)
                         if case .success(let out) = state.applying(action: .place(capPt), color: defender) {
                             let newLibs = out.nextState.groupAndLiberties(at: targetIdx)?.liberties.count ?? 0
-                            if newLibs >= 2 {
+                            if newLibs >= 3 {
                                 outSteps.append(capPt)
                                 return true
                             }
@@ -172,6 +176,7 @@ enum GoTacticalReader {
                 attacker: attacker,
                 depth: depth + 2,
                 maxDepth: maxDepth,
+                nodesRemaining: &nodesRemaining,
                 outSteps: &branchSteps
             )
             if !defEscapes {

@@ -8,6 +8,7 @@ import SwiftUI
 
 struct GameArchiveView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
 
     @State private var selectedHall: AcademyHall = .masterpieces
     @State private var selectedLevel: AcademyLevel = .all
@@ -24,7 +25,7 @@ struct GameArchiveView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.recordDesk
 
             VStack(spacing: 14) {
                 // Top Bar: Back + Academy Crest + Star Coins
@@ -51,7 +52,7 @@ struct GameArchiveView: View {
                     HStack(spacing: 5) {
                         StarCoinBadgeView(size: 17)
                         Text("\(appState.profile.starCoins)")
-                            .font(.system(size: 14.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 14.5, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                     }
                     .padding(.horizontal, 14)
@@ -92,7 +93,7 @@ struct GameArchiveView: View {
 
                         if filteredEntries.isEmpty {
                             VStack(spacing: 12) {
-                                Text("✨").font(.system(size: 46))
+                                Text("✨").font(AppFont.rounded(size: 46, weight: .regular))
                                 Text(l10n.localized(
                                     zh: "该棋力分级下暂无展品，切换「全部」浏览本馆全部名篇！",
                                     en: "No entries in this rank band — tap 'All' to browse this entire hall!",
@@ -100,7 +101,7 @@ struct GameArchiveView: View {
                                     ko: "이 기력대에는 아직 항목이 없어요. '전체'를 눌러 둘러보세요!",
                                     zhHant: "該棋力分級下暫無展品，切換「全部」瀏覽本館全部名篇！"
                                 ))
-                                .font(.system(size: 14.5, weight: .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 14.5, weight: .bold))
                                 .foregroundColor(AppTheme.inkSecondary)
                                 .multilineTextAlignment(.center)
 
@@ -110,7 +111,7 @@ struct GameArchiveView: View {
                                     }
                                 } label: {
                                     Text(l10n.localized(zh: "查看本馆全部", en: "Show All", ja: "すべて見る", ko: "전체 보기", zhHant: "查看本館全部"))
-                                        .font(.system(size: 14, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 14, weight: .black))
                                         .foregroundColor(.white)
                                         .padding(.horizontal, 20)
                                         .padding(.vertical, 10)
@@ -152,9 +153,9 @@ struct GameArchiveView: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: hall.symbolName)
-                    .font(.system(size: 13.5, weight: .black))
-                Text("\(hall.title(l10n)) \(done)/\(total)")
                     .font(.system(size: 13.5, weight: .black, design: .rounded))
+                Text("\(hall.title(l10n)) \(done)/\(total)")
+                    .font(AppFont.rounded(size: 13.5, weight: .black))
             }
             .foregroundColor(active ? .white : AppTheme.inkPrimary)
             .padding(.horizontal, 16)
@@ -180,7 +181,7 @@ struct GameArchiveView: View {
             SoundAndHapticsManager.shared.playUITap()
         } label: {
             Text(level.title(l10n))
-                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .black))
                 .foregroundColor(active ? .white : AppTheme.inkSecondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
@@ -197,17 +198,17 @@ struct GameArchiveView: View {
         let accent = Color(hex: hall.accentHex)
         return HStack(spacing: 12) {
             Image(systemName: hall.symbolName)
-                .font(.system(size: 18, weight: .black))
+                .font(.system(size: 18, weight: .black, design: .rounded))
                 .foregroundColor(.white)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(accent))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(hall.title(l10n))
-                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 17, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                 Text(hall.subtitle(l10n))
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineLimit(2)
             }
@@ -235,7 +236,7 @@ struct GameArchiveView: View {
                 // Row 1: Uniform-height tag bar (26pt fixed)
                 HStack(spacing: 6) {
                     Text("\(entry.boardSize)×\(entry.boardSize)")
-                        .font(.system(size: 11.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11.5, weight: .black))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -244,7 +245,7 @@ struct GameArchiveView: View {
                         .background(Capsule().fill(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)))
 
                     Text(entry.rankTag)
-                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .black))
                         .foregroundColor(accent)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -260,7 +261,7 @@ struct GameArchiveView: View {
                             ko: "전보 \(entry.moveCount)수",
                             zhHant: "全譜 \(entry.moveCount) 手"
                         ))
-                        .font(.system(size: 10.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 10.5, weight: .black))
                         .foregroundColor(AppTheme.mintBottom)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -274,9 +275,9 @@ struct GameArchiveView: View {
                     if isStudied {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 11.5, weight: .black))
+                                .font(.system(size: 11.5, weight: .black, design: .rounded))
                             Text(l10n.localized(zh: "已赏析 ★", en: "Studied ★", ja: "鑑賞済 ★", ko: "감상 ★", zhHant: "已賞析 ★"))
-                                .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 10.5, weight: .black))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
                         }
@@ -290,7 +291,7 @@ struct GameArchiveView: View {
 
                 // Row 2: Title (uniform 2-line space)
                 Text(entry.title(l10n))
-                    .font(.system(size: 17.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 17.5, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2, reservesSpace: true)
@@ -298,7 +299,7 @@ struct GameArchiveView: View {
 
                 // Row 3: Story Hook (uniform 3-line space)
                 Text(entry.hook(l10n))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.leading)
                     .lineSpacing(2.5)
@@ -309,7 +310,7 @@ struct GameArchiveView: View {
 
                 // Row 4: Era / Tag pinned cleanly at the exact same bottom baseline
                 Text(entry.eraOrTag(l10n))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -320,5 +321,19 @@ struct GameArchiveView: View {
         .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224)
         .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
         .accessibilityIdentifier("AcademyEntry_\(entry.id)")
+        .modifier(OptionalZoomSourceModifier(id: entry.recordId, namespace: zoomNamespace))
+    }
+}
+
+private struct OptionalZoomSourceModifier<ID: Hashable>: ViewModifier {
+    let id: ID
+    let namespace: Namespace.ID?
+
+    func body(content: Content) -> some View {
+        if let namespace {
+            content.matchedTransitionSource(id: id, in: namespace)
+        } else {
+            content
+        }
     }
 }

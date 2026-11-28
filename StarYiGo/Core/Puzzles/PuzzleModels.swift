@@ -162,13 +162,13 @@ struct SRSMistakeItem: Codable, Hashable, Identifiable, Sendable {
         SRSMistakeItem(puzzleId: puzzleId, nextReviewDate: now, intervalDays: 1, correctStreak: 0)
     }
 
-    /// Advances review schedule: 1 day -> 3 days -> 7 days -> returns nil when Mastered (3 consecutive passes)!
+    /// Advances review schedule: 1 day -> 3 days -> returns nil when Mastered (3 consecutive passes).
     func advancingOnCorrect(now: Date = Date()) -> SRSMistakeItem? {
         let nextStreak = correctStreak + 1
         if nextStreak >= 3 {
             return nil // Graduated from SRS mistake book!
         }
-        let nextDays = nextStreak == 1 ? 1 : (nextStreak == 2 ? 3 : 7)
+        let nextDays = nextStreak == 1 ? 1 : 3
         let nextDate = Calendar.current.date(byAdding: .day, value: nextDays, to: now) ?? now.addingTimeInterval(Double(nextDays) * 86400)
         return SRSMistakeItem(
             puzzleId: puzzleId,
@@ -201,10 +201,12 @@ struct GoPuzzle: Identifiable, Hashable, Codable, Sendable {
     func prompt(_ l10n: L10n, activeColor: StoneColor? = nil) -> String {
         let raw = l10n.bilingual(zh: promptZh, en: promptEn)
         guard let activeColor, activeColor != playerColor else { return raw }
-        // Adjust color wording cleanly when color-swapped!
+        // Bidirectional color wording swap for both Black-to-play and White-to-play puzzles.
         if l10n.language.isChinese {
             return raw
-                .replacingOccurrences(of: "黑先", with: "白先")
+                .replacingOccurrences(of: "黑先", with: "__TMP_B1__")
+                .replacingOccurrences(of: "白先", with: "黑先")
+                .replacingOccurrences(of: "__TMP_B1__", with: "白先")
                 .replacingOccurrences(of: "黑棋", with: "__TMP_B__")
                 .replacingOccurrences(of: "黑子", with: "__TMP_BS__")
                 .replacingOccurrences(of: "白棋", with: "黑棋")
@@ -213,10 +215,12 @@ struct GoPuzzle: Identifiable, Hashable, Codable, Sendable {
                 .replacingOccurrences(of: "__TMP_BS__", with: "白子")
         } else {
             return raw
-                .replacingOccurrences(of: "Black to play", with: "White to play")
                 .replacingOccurrences(of: "Black", with: "__TMP_B__")
+                .replacingOccurrences(of: "black", with: "__TMP_b__")
                 .replacingOccurrences(of: "White", with: "Black")
+                .replacingOccurrences(of: "white", with: "black")
                 .replacingOccurrences(of: "__TMP_B__", with: "White")
+                .replacingOccurrences(of: "__TMP_b__", with: "white")
         }
     }
 

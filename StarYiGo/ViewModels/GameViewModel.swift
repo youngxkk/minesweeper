@@ -5,7 +5,29 @@
 
 import Combine
 import Foundation
+import Observation
 import UIKit
+
+/// Isolated `@Observable` clock display state so 1 Hz timer ticks ONLY re-render
+/// tiny clock pills without invalidating the 2,000-line `GamePlayView` or `GoBoardView`.
+@MainActor
+@Observable
+final class GameClockDisplayState {
+    var clock: GoClock
+    var blackElapsedSeconds: Int = 0
+    var whiteElapsedSeconds: Int = 0
+
+    init(clock: GoClock) {
+        self.clock = clock
+    }
+
+    func formattedElapsedTime(for color: StoneColor) -> String {
+        let secs = color == .black ? blackElapsedSeconds : whiteElapsedSeconds
+        let m = secs / 60
+        let s = secs % 60
+        return String(format: "%02d:%02d", m, s)
+    }
+}
 
 enum CompanionMood: Equatable {
     case greeting
@@ -103,10 +125,22 @@ final class GameViewModel: ObservableObject {
     @Published var highlightedPocketPoints: Set<BoardPoint> = []
     @Published var activeCountingPocketLabel: String? = nil
 
-    // Go Clock & Byoyomi State + Per-Player Elapsed Time
-    @Published var clock: GoClock
-    @Published var blackElapsedSeconds: Int = 0
-    @Published var whiteElapsedSeconds: Int = 0
+    // Go Clock & Byoyomi State + Per-Player Elapsed Time (stored without @Published to avoid 1 Hz full-view invalidation;
+    // UI clock pills observe `clockDisplay` directly via Observation).
+    let clockDisplay: GameClockDisplayState
+    var clock: GoClock {
+        didSet { clockDisplay.clock = clock }
+    }
+    var blackElapsedSeconds: Int = 0 {
+        didSet { clockDisplay.blackElapsedSeconds = blackElapsedSeconds }
+    }
+    var whiteElapsedSeconds: Int = 0 {
+        didSet { clockDisplay.whiteElapsedSeconds = whiteElapsedSeconds }
+    }
+
+    /// Cached per-move board graph analysis so `GamePlayView` / `GoBoardView` don't repeat full-board BFS on every render.
+    private(set) var cachedAtariPoints: Set<BoardPoint> = []
+    private var hasFinalizedMatchOnce: Bool = false
 
     // Nintendo Companion Personality State
     @Published var companionMood: CompanionMood = .greeting
@@ -174,6 +208,7 @@ final class GameViewModel: ObservableObject {
     /// Tracks human-perspective lead after each ply for Time Hourglass turning-point analysis.
     private var humanLeadHistory: [Double] = [0]
     private(set) var aiTask: Task<Void, Never>?
+    private var hintTask: Task<Void, Never>?
     private var bannerDismissTask: Task<Void, Never>?
     private var pocketAnimTask: Task<Void, Never>?
     private var isSuspended = false
@@ -206,15 +241,30 @@ final class GameViewModel: ObservableObject {
         return false
     }
 
+    var isRegularAIMatch: Bool {
+        !isTwoPlayer && !isExamMatch && bossIslandId == nil && tacticalScenario == nil
+    }
+
+    var hasHumanMoved: Bool {
+        if let humanColor {
+            return moves.contains { $0.color == humanColor }
+        }
+        return !moves.isEmpty
+    }
+
+    /// Whether the top-bar "Resume Last Match" button may be offered for this match.
+    /// Hidden once the player has started playing in the current match.
+    var canOfferResumePausedAIMatch: Bool {
+        isRegularAIMatch && !isGameOver && !hasHumanMoved
+    }
+
     var shouldConfirmBeforeLeaving: Bool {
         !isTwoPlayer && !isGameOver && !moves.isEmpty
     }
 
     func makePausedAIMatchSnapshot() -> PausedAIMatchSnapshot? {
         guard case .vsAI(let difficulty, let playerColor) = mode,
-              !isExamMatch,
-              bossIslandId == nil,
-              tacticalScenario == nil,
+              isRegularAIMatch,
               !isGameOver,
               !moves.isEmpty else {
             return nil
@@ -276,16 +326,21 @@ final class GameViewModel: ObservableObject {
         return l10n.t("companion.\(companionEvent.rawValue)")
     }
 
+    private var cachedMoveNumberLookup: [BoardPoint: Int] = [:]
+
     var moveNumberLookup: [BoardPoint: Int] {
+        cachedMoveNumberLookup
+    }
+
+    private func rebuildMoveNumberLookup() {
         var map: [BoardPoint: Int] = [:]
+        map.reserveCapacity(moves.count)
         for move in moves {
-            if case .place(let pt) = move.action {
-                if boardState.stone(at: pt) != nil {
-                    map[pt] = move.moveNumber
-                }
+            if case .place(let pt) = move.action, boardState.stone(at: pt) != nil {
+                map[pt] = move.moveNumber
             }
         }
-        return map
+        cachedMoveNumberLookup = map
     }
 
     init(
@@ -302,7 +357,8 @@ final class GameViewModel: ObservableObject {
         campaignNodeId: String? = nil,
         aiEngine: GoAIEngine = CoreMLGoAIEngine.shared,
         appState: AppState? = nil,
-        simulateHumanThinkingPacing: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        simulateHumanThinkingPacing: Bool = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+        deferInitialStart: Bool = false
     ) {
         self.boardSize = boardSize
         self.mode = mode
@@ -310,7 +366,9 @@ final class GameViewModel: ObservableObject {
         self.scoringRule = scoringRule
         self.timeControl = timeControl
         self.coachingStyle = coachingStyle
-        self.clock = GoClock(timeControl: timeControl)
+        let initialClock = GoClock(timeControl: timeControl)
+        self.clock = initialClock
+        self.clockDisplay = GameClockDisplayState(clock: initialClock)
         self.handicap = handicap
         self.bossIslandId = bossIslandId
         self.examTier = examTier
@@ -324,16 +382,19 @@ final class GameViewModel: ObservableObject {
         if let scenario = tacticalScenario {
             initial = scenario.makeInitialState()
         } else {
-            let komi = handicap > 0 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
+            let komi = handicap >= 2 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
             initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
         }
         self.boardState = initial
+        self.cachedAtariPoints = initial.atariPoints()
         self.stateHistory = [initial]
         self.humanLeadHistory = [0]
         self.lastTurnStartTime = Date()
 
-        startClockIfNeeded()
-        triggerAIIfNeeded()
+        if !deferInitialStart {
+            startClockIfNeeded()
+            triggerAIIfNeeded()
+        }
     }
 
     convenience init(
@@ -356,7 +417,8 @@ final class GameViewModel: ObservableObject {
             campaignNodeId: nil,
             aiEngine: aiEngine,
             appState: appState,
-            simulateHumanThinkingPacing: simulateHumanThinkingPacing
+            simulateHumanThinkingPacing: simulateHumanThinkingPacing,
+            deferInitialStart: true
         )
         restore(from: snapshot)
     }
@@ -367,7 +429,7 @@ final class GameViewModel: ObservableObject {
         pendingPoint = nil
         suggestions = []
 
-        let komi = snapshot.handicap > 0 ? 0.5 : snapshot.scoringRule.defaultKomi(for: snapshot.boardSize)
+        let komi = snapshot.handicap >= 2 ? 0.5 : snapshot.scoringRule.defaultKomi(for: snapshot.boardSize)
         var state = GoBoardState(size: snapshot.boardSize.rawValue, komi: komi, handicap: snapshot.handicap)
         var history: [GoBoardState] = [state]
         var replayedMoves: [GoMove] = []
@@ -385,15 +447,15 @@ final class GameViewModel: ObservableObject {
                         capturedPoints: outcome.capturedPoints
                     )
                 )
-                let est = GoScoring.estimateTerritory(state: state)
-                let lead = (snapshot.playerColor == .black) ? est.blackLead : -est.blackLead
-                leads.append(lead)
+                leads.append(0)
             }
         }
 
         boardState = state
+        cachedAtariPoints = state.atariPoints()
         stateHistory = history
         moves = replayedMoves
+        rebuildMoveNumberLookup()
         humanLeadHistory = leads
         clock = snapshot.clock
         blackElapsedSeconds = snapshot.blackElapsedSeconds
@@ -414,6 +476,7 @@ final class GameViewModel: ObservableObject {
 
     deinit {
         aiTask?.cancel()
+        hintTask?.cancel()
         bannerDismissTask?.cancel()
         pocketAnimTask?.cancel()
         clockTimer?.invalidate()
@@ -430,11 +493,13 @@ final class GameViewModel: ObservableObject {
         clockTimer?.invalidate()
         clockTimer = nil
         guard !isSuspended, !isGameOver else { return }
-        clockTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.tickClock()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        clockTimer = timer
     }
 
     func setSuspended(_ suspended: Bool) {
@@ -444,6 +509,9 @@ final class GameViewModel: ObservableObject {
             clockTimer?.invalidate()
             clockTimer = nil
             aiTask?.cancel()
+            hintTask?.cancel()
+            hintTask = nil
+            isComputingHint = false
             isAIThinking = false
         } else if !isGameOver {
             startClockIfNeeded()
@@ -590,6 +658,7 @@ final class GameViewModel: ObservableObject {
         }
 
         refreshTerritoryIfVisible()
+        lastTurnStartTime = Date()
         triggerAIIfNeeded()
     }
 
@@ -618,27 +687,63 @@ final class GameViewModel: ObservableObject {
         territoryEstimate = nil
 
         stateHistory = Array(stateHistory.prefix(targetStateIndex + 1))
+        hintTask?.cancel()
+        hintTask = nil
+        isComputingHint = false
         moves = Array(moves.prefix(targetStateIndex))
+        rebuildMoveNumberLookup()
         humanLeadHistory = Array(humanLeadHistory.prefix(targetStateIndex + 1))
         boardState = stateHistory.last ?? GoBoardState(size: boardSize.rawValue, handicap: handicap)
+        cachedAtariPoints = boardState.atariPoints()
+
+        // If rewinding from a flagged timeout, grant safe grace time so the player can actually continue
+        if clock.isActive {
+            if clock.black.isFlagged {
+                clock.black.mainSecondsRemaining = max(clock.black.mainSecondsRemaining, 60)
+                if clock.black.periodDuration > 0 {
+                    clock.black.byoyomiPeriodsRemaining = max(clock.black.byoyomiPeriodsRemaining, 1)
+                    clock.black.byoyomiSecondsRemaining = clock.black.periodDuration
+                }
+            }
+            if clock.white.isFlagged {
+                clock.white.mainSecondsRemaining = max(clock.white.mainSecondsRemaining, 60)
+                if clock.white.periodDuration > 0 {
+                    clock.white.byoyomiPeriodsRemaining = max(clock.white.byoyomiPeriodsRemaining, 1)
+                    clock.white.byoyomiSecondsRemaining = clock.white.periodDuration
+                }
+            }
+        }
+        lastTurnStartTime = Date()
 
         companionMood = .cheering
         companionEvent = .greet
         SoundAndHapticsManager.shared.playHourglassRewind()
         SoundAndHapticsManager.shared.playVoice(.rewind, delay: 0.12)
 
+        startClockIfNeeded()
         triggerAIIfNeeded()
     }
 
     func requestHint() {
         guard isHumansTurn, !isAIThinking, !isComputingHint, !isGameOver else { return }
+        hintTask?.cancel()
         isComputingHint = true
         suggestions = []
         let snapshot = boardState
         let color = boardState.currentTurn
+        let expectedHash = snapshot.boardHash
+        let expectedMoveCount = snapshot.moveCount
 
-        Task {
-            let results = await aiEngine.suggestMoves(for: snapshot, color: color, count: 2)
+        hintTask = Task { [weak self] in
+            guard let self else { return }
+            let results = await self.aiEngine.suggestMoves(for: snapshot, color: color, count: 2)
+            guard !Task.isCancelled,
+                  self.boardState.boardHash == expectedHash,
+                  self.boardState.moveCount == expectedMoveCount,
+                  !self.isGameOver else {
+                self.isComputingHint = false
+                return
+            }
             self.isComputingHint = false
             self.suggestions = results
             if results.isEmpty, let l10n = self.appState?.l10n {
@@ -866,7 +971,11 @@ final class GameViewModel: ObservableObject {
         territoryEstimate = nil
         lastCapturedPoints = []
         illegalFlashPoint = nil
+        hintTask?.cancel()
+        hintTask = nil
+        isComputingHint = false
         moves = []
+        cachedMoveNumberLookup = [:]
         companionMood = .greeting
         companionEvent = .greet
 
@@ -874,10 +983,12 @@ final class GameViewModel: ObservableObject {
         if let scenario = tacticalScenario {
             initial = scenario.makeInitialState()
         } else {
-            let komi = handicap > 0 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
+            let komi = handicap >= 2 ? 0.5 : scoringRule.defaultKomi(for: boardSize)
             initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
         }
         boardState = initial
+        cachedAtariPoints = initial.atariPoints()
+        hasFinalizedMatchOnce = false
         stateHistory = [initial]
         humanLeadHistory = [0]
         clock = GoClock(timeControl: timeControl)
@@ -904,6 +1015,9 @@ final class GameViewModel: ObservableObject {
                 SoundAndHapticsManager.shared.playWrong()
             }
         case .success(let outcome):
+            if isRegularAIMatch && appState?.pausedAIMatch != nil {
+                appState?.clearPausedAIMatch()
+            }
             lastHumanThinkDuration = max(0, Date().timeIntervalSince(lastTurnStartTime))
             applySuccessfulOutcome(outcome, action: action, color: color)
             if !isGameOver {
@@ -985,6 +1099,14 @@ final class GameViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64((targetDuration - elapsed) * 1_000_000_000))
             }
             guard !Task.isCancelled, let self else { return }
+            guard !self.isSuspended,
+                  !self.isGameOver,
+                  !self.isMarkingDeadStones,
+                  self.boardState.boardHash == snapshot.boardHash,
+                  self.boardState.moveCount == snapshot.moveCount else {
+                self.isAIThinking = false
+                return
+            }
             self.isAIThinking = false
 
             let recentMaxCaptureAgainstAI = self.moves
@@ -1030,6 +1152,9 @@ final class GameViewModel: ObservableObject {
     }
 
     private func applySuccessfulOutcome(_ outcome: MoveOutcome, action: MoveAction, color: StoneColor) {
+        hintTask?.cancel()
+        hintTask = nil
+        isComputingHint = false
         suggestions = []
         clock.completeMove(for: color)
         lastTurnStartTime = Date()
@@ -1043,15 +1168,22 @@ final class GameViewModel: ObservableObject {
             capturedPoints: outcome.capturedPoints
         )
         moves.append(move)
+        if case .place(let pt) = action {
+            cachedMoveNumberLookup[pt] = move.moveNumber
+            for cap in outcome.capturedPoints {
+                cachedMoveNumberLookup.removeValue(forKey: cap)
+            }
+        }
 
         let est = GoScoring.estimateTerritory(state: outcome.nextState)
         let perspective = humanColor ?? .black
         let lead = (perspective == .black) ? est.blackLead : -est.blackLead
         humanLeadHistory.append(lead)
 
-        updateCompanionReaction(move: move, outcome: outcome)
-
         let nextAtariPoints = outcome.nextState.atariPoints()
+        cachedAtariPoints = nextAtariPoints
+        updateCompanionReaction(move: move, outcome: outcome, nextAtariPoints: nextAtariPoints)
+
         let hasTension = (outcome.nextState.koIndex != nil) || !nextAtariPoints.isEmpty
         SoundAndHapticsManager.shared.setMatchTension(hasTension)
 
@@ -1224,7 +1356,7 @@ final class GameViewModel: ObservableObject {
         }
     }
 
-    private func updateCompanionReaction(move: GoMove, outcome: MoveOutcome) {
+    private func updateCompanionReaction(move: GoMove, outcome: MoveOutcome, nextAtariPoints: Set<BoardPoint>) {
         guard let humanColor else { return }
         let isHumanMove = (move.color == humanColor)
 
@@ -1250,8 +1382,7 @@ final class GameViewModel: ObservableObject {
                 companionMood = .playful
                 companionEvent = .aiCaptured
             } else {
-                let atari = outcome.nextState.atariPoints()
-                let humanInAtari = atari.contains { outcome.nextState.stone(at: $0) == humanColor }
+                let humanInAtari = nextAtariPoints.contains { outcome.nextState.stone(at: $0) == humanColor }
                 if humanInAtari {
                     companionMood = .playful
                     companionEvent = .playerAtari
@@ -1436,10 +1567,17 @@ final class GameViewModel: ObservableObject {
 
     private func popOnePly() {
         guard stateHistory.count > 1, !moves.isEmpty else { return }
+        hintTask?.cancel()
+        hintTask = nil
+        isComputingHint = false
         stateHistory.removeLast()
         moves.removeLast()
         if humanLeadHistory.count > 1 { humanLeadHistory.removeLast() }
-        boardState = stateHistory.last!
+        if let previous = stateHistory.last {
+            boardState = previous
+            cachedAtariPoints = previous.atariPoints()
+        }
+        rebuildMoveNumberLookup()
     }
 
     private func refreshTerritoryIfVisible() {
@@ -1449,6 +1587,13 @@ final class GameViewModel: ObservableObject {
     }
 
     private func finishGame(with result: GameResult) {
+        clockTimer?.invalidate()
+        clockTimer = nil
+        aiTask?.cancel()
+        hintTask?.cancel()
+        hintTask = nil
+        isAIThinking = false
+        isComputingHint = false
         gameResult = result
         computeTimeHourglassMoments()
 
@@ -1519,18 +1664,22 @@ final class GameViewModel: ObservableObject {
             sgf: sgf
         )
         savedRecordId = record.id
-        if let examTier {
-            appState.recordExamMatchResult(tier: examTier, didWin: didHumanWin)
+        let isFirstFinalization = !hasFinalizedMatchOnce
+        hasFinalizedMatchOnce = true
+        if isFirstFinalization {
+            if let examTier {
+                appState.recordExamMatchResult(tier: examTier, didWin: didHumanWin)
+            }
+            if let nodeId = campaignNodeId, didHumanWin {
+                appState.recordCampaignNodeCleared(nodeId: nodeId, stars: 3, masteryTier: .normal)
+            }
+            appState.saveCompletedGame(
+                record,
+                didHumanWin: didHumanWin,
+                capturesByHuman: humanCaps,
+                opponentDifficulty: examTier == nil ? aiDifficulty : nil,
+                bossIslandId: bossIslandId
+            )
         }
-        if let nodeId = campaignNodeId, didHumanWin {
-            appState.recordCampaignNodeCleared(nodeId: nodeId, stars: 3, masteryTier: .normal)
-        }
-        appState.saveCompletedGame(
-            record,
-            didHumanWin: didHumanWin,
-            capturesByHuman: humanCaps,
-            opponentDifficulty: examTier == nil ? aiDifficulty : nil,
-            bossIslandId: bossIslandId
-        )
     }
 }

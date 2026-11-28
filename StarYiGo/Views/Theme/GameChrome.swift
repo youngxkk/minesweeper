@@ -136,72 +136,8 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
             .frame(minHeight: minimumHeight)
             .offset(y: travel)
             .background(
-                GeometryReader { geo in
-                    let r = min(cornerRadius, geo.size.height / 2)
-                    let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
-
-                    ZStack {
-                        // Grounded soft contact shadow tucked naturally beneath the rim
-                        shape
-                            .fill(palette.rim)
-                            .padding(.horizontal, 2)
-                            .shadow(
-                                color: palette.glow.opacity(pressed ? 0.08 : 0.18),
-                                radius: pressed ? 1.5 : 4,
-                                y: pressed ? 0.5 : 2.5
-                            )
-                            .offset(y: rimHeight)
-
-                        shape
-                            .fill(palette.rim)
-                            .offset(y: rimHeight)
-
-                        ZStack {
-                            shape
-                                .fill(
-                                    LinearGradient(
-                                        colors: [palette.top, palette.bottom],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-
-                            if showStripeSheen {
-                                DiagonalGlossStripes()
-                                    .fill(Color.white.opacity(0.065))
-                                    .clipShape(shape)
-                            }
-
-                            shape
-                                .fill(
-                                    LinearGradient(
-                                        stops: [
-                                            .init(color: .white.opacity(pressed ? 0.11 : 0.26), location: 0),
-                                            .init(color: .white.opacity(pressed ? 0.03 : 0.06), location: 0.26),
-                                            .init(color: .clear, location: 0.52)
-                                        ],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-
-                            shape
-                                .fill(Color.black.opacity(pressed ? 0.045 : 0))
-
-                            shape
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [.white.opacity(pressed ? 0.65 : 0.82), palette.rim.opacity(0.65)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    ),
-                                    lineWidth: whiteBorderWidth * 0.55
-                                )
-                        }
-                        .offset(y: travel)
-                    }
-                }
-                .allowsHitTesting(false)
+                glossyBodyBackground(pressed: pressed, travel: travel)
+                    .allowsHitTesting(false)
             )
             .scaleEffect(x: scaleX, y: scaleY)
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -215,6 +151,71 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                 }
             }
             .padding(.bottom, rimHeight)
+    }
+
+    @ViewBuilder
+    private func glossyBodyBackground(pressed: Bool, travel: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        ZStack {
+            // Grounded soft contact shadow tucked naturally beneath the rim
+            shape
+                .fill(palette.rim)
+                .padding(.horizontal, 2)
+                .shadow(
+                    color: palette.glow.opacity(pressed ? 0.08 : 0.18),
+                    radius: pressed ? 1.5 : 4,
+                    y: pressed ? 0.5 : 2.5
+                )
+                .offset(y: rimHeight)
+
+            shape
+                .fill(palette.rim)
+                .offset(y: rimHeight)
+
+            ZStack {
+                shape
+                    .fill(
+                        LinearGradient(
+                            colors: [palette.top, palette.bottom],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                if showStripeSheen {
+                    DiagonalGlossStripes()
+                        .fill(Color.white.opacity(0.065))
+                        .clipShape(shape)
+                }
+
+                shape
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(pressed ? 0.11 : 0.26), location: 0),
+                                .init(color: .white.opacity(pressed ? 0.03 : 0.06), location: 0.26),
+                                .init(color: .clear, location: 0.52)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                shape
+                    .fill(Color.black.opacity(pressed ? 0.045 : 0))
+
+                shape
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.white.opacity(pressed ? 0.65 : 0.82), palette.rim.opacity(0.65)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: whiteBorderWidth * 0.55
+                    )
+            }
+            .offset(y: travel)
+        }
     }
 }
 
@@ -262,7 +263,7 @@ struct GameBevelButtonStyle: ButtonStyle {
     }
 }
 
-/// Glossy sky-blue pill Back Button used consistently across all screens.
+/// Glossy light snow-white pill Back Button used consistently across all screens.
 struct GameBackButton: View {
     let title: String
     let action: () -> Void
@@ -271,18 +272,17 @@ struct GameBackButton: View {
         Button(action: action) {
             HStack(spacing: 7) {
                 Image(systemName: "arrow.uturn.backward")
-                    .font(.system(size: 14.5, weight: .black))
+                    .font(.system(size: 14.5, weight: .black, design: .rounded))
                 Text(title)
-                    .font(.system(size: 15.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 15.5, weight: .heavy))
             }
-            .foregroundColor(.white)
-            .shadow(color: AppTheme.skyRim.opacity(0.45), radius: 1, y: 1.5)
+            .foregroundColor(AppTheme.inkPrimary)
             .padding(.horizontal, 19)
             .padding(.vertical, 10.5)
         }
         .buttonStyle(
             GlossyCapsuleButtonStyle(
-                palette: .sky,
+                palette: .snow,
                 cornerRadius: 999,
                 rimHeight: 5,
                 whiteBorderWidth: 3
@@ -305,7 +305,7 @@ struct GameCircleButton: View {
         let diameter = max(size, minimumHeight)
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: max(size * 0.42, diameter * 0.38), weight: .heavy))
+                .font(.system(size: max(size * 0.42, diameter * 0.38), weight: .heavy, design: .rounded))
                 .foregroundColor(tint)
                 .frame(width: diameter, height: diameter)
         }
@@ -331,26 +331,26 @@ struct GameTitleCrest: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "star.fill")
-                .font(.system(size: 14, weight: .black))
+                .font(.system(size: 14, weight: .black, design: .rounded))
                 .foregroundStyle(
                     LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom)
                 )
 
             VStack(spacing: 1) {
                 Text(title)
-                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 17, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(1)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .bold))
                         .foregroundColor(AppTheme.skyBottom)
                         .lineLimit(1)
                 }
             }
 
             Image(systemName: "star.fill")
-                .font(.system(size: 14, weight: .black))
+                .font(.system(size: 14, weight: .black, design: .rounded))
                 .foregroundStyle(
                     LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom)
                 )
@@ -418,7 +418,7 @@ struct WoodenGoBowlView: View {
 
             if count > 0 {
                 Text("\(count)")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 11, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -671,7 +671,9 @@ struct CharacterAvatarView: View {
 
 /// Joyful 60fps Nintendo Confetti Celebration Burst for puzzle solves, match wins, and Boss victories!
 struct ConfettiBurstView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var startDate = Date()
+    @State private var isFinished = false
 
     private struct Piece {
         let angle: Double
@@ -701,33 +703,48 @@ struct ConfettiBurstView: View {
     }()
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-            let elapsed = timeline.date.timeIntervalSince(startDate)
-            if elapsed < 2.4 {
-                Canvas { context, size in
-                    let origin = CGPoint(x: size.width * 0.5, y: size.height * 0.48)
-                    let gravity = 360.0
-                    let fade = max(0, min(1, 1.0 - max(0, elapsed - 1.5) / 0.9))
+        Group {
+            if !reduceMotion && !isFinished {
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: isFinished)) { timeline in
+                    let elapsed = timeline.date.timeIntervalSince(startDate)
+                    if elapsed < 2.4 {
+                        Canvas { context, size in
+                            let origin = CGPoint(x: size.width * 0.5, y: size.height * 0.48)
+                            let gravity = 360.0
+                            let fade = max(0, min(1, 1.0 - max(0, elapsed - 1.5) / 0.9))
 
-                    for p in pieces {
-                        let x = origin.x + CGFloat(cos(p.angle) * p.speed * elapsed + sin(elapsed * 3.0) * p.drift)
-                        let y = origin.y + CGFloat(sin(p.angle) * p.speed * elapsed + 0.5 * gravity * elapsed * elapsed)
-                        let rect = CGRect(x: -p.size / 2, y: -p.size * 0.35, width: p.size, height: p.size * 0.7)
+                            for p in pieces {
+                                let x = origin.x + CGFloat(cos(p.angle) * p.speed * elapsed + sin(elapsed * 3.0) * p.drift)
+                                let y = origin.y + CGFloat(sin(p.angle) * p.speed * elapsed + 0.5 * gravity * elapsed * elapsed)
+                                let rect = CGRect(x: -p.size / 2, y: -p.size * 0.35, width: p.size, height: p.size * 0.7)
 
-                        context.drawLayer { layerCtx in
-                            layerCtx.translateBy(x: x, y: y)
-                            layerCtx.rotate(by: .radians(elapsed * p.spinSpeed))
-                            layerCtx.fill(
-                                Path(roundedRect: rect, cornerRadius: 2),
-                                with: .color(p.color.opacity(fade))
-                            )
+                                context.drawLayer { layerCtx in
+                                    layerCtx.translateBy(x: x, y: y)
+                                    layerCtx.rotate(by: .radians(elapsed * p.spinSpeed))
+                                    layerCtx.fill(
+                                        Path(roundedRect: rect, cornerRadius: 2),
+                                        with: .color(p.color.opacity(fade))
+                                    )
+                                }
+                            }
                         }
+                        .allowsHitTesting(false)
                     }
                 }
-                .allowsHitTesting(false)
             }
         }
-        .onAppear { startDate = Date() }
+        .task {
+            startDate = Date()
+            isFinished = false
+            guard !reduceMotion else {
+                isFinished = true
+                return
+            }
+            try? await Task.sleep(nanoseconds: 2_450_000_000)
+            if !Task.isCancelled {
+                isFinished = true
+            }
+        }
     }
 }
 
@@ -742,7 +759,7 @@ struct GoTermQuickCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: entry.symbolName)
-                    .font(.system(size: 20, weight: .black))
+                    .font(.system(size: 20, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
                     .background(
@@ -753,10 +770,10 @@ struct GoTermQuickCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.term(l10n))
-                        .font(.system(size: 20, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 20, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text("\(l10n.t(entry.tier.titleKey)) · \(entry.rankTag)")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.skyBottom)
                 }
 
@@ -768,21 +785,21 @@ struct GoTermQuickCard: View {
             }
 
             Text(entry.metaphor(l10n))
-                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 15, weight: .heavy))
                 .foregroundColor(AppTheme.sunBottom)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AppTheme.softGoldBg))
 
             Text(entry.explanation(l10n))
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(AppFont.rounded(size: 14, weight: .semibold))
                 .foregroundColor(AppTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             if let onOpenCodex {
                 Button(action: onOpenCodex) {
                     Label(l10n.t("codex.openFull"), systemImage: "book.closed.fill")
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -797,7 +814,7 @@ struct GoTermQuickCard: View {
                         ko: "알겠어요",
                         zhHant: "知道了"
                     ))
-                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
@@ -893,19 +910,19 @@ struct GameDialogModifier: ViewModifier {
                             .shadow(color: accentPalette.glow.opacity(0.35), radius: 10, y: 4)
 
                         Image(systemName: icon)
-                            .font(.system(size: 28, weight: .black))
+                            .font(.system(size: 28, weight: .black, design: .rounded))
                             .foregroundColor(.white)
                             .shadow(color: accentPalette.rim.opacity(0.5), radius: 2, y: 1.5)
                     }
 
                     Text(title)
-                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 22, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(message)
-                        .font(.system(size: 15.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 15.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
@@ -923,7 +940,7 @@ struct GameDialogModifier: ViewModifier {
                                 item.action()
                             } label: {
                                 Text(item.title)
-                                    .font(.system(size: 16, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 16, weight: .black))
                                     .foregroundColor(item.isLightFace ? AppTheme.inkPrimary : .white)
                                     .shadow(
                                         color: item.isLightFace ? .clear : item.palette.rim.opacity(0.5),
@@ -970,6 +987,7 @@ struct GameDialogModifier: ViewModifier {
                 .padding(.horizontal, 24)
                 .transition(.scale(scale: 0.86).combined(with: .opacity))
                 .zIndex(901)
+                .accessibilityAddTraits(.isModal)
             }
         }
         .animation(.spring(response: 0.26, dampingFraction: 0.78), value: isPresented)

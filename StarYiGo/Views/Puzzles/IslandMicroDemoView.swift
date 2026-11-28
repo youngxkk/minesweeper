@@ -74,10 +74,10 @@ struct IslandMicroDemoSheet: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Text(spec.icon).font(.system(size: 28))
+                Text(spec.icon).font(AppFont.rounded(size: 28, weight: .regular))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(island.localizedName(l10n))
-                        .font(.system(size: 19, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 19, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text(l10n.localized(
                         zh: "3秒无字动画 · 看懂本岛核心招式",
@@ -86,7 +86,7 @@ struct IslandMicroDemoSheet: View {
                         ko: "3초 무음 시범 · 눈으로 바로 배우는 핵심 맥점",
                         zhHant: "3秒無字動畫 · 看懂本島核心招式"
                     ))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
                 }
                 Spacer()
@@ -126,7 +126,7 @@ struct IslandMicroDemoSheet: View {
                 dismiss()
             } label: {
                 Text(l10n.localized(zh: "看懂了，去闯关！", en: "Got it — Let's Play!", ja: "わかった！挑戦する", ko: "이해했어요! 도전하기", zhHant: "看懂了，去闖關！"))
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 16, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)

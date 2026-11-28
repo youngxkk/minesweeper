@@ -33,7 +33,9 @@ final class ZobristTable: @unchecked Sendable {
     @inline(__always)
     func hash(index: Int, color: StoneColor) -> UInt64 {
         let colorOffset = (color == .black) ? 0 : 1
-        return table[index * 2 + colorOffset]
+        let slot = index * 2 + colorOffset
+        guard slot >= 0 && slot < table.count else { return 0 }
+        return table[slot]
     }
 }
 
@@ -52,6 +54,8 @@ struct GoBoardState: Hashable, Sendable {
     var whiteCaptures: Int
     var koIndex: Int?
     var lastMove: MoveAction?
+    /// Most recent 5 moves (newest last) for neural-net history planes (t-1 .. t-5).
+    var recentMoves: [MoveAction] = []
     var moveCount: Int
     var consecutivePasses: Int
     var boardHash: UInt64
@@ -71,12 +75,13 @@ struct GoBoardState: Hashable, Sendable {
         self.whiteCaptures = 0
         self.koIndex = nil
         self.lastMove = nil
+        self.recentMoves = []
         self.moveCount = 0
         self.consecutivePasses = 0
         self.boardHash = 0
         self.handicap = max(0, handicap)
         let defaultKomi = BoardSize(rawValue: size)?.defaultKomi ?? 6.5
-        self.komi = komi ?? (self.handicap > 0 ? 0.5 : defaultKomi)
+        self.komi = komi ?? (self.handicap >= 2 ? 0.5 : defaultKomi)
         self.currentTurn = startingTurn ?? (self.handicap >= 2 ? .white : .black)
         self.positionHistory = []
 
@@ -282,14 +287,52 @@ struct GoBoardState: Hashable, Sendable {
         return minLibs >= 3
     }
 
-    /// Checks whether a small 4-point empty region forms a dead Square Four (方四, 2x2 block).
-    private func isSquareFour(_ regionIndices: [Int]) -> Bool {
-        guard regionIndices.count == 4 else { return false }
-        let rows = regionIndices.map { $0 / size }
-        let cols = regionIndices.map { $0 % size }
-        guard let minR = rows.min(), let maxR = rows.max(),
-              let minC = cols.min(), let maxC = cols.max() else { return false }
-        return (maxR - minR == 1) && (maxC - minC == 1)
+    /// Checks whether an enclosed single eye space of 4+ points is unconditionally alive
+    /// (excludes dead 1-vital-point shapes: Square Four, Pyramid Four, Bulky Five, Crossed Five, and Rabbity Six).
+    private func isUnconditionallyAliveSingleEye(_ regionIndices: [Int]) -> Bool {
+        let count = regionIndices.count
+        guard count >= 4 else { return false }
+        if count >= 7 { return true }
+
+        let regionSet = Set(regionIndices)
+        var maxDeg = 0
+        var deg3Count = 0
+        var has2x2 = false
+
+        for idx in regionIndices {
+            let r = idx / size
+            let c = idx % size
+            var deg = 0
+            for n in neighbors(of: idx) where regionSet.contains(n) {
+                deg += 1
+            }
+            if deg > maxDeg { maxDeg = deg }
+            if deg == 3 { deg3Count += 1 }
+            if !has2x2 && r + 1 < size && c + 1 < size {
+                if regionSet.contains(index(row: r, col: c + 1)) &&
+                   regionSet.contains(index(row: r + 1, col: c)) &&
+                   regionSet.contains(index(row: r + 1, col: c + 1)) {
+                    has2x2 = true
+                }
+            }
+        }
+
+        switch count {
+        case 4:
+            // Alive: Straight-4 / Bent-4 (no 2x2 Square-4, no degree-3 Pyramid-4)
+            return !has2x2 && maxDeg <= 2
+        case 5:
+            // Alive: excludes Bulky-5 (has 2x2) and Crossed-5 (maxDeg == 4)
+            return !has2x2 && maxDeg <= 3
+        case 6:
+            // Alive: excludes Rabbity-6 (has 2x2 with a single degree-3 vital point; 2x3 rectangle has 2 deg-3 points)
+            if has2x2 && deg3Count <= 1 {
+                return false
+            }
+            return true
+        default:
+            return true
+        }
     }
 
     /// Returns eye points and stone indices belonging to unconditionally alive groups:
@@ -359,8 +402,7 @@ struct GoBoardState: Hashable, Sendable {
             let group = groups[gIdx]
             let hasTwoDistinctEyes = regions.count >= 2
             let hasBigLivingEye = regions.contains { reg in
-                // Straight-4 / Bent-4 (non-Square-4) or 5+ enclosed space surrounded by one solid chain is alive
-                reg.count >= 4 && !isSquareFour(reg)
+                isUnconditionallyAliveSingleEye(reg)
             }
 
             if hasTwoDistinctEyes || hasBigLivingEye {
@@ -397,6 +439,7 @@ struct GoBoardState: Hashable, Sendable {
             next.currentTurn = mover.opposite
             next.koIndex = nil
             next.lastMove = .pass
+            next.appendRecentMove(.pass)
             next.moveCount += 1
             next.consecutivePasses += 1
             return .success(MoveOutcome(nextState: next, capturedPoints: []))
@@ -461,6 +504,7 @@ struct GoBoardState: Hashable, Sendable {
 
             next.currentTurn = opponent
             next.lastMove = .place(pt)
+            next.appendRecentMove(.place(pt))
             next.moveCount += 1
             next.consecutivePasses = 0
             next.positionHistory.insert(next.boardHash)
@@ -470,11 +514,79 @@ struct GoBoardState: Hashable, Sendable {
         }
     }
 
-    func isLegal(point pt: BoardPoint, for color: StoneColor? = nil) -> Bool {
-        if case .success = applying(action: .place(pt), color: color) {
-            return true
+    private mutating func appendRecentMove(_ action: MoveAction) {
+        recentMoves.append(action)
+        if recentMoves.count > 5 {
+            recentMoves.removeFirst(recentMoves.count - 5)
         }
-        return false
+    }
+
+    /// Fast, allocation-free legality check for the common non-capturing case;
+    /// falls back to full `applying` only when an adjacent opponent group is in atari.
+    func isLegal(point pt: BoardPoint, for color: StoneColor? = nil) -> Bool {
+        guard isValid(row: pt.row, col: pt.col) else { return false }
+        let idx = index(row: pt.row, col: pt.col)
+        guard grid[idx] == nil else { return false }
+        if let ko = koIndex, ko == idx { return false }
+
+        let mover = color ?? currentTurn
+        let opponent = mover.opposite
+        let adj = neighbors(of: idx)
+
+        var hasEmptyNeighbor = false
+        var hasSafeFriendlyNeighbor = false
+        var mightCaptureOpponent = false
+
+        for n in adj {
+            guard let stone = grid[n] else {
+                hasEmptyNeighbor = true
+                continue
+            }
+            if stone == opponent {
+                // If an adjacent opponent group has only 1 liberty (this point), placing captures it.
+                if groupHasExactlyOneLiberty(at: n, expectedLiberty: idx) {
+                    mightCaptureOpponent = true
+                    break
+                }
+            } else if !hasSafeFriendlyNeighbor {
+                if !groupHasExactlyOneLiberty(at: n, expectedLiberty: idx) {
+                    hasSafeFriendlyNeighbor = true
+                }
+            }
+        }
+
+        if mightCaptureOpponent {
+            if case .success = applying(action: .place(pt), color: mover) {
+                return true
+            }
+            return false
+        }
+
+        // Non-capturing move: must have an empty neighbor or join a friendly group with >= 2 liberties.
+        guard hasEmptyNeighbor || hasSafeFriendlyNeighbor else { return false }
+        let candidateHash = boardHash ^ ZobristTable.shared.hash(index: idx, color: mover)
+        return !positionHistory.contains(candidateHash)
+    }
+
+    /// Returns true if the chain containing `startIdx` has no liberty other than `expectedLiberty`.
+    private func groupHasExactlyOneLiberty(at startIdx: Int, expectedLiberty: Int) -> Bool {
+        guard let color = grid[startIdx] else { return false }
+        var visited = Set<Int>()
+        visited.insert(startIdx)
+        var stack: [Int] = [startIdx]
+
+        while let cur = stack.popLast() {
+            for n in neighbors(of: cur) {
+                if grid[n] == nil {
+                    if n != expectedLiberty {
+                        return false // Found a second liberty!
+                    }
+                } else if grid[n] == color && visited.insert(n).inserted {
+                    stack.append(n)
+                }
+            }
+        }
+        return true
     }
 
     func legalMovePoints(for color: StoneColor? = nil) -> [BoardPoint] {

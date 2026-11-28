@@ -10,6 +10,7 @@ struct StarYiGoApp: App {
     @StateObject private var appState: AppState
 
     init() {
+        AppFont.registerBundledFonts()
         #if DEBUG
         if let suite = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"],
            suite.hasPrefix("StarYiGoUITests."),
@@ -26,6 +27,18 @@ struct StarYiGoApp: App {
             RootNavigationView()
                 .environmentObject(appState)
                 .environment(\.locale, appState.settings.language.locale)
+                .font(AppFont.rounded(size: 16, weight: .semibold, languageCode: appState.settings.language.resolvedCode))
+                .preferredColorScheme(.light)
+        }
+    }
+}
+
+struct HomeLogoFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next.width > 0 && next.height > 0 {
+            value = next
         }
     }
 }
@@ -33,6 +46,10 @@ struct StarYiGoApp: App {
 struct RootNavigationView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var zoomTransitionNamespace
+
+    @State private var splashMorphToHome: Bool = false
 
     private var l10n: L10n { appState.l10n }
 
@@ -73,9 +90,11 @@ struct RootNavigationView: View {
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
-                        case .puzzleGauntlet(let nodeId, let masteryTier):
+                        case .puzzleGauntlet(let nodeId, let masteryTier, let sectionIndex):
                             if let node = StarYiCampaign.node(withId: nodeId),
-                               case .puzzleGauntlet(let ids, let forceExam) = node.kind {
+                               case .puzzleGauntlet(_, let forceExam) = node.kind {
+                                let resolvedSection = sectionIndex ?? StarYiCampaign.nextSectionIndex(for: node, progress: appState.puzzleProgress)
+                                let ids = node.puzzleIds(forSection: resolvedSection)
                                 let list = ids.compactMap { appState.findAnyPuzzle(withId: $0) }
                                 let effectiveTier: StageMasteryTier = forceExam ? max(masteryTier, .examCrown) : masteryTier
                                 PuzzleGauntletView(
@@ -84,7 +103,9 @@ struct RootNavigationView: View {
                                     puzzles: list.isEmpty ? [BuiltInPuzzleLibrary.allPuzzles[0]] : list,
                                     campaignNodeId: node.id,
                                     masteryTier: effectiveTier,
-                                    isGhostBuster: false
+                                    isGhostBuster: false,
+                                    sectionIndex: resolvedSection,
+                                    totalSections: node.sectionCount
                                 )
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
@@ -119,6 +140,7 @@ struct RootNavigationView: View {
                         case .reviewGame(let recordId):
                             if let record = appState.findGameRecord(id: recordId) {
                                 GameReviewView(record: record)
+                                    .navigationTransition(.zoom(sourceID: recordId, in: zoomTransitionNamespace))
                             } else {
                                 GameArchiveView()
                             }
@@ -152,17 +174,20 @@ struct RootNavigationView: View {
                             }
                         case .passport:
                             GoPassportView()
+                        case .savedGames:
+                            SavedGamesListView()
                         case .photoJudge:
                             PhotoBoardJudgeView()
                         }
                     }
             }
+            .environment(\.zoomTransitionNamespace, zoomTransitionNamespace)
 
             // Global Celebratory Go Codex Term Unlock Banner!
             if let unlocked = appState.newlyUnlockedCodexToast {
                 HStack(spacing: 12) {
                     Image(systemName: unlocked.symbolName)
-                        .font(.system(size: 20, weight: .black))
+                        .font(.system(size: 20, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
                         .background(
@@ -173,10 +198,10 @@ struct RootNavigationView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(l10n.t("codex.unlockToast.title"))
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(AppTheme.sunBottom)
                         Text("\(unlocked.term(l10n)) · +5 🪙")
-                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 15, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                     }
                 }
@@ -193,15 +218,78 @@ struct RootNavigationView: View {
                 .zIndex(100)
                 .allowsHitTesting(false)
             }
+
+            // Seamless Launch-to-Home transition: exact pixel match with LaunchScreen.storyboard
+            // (LaunchSkyBackdrop.jpg + centered universal 300x300 LaunchEmblem.png), then smoothly dissolves into Home.
+            if appState.isLaunchSplashActive {
+                GeometryReader { geo in
+                    ZStack {
+                        if let uiImg = UIImage(named: "LaunchSkyBackdrop.jpg") {
+                            Image(uiImage: uiImg)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                .opacity(splashMorphToHome ? 0 : 1)
+                        } else {
+                            Color("LaunchBackground")
+                                .opacity(splashMorphToHome ? 0 : 1)
+                        }
+
+                        if let emblemImg = UIImage(named: "LaunchEmblem.png") {
+                            Image(uiImage: emblemImg)
+                                .resizable()
+                                .interpolation(.high)
+                                .scaledToFit()
+                                .frame(width: 300, height: 300)
+                                .scaleEffect(splashMorphToHome && !reduceMotion ? 1.08 : 1.0)
+                                .opacity(splashMorphToHome ? 0 : 1)
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .ignoresSafeArea()
+                }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .zIndex(200)
+            }
+        }
+        .coordinateSpace(name: "RootLaunchSpace")
+        .task {
+            guard appState.isLaunchSplashActive else {
+                appState.isLaunchSplashRevealing = true
+                return
+            }
+            try? await Task.sleep(nanoseconds: 160_000_000)
+            guard !Task.isCancelled else { return }
+            appState.isLaunchSplashRevealing = true
+            if reduceMotion {
+                withAnimation(.easeOut(duration: 0.26)) {
+                    splashMorphToHome = true
+                }
+                try? await Task.sleep(nanoseconds: 280_000_000)
+            } else {
+                withAnimation(.easeOut(duration: 0.44)) {
+                    splashMorphToHome = true
+                }
+                try? await Task.sleep(nanoseconds: 460_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            appState.isLaunchSplashActive = false
         }
         .tint(AppTheme.jadeAccent)
         .onChange(of: scenePhase, initial: true) { _, phase in
             appState.setAppActive(phase == .active)
+            if phase == .active {
+                enforceMinimumLandscapeWindowSize()
+            }
         }
         .fullScreenCover(isPresented: $appState.showSettingsSheet) {
             SettingsView()
                 .environmentObject(appState)
                 .environment(\.locale, appState.settings.language.locale)
+                .font(AppFont.rounded(size: 16, weight: .semibold, languageCode: appState.settings.language.resolvedCode))
+                .preferredColorScheme(.light)
         }
         .gameDialog(
             isPresented: $appState.showEyeCareAlert,
@@ -213,5 +301,14 @@ struct RootNavigationView: View {
                 .primary(l10n.t("settings.eyecare.keepPlaying"), palette: .mint)
             ]
         )
+    }
+
+    /// Prevents iPadOS 26+ Freeform Windowing from shrinking the Go board into an unplayable vertical strip
+    /// while staying fully compliant with modern resizable-window guidelines (Apple TN3192).
+    private func enforceMinimumLandscapeWindowSize() {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            windowScene.sizeRestrictions?.minimumSize = CGSize(width: 1024, height: 700)
+        }
     }
 }

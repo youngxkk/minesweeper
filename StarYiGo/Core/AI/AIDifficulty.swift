@@ -384,16 +384,16 @@ enum AIThinkingPacer {
             duration = min(maxCeiling, max(profile.midgameFloor, duration))
         }
 
-        // 6. Clock safety: never risk timing out in timed / byoyomi games
+        // 6. Clock safety: never risk timing out in timed / byoyomi games (allow down to 0.0s in extreme time trouble)
         if clock.isActive {
             let aiClock = clock.state(for: aiColor)
             if aiClock.inByoyomi {
                 let remaining = Double(aiClock.byoyomiSecondsRemaining)
-                let safeCap = max(0.5, min(remaining * 0.45, remaining - 2.0))
+                let safeCap = max(0.0, min(remaining * 0.45, remaining - 2.0))
                 duration = min(duration, safeCap)
             } else if aiClock.mainSecondsRemaining <= 40 {
                 let remaining = Double(aiClock.mainSecondsRemaining)
-                let safeCap = max(0.5, min(remaining * 0.35, remaining - 3.0))
+                let safeCap = max(0.0, min(remaining * 0.35, remaining - 3.0))
                 duration = min(duration, safeCap)
             }
         }

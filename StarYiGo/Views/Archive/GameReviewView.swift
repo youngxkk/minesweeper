@@ -88,7 +88,7 @@ struct GameReviewView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.recordDesk
 
             GeometryReader { geo in
                 let w = geo.size.width
@@ -154,7 +154,9 @@ struct GameReviewView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            loadMainLineFromSGF()
+            if mainLineStates.isEmpty {
+                loadMainLineFromSGF()
+            }
         }
         .onDisappear {
             stopAutoPlay()
@@ -175,6 +177,7 @@ struct GameReviewView: View {
         GoBoardView(
             boardState: activeState,
             theme: appState.settings.boardTheme,
+            stoneStyle: appState.settings.stoneStyle,
             showCoordinates: appState.settings.showCoordinates || academyEntry != nil,
             showMoveNumbers: showMoveNumbers && !isVariationMode,
             moveNumbers: activeMoveNumbers,
@@ -218,13 +221,13 @@ struct GameReviewView: View {
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     Text("\(record.boardSize)×\(record.boardSize)")
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Capsule().fill(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)))
                     Text(record.resultString)
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -240,14 +243,14 @@ struct GameReviewView: View {
                                     ProgressView().scaleEffect(0.7).tint(.white)
                                 } else {
                                     Image(systemName: "waveform.path.ecg")
-                                        .font(.system(size: 11, weight: .black))
+                                        .font(.system(size: 11, weight: .black, design: .rounded))
                                 }
                                 Text(
                                     isAnalyzingGame
                                     ? l10n.localized(zh: "分析中...", en: "Analyzing...", ja: "解析中...", ko: "분석 중...", zhHant: "分析中...")
                                     : l10n.localized(zh: "AI 深度复盘", en: "AI Review", ja: "AI 詳細検討", ko: "AI 심층 복기", zhHant: "AI 深度復盤")
                                 )
-                                    .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 11.5, weight: .black))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, 12)
@@ -259,7 +262,7 @@ struct GameReviewView: View {
                 }
 
                 Text("⚫️ \(record.blackName)   vs   ⚪️ \(record.whiteName)")
-                    .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 13.5, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(1)
             }
@@ -287,10 +290,10 @@ struct GameReviewView: View {
                     CharacterAvatarView(character: .panda, mood: .greeting, size: 38)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(l10n.t("review.coachLabel"))
-                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .black))
                             .foregroundColor(AppTheme.sunBottom)
                         Text(comment)
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 13, weight: .bold))
                             .foregroundColor(AppTheme.inkPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -326,7 +329,7 @@ struct GameReviewView: View {
                         isVariationMode ? l10n.t("review.exitVariation") : l10n.t("review.tryVariation"),
                         systemImage: isVariationMode ? "arrow.uturn.backward.circle.fill" : "hand.tap.fill"
                     )
-                    .font(.system(size: 14.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 14.5, weight: .heavy))
                     .foregroundColor(isVariationMode ? .white : AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -345,7 +348,7 @@ struct GameReviewView: View {
                         showTerritory.toggle()
                     } label: {
                         Label(l10n.t("game.action.territory"), systemImage: "square.grid.3x3.topleft.filled")
-                            .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 13.5, weight: .heavy))
                             .foregroundColor(showTerritory ? .white : AppTheme.skyBottom)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
@@ -363,7 +366,7 @@ struct GameReviewView: View {
                             copiedFeedback ? l10n.t("review.copiedSGF") : l10n.t("review.copySGF"),
                             systemImage: copiedFeedback ? "checkmark" : "doc.on.doc"
                         )
-                        .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .heavy))
                         .foregroundColor(copiedFeedback ? .white : AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
@@ -375,10 +378,10 @@ struct GameReviewView: View {
             if isVariationMode {
                 HStack(spacing: 10) {
                     Image(systemName: "hand.tap.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 18, design: .rounded))
                         .foregroundColor(AppTheme.coralBottom)
                     Text(l10n.t("review.variationBanner"))
-                        .font(.system(size: 13.5, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .heavy))
                         .foregroundColor(AppTheme.coralBottom)
                 }
                 .frame(maxWidth: .infinity)
@@ -411,17 +414,27 @@ struct GameReviewView: View {
 
                     HStack(spacing: 8) {
                         navButton("backward.end.fill") { stopAutoPlay(); stepIndex = 0 }
+                            .accessibilityLabel(l10n.localized(zh: "回到开局", en: "Start", ja: "最初へ", ko: "처음으로", zhHant: "回到開局"))
                         navButton("chevron.left") { stopAutoPlay(); stepIndex = max(0, stepIndex - 1) }
+                            .keyboardShortcut(.leftArrow, modifiers: [])
+                            .accessibilityLabel(l10n.localized(zh: "上一手", en: "Previous Move", ja: "一手戻る", ko: "이전 수", zhHant: "上一手"))
                         Button { toggleAutoPlay() } label: {
                             Image(systemName: isAutoPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 15, weight: .black))
+                                .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 9)
                         }
                         .buttonStyle(GlossyCapsuleButtonStyle(palette: isAutoPlaying ? .coral : .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                        .keyboardShortcut(.space, modifiers: [])
+                        .accessibilityLabel(isAutoPlaying
+                            ? l10n.localized(zh: "暂停播放", en: "Pause", ja: "一時停止", ko: "일시정지", zhHant: "暫停播放")
+                            : l10n.localized(zh: "自动播放", en: "Play", ja: "再生", ko: "재생", zhHant: "自動播放"))
                         navButton("chevron.right") { stopAutoPlay(); stepIndex = min(mainLineStates.count - 1, stepIndex + 1) }
+                            .keyboardShortcut(.rightArrow, modifiers: [])
+                            .accessibilityLabel(l10n.localized(zh: "下一手", en: "Next Move", ja: "一手進む", ko: "다음 수", zhHant: "下一手"))
                         navButton("forward.end.fill") { stopAutoPlay(); stepIndex = mainLineStates.count - 1 }
+                            .accessibilityLabel(l10n.localized(zh: "跳至终局", en: "End", ja: "最後へ", ko: "끝으로", zhHant: "跳至終局"))
                     }
                 }
                 .warmCard(cornerRadius: 22, padding: 12)
@@ -447,7 +460,7 @@ struct GameReviewView: View {
                     ko: "승률 그래프 · 탭하여 이동",
                     zhHant: "勝率曲線 · 點擊跳轉"
                 ))
-                    .font(.system(size: 11.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 11.5, weight: .black))
                     .foregroundColor(AppTheme.grapeBottom)
                 Spacer()
                 Text(l10n.localized(
@@ -457,7 +470,7 @@ struct GameReviewView: View {
                     ko: "흑 승률 \(pct)% (\(leadStr)집)",
                     zhHant: "黑勝率 \(pct)% (\(leadStr)目)"
                 ))
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .font(AppFont.rounded(size: 11, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
             }
 
@@ -514,7 +527,9 @@ struct GameReviewView: View {
                         ForEach(report.keyMistakes.prefix(5)) { m in
                             Button {
                                 stopAutoPlay()
-                                stepIndex = m.moveNumber
+                                isVariationMode = false
+                                isQuizMode = false
+                                stepIndex = max(0, min(mainLineStates.count - 1, m.moveNumber))
                             } label: {
                                 Text(l10n.localized(
                                     zh: "第\(m.moveNumber)手 \(m.quality.symbol)",
@@ -523,7 +538,7 @@ struct GameReviewView: View {
                                     ko: "\(m.moveNumber)수 \(m.quality.symbol)",
                                     zhHant: "第\(m.moveNumber)手 \(m.quality.symbol)"
                                 ))
-                                    .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 10.5, weight: .black))
                                     .foregroundColor(stepIndex == m.moveNumber ? .white : AppTheme.coralBottom)
                                     .padding(.horizontal, 9)
                                     .padding(.vertical, 4)
@@ -562,7 +577,7 @@ struct GameReviewView: View {
                     ko: "\(rev.moveNumber)수 진단 \(rev.quality.symbol)",
                     zhHant: "第 \(rev.moveNumber) 手診斷 \(rev.quality.symbol)"
                 ))
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -580,7 +595,7 @@ struct GameReviewView: View {
                             : l10n.localized(zh: "隐藏变化", en: "Hide PV", ja: "変化を隠す", ko: "변화도 숨기기", zhHant: "隱藏變化"),
                             systemImage: "sparkles"
                         )
-                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .black))
                         .foregroundColor(AppTheme.skyBottom)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -592,7 +607,7 @@ struct GameReviewView: View {
             }
 
             Text(rev.diagnosis(l10n))
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .bold))
                 .foregroundColor(AppTheme.inkPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -606,7 +621,7 @@ struct GameReviewView: View {
                         : l10n.localized(zh: "一键转成我的实战错题", en: "Save Blunder as Practice Puzzle", ja: "実戦ミス問題として保存", ko: "실전 오답 문제로 저장", zhHant: "一鍵轉成我的實戰錯題"),
                         systemImage: alreadySaved ? "checkmark.circle.fill" : "bookmark.fill"
                     )
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -688,7 +703,7 @@ struct GameReviewView: View {
                     ko: "\(mv.moveNumber)수 · \(colorDot) \(pointText)",
                     zhHant: "第 \(mv.moveNumber) 手 · \(colorDot) 落點 \(pointText)"
                 ))
-                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .black))
                 .foregroundColor(AppTheme.inkPrimary)
             } else {
                 Text(l10n.localized(
@@ -698,12 +713,12 @@ struct GameReviewView: View {
                     ko: "시작 전 · 총 \(total)수",
                     zhHant: "開局前 · 全譜共 \(total) 手"
                 ))
-                .font(.system(size: 12.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .black))
                 .foregroundColor(AppTheme.inkSecondary)
             }
             Spacer()
             Text("\(stepIndex) / \(total)")
-                .font(.system(size: 11.5, weight: .heavy, design: .monospaced))
+                .font(AppFont.rounded(size: 11.5, weight: .heavy))
                 .foregroundColor(AppTheme.skyBottom)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -714,7 +729,7 @@ struct GameReviewView: View {
     private func navButton(_ systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .black))
+                .font(.system(size: 14, weight: .black, design: .rounded))
                 .foregroundColor(AppTheme.inkPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
@@ -764,11 +779,11 @@ struct GameReviewView: View {
                 if isAcademyStudied {
                     HStack(spacing: 5) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 12.5, weight: .black))
+                            .font(.system(size: 12.5, weight: .black, design: .rounded))
                         Text(justStampedBanner
                              ? l10n.localized(zh: "已赏析 ★ +10🪙", en: "Studied ★ +10🪙", ja: "鑑賞済 ★ +10🪙", ko: "감상 완료 ★ +10🪙", zhHant: "已賞析 ★ +10🪙")
                              : l10n.localized(zh: "已赏析 ★", en: "Studied ★", ja: "鑑賞済 ★", ko: "감상 완료 ★", zhHant: "已賞析 ★"))
-                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .black))
                     }
                     .foregroundColor(AppTheme.sunBottom)
                     .padding(.horizontal, 12)
@@ -780,9 +795,9 @@ struct GameReviewView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "star.circle.fill")
-                                .font(.system(size: 12.5, weight: .black))
+                                .font(.system(size: 12.5, weight: .black, design: .rounded))
                             Text(l10n.localized(zh: "已看懂！盖章 +10🪙", en: "Stamp Studied +10🪙", ja: "理解した！+10🪙", ko: "이해 완료! +10🪙", zhHant: "已看懂！蓋章 +10🪙"))
-                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: .black))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
@@ -811,11 +826,11 @@ struct GameReviewView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: isQuizMode ? "xmark.circle.fill" : "sparkles")
-                                .font(.system(size: 12, weight: .black))
+                                .font(.system(size: 12, weight: .black, design: .rounded))
                             Text(isQuizMode
                                  ? l10n.localized(zh: "退出猜手", en: "Exit Quiz", ja: "終了", ko: "퀴즈 종료", zhHant: "退出猜手")
                                  : l10n.localized(zh: "猜大师下一手", en: "Guess Move", ja: "次の一手", ko: "다음 수 퀴즈", zhHant: "猜大師下一手"))
-                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: .black))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
@@ -839,7 +854,7 @@ struct GameReviewView: View {
                         }
                     } label: {
                         Text(l10n.localized(zh: "✅ 正着演示", en: "✅ Good Move", ja: "✅ 正解", ko: "✅ 정수", zhHant: "✅ 正著演示"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(!showingCounterExample ? .white : AppTheme.mintBottom)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -858,7 +873,7 @@ struct GameReviewView: View {
                         }
                     } label: {
                         Text(l10n.localized(zh: "❌ 贪心/错着对比", en: "❌ Mistake Demo", ja: "❌ 失敗例", ko: "❌ 실수 비교", zhHant: "❌ 貪心/錯著對比"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(showingCounterExample ? .white : AppTheme.coralBottom)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
@@ -873,20 +888,20 @@ struct GameReviewView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
                         Image(systemName: "hand.point.up.left.fill")
-                            .font(.system(size: 13, weight: .black))
+                            .font(.system(size: 13, weight: .black, design: .rounded))
                             .foregroundColor(AppTheme.grapeBottom)
                         Text(l10n.localized(zh: "猜大师下一手 · 直接点击棋盘！", en: "Guess the Master's Move — Tap the Board!", ja: "次の一手・盤面をタップ！", ko: "다음 수 맞히기 · 바둑판을 탭하세요!", zhHant: "猜大師下一手 · 直接點擊棋盤！"))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
                             .foregroundColor(AppTheme.grapeBottom)
                     }
                     Text(quiz.prompt(l10n))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let feedback = quizFeedback {
                         Text(feedback)
-                            .font(.system(size: 12.5, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .heavy))
                             .foregroundColor(quizSolved ? AppTheme.mintBottom : AppTheme.coralBottom)
                     }
 
@@ -895,7 +910,7 @@ struct GameReviewView: View {
                             revealQuizAnswer(quiz: quiz)
                         } label: {
                             Text(l10n.localized(zh: "揭晓大师一手 →", en: "Reveal Master's Move →", ja: "正解を見る →", ko: "정답 보기 →", zhHant: "揭曉大師一手 →"))
-                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: .black))
                                 .foregroundColor(AppTheme.skyBottom)
                         }
                     }
@@ -925,9 +940,9 @@ struct GameReviewView: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Image(systemName: "bookmark.fill")
-                                        .font(.system(size: 10, weight: .black))
+                                        .font(.system(size: 10, weight: .black, design: .rounded))
                                     Text("\(h.label(l10n)) (#\(clamped))")
-                                        .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 11.5, weight: .black))
                                 }
                                 .foregroundColor(isHere ? .white : AppTheme.inkPrimary)
                                 .padding(.horizontal, 10)

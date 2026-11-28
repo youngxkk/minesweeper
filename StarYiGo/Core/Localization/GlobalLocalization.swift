@@ -29,11 +29,11 @@ extension CampaignSea {
     func localizedName(_ l10n: L10n) -> String {
         switch id {
         case "sea-1":
-            return l10n.localized(zh: nameZh, en: nameEn, ja: "碧の海島・入門の浅瀬", ko: "푸른 해섬 · 입문 여울", zhHant: "碧藍海島 · 啟蒙淺灘")
+            return l10n.localized(zh: nameZh, en: nameEn, ja: "風車の草原・入門の浅瀬", ko: "바람개비 초원 · 입문 여울", zhHant: "風起棋丘 · 啟蒙淺灘")
         case "sea-2":
             return l10n.localized(zh: nameZh, en: nameEn, ja: "翡翠の森・竹林秘境", ko: "비취 숲 · 죽림 비경", zhHant: "翡翠森林 · 竹林秘境")
         case "sea-3":
-            return l10n.localized(zh: nameZh, en: nameEn, ja: "黄金砂漠・遺跡の砂海", ko: "황금 사막 · 유적 사해", zhHant: "金色沙漠 · 古跡沙海")
+            return l10n.localized(zh: nameZh, en: nameEn, ja: "双月の鏡湖・月橋の岸辺", ko: "쌍월 거울호수 · 달다리 호숫가", zhHant: "雙月鏡湖 · 月橋水岸")
         case "sea-4":
             return l10n.localized(zh: nameZh, en: nameEn, ja: "白銀雪山・氷峰道場", ko: "백은 설산 · 빙봉 도장", zhHant: "凜冬雪山 · 冰峰道場")
         case "sea-5":
@@ -47,21 +47,21 @@ extension CampaignSea {
 extension CampaignIsland {
     func localizedName(_ l10n: L10n) -> String {
         switch id {
-        case "s1-reef":       return l10n.localized(zh: nameZh, en: nameEn, ja: "わかば珊瑚礁", ko: "새싹 산호초", zhHant: "青芽珊瑚礁")
-        case "s1-shell":      return l10n.localized(zh: nameZh, en: nameEn, ja: "貝殻のアタリ湾", ko: "조개 단수만", zhHant: "貝殼抱吃灣")
-        case "s1-lagoon":     return l10n.localized(zh: nameZh, en: nameEn, ja: "ゲタ門の入江", ko: "장문 라군", zhHant: "關門瀉湖")
-        case "s1-harbor":     return l10n.localized(zh: nameZh, en: nameEn, ja: "両アタリ風車港", ko: "양단수 풍차항", zhHant: "雙吃風車港")
-        case "s1-lighthouse": return l10n.localized(zh: nameZh, en: nameEn, ja: "二眼の灯台島", ko: "두집 등대섬", zhHant: "雙瞳燈塔島")
+        case "s1-reef":       return l10n.localized(zh: nameZh, en: nameEn, ja: "若芽の草地", ko: "새싹 풀밭", zhHant: "青芽草坪")
+        case "s1-shell":      return l10n.localized(zh: nameZh, en: nameEn, ja: "石取りの小川", ko: "돌잡이 시냇가", zhHant: "抱吃溪岸")
+        case "s1-lagoon":     return l10n.localized(zh: nameZh, en: nameEn, ja: "花咲く丘", ko: "꽃언덕", zhHant: "關門花坡")
+        case "s1-harbor":     return l10n.localized(zh: nameZh, en: nameEn, ja: "両アタリの浅瀬", ko: "양단수 여울", zhHant: "雙吃淺灘")
+        case "s1-lighthouse": return l10n.localized(zh: nameZh, en: nameEn, ja: "金星の風車", ko: "금별 풍차", zhHant: "金星風車")
         case "s2-wind":       return l10n.localized(zh: nameZh, en: nameEn, ja: "青竹シチョウ林", ko: "청죽 축 숲", zhHant: "青竹征子林")
         case "s2-canyon":     return l10n.localized(zh: nameZh, en: nameEn, ja: "紅葉ウッテガエシ谷", ko: "단풍 환격 계곡", zhHant: "楓葉倒撲谷")
         case "s2-lake":       return l10n.localized(zh: nameZh, en: nameEn, ja: "双月の霊泉湖", ko: "쌍월 영천호", zhHant: "雙月靈泉湖")
         case "s2-temple":     return l10n.localized(zh: nameZh, en: nameEn, ja: "大樹の水車小屋", ko: "거목 물레방아", zhHant: "巨樹風車坊")
         case "s2-summit":     return l10n.localized(zh: nameZh, en: nameEn, ja: "白鶴の古寺峰", ko: "백학 고사봉", zhHant: "白鶴古寺峰")
-        case "s3-pine":       return l10n.localized(zh: nameZh, en: nameEn, ja: "オアシスの井戸", ko: "오아시스 우물", zhHant: "綠洲渡沙井")
-        case "s3-forge":      return l10n.localized(zh: nameZh, en: nameEn, ja: "日時計の石碑陣", ko: "해시계 석비진", zhHant: "日晷石碑陣")
-        case "s3-river":      return l10n.localized(zh: nameZh, en: nameEn, ja: "流砂の双子塔", ko: "유사 쌍둥이탑", zhHant: "流沙雙子塔")
-        case "s3-pagoda":     return l10n.localized(zh: nameZh, en: nameEn, ja: "黄金のピラミッド", ko: "황금 피라미드", zhHant: "黃金金字塔")
-        case "s3-sanctum":    return l10n.localized(zh: nameZh, en: nameEn, ja: "星砂の神殿頂", ko: "별모래 신전", zhHant: "星砂神殿頂")
+        case "s3-pine":       return l10n.localized(zh: nameZh, en: nameEn, ja: "松影の渡し場", ko: "솔그늘 나루", zhHant: "松影渡口")
+        case "s3-forge":      return l10n.localized(zh: nameZh, en: nameEn, ja: "桜の湖岸", ko: "벚꽃 호숫가", zhHant: "落櫻湖岸")
+        case "s3-river":      return l10n.localized(zh: nameZh, en: nameEn, ja: "双月の棋島", ko: "쌍월 바둑섬", zhHant: "雙月棋洲")
+        case "s3-pagoda":     return l10n.localized(zh: nameZh, en: nameEn, ja: "さざ波の石道", ko: "물결 돌길", zhHant: "漣漪石徑")
+        case "s3-sanctum":    return l10n.localized(zh: nameZh, en: nameEn, ja: "月橋の灯籠", ko: "달다리 등불", zhHant: "月橋燈岸")
         case "s4-mist":       return l10n.localized(zh: nameZh, en: nameEn, ja: "雪松の温泉村", ko: "설송 온천마을", zhHant: "雪松溫泉村")
         case "s4-flame":      return l10n.localized(zh: nameZh, en: nameEn, ja: "氷晶の吊り橋谷", ko: "빙정 출렁다리", zhHant: "寒冰雙橋谷")
         case "s4-azure":      return l10n.localized(zh: nameZh, en: nameEn, ja: "氷晶の五重塔", ko: "빙정 오층탑", zhHant: "冰晶五重塔")

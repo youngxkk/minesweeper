@@ -39,7 +39,7 @@ struct TrainingDojoView: View {
 
     var body: some View {
         ZStack {
-            boardBackdrop
+            SceneBackdrop.morningDojo
 
             VStack(spacing: 14) {
                 // Header
@@ -48,7 +48,7 @@ struct TrainingDojoView: View {
                         appState.popRoute()
                     } label: {
                         Label(l10n.t("common.back"), systemImage: "arrow.uturn.backward")
-                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .font(AppFont.rounded(size: 14, weight: .heavy))
                             .foregroundColor(AppTheme.inkPrimary)
                             .padding(.horizontal, 12)
                             .frame(minHeight: AppTheme.buttonFaceHeight)
@@ -57,7 +57,7 @@ struct TrainingDojoView: View {
 
                     VStack(spacing: 3) {
                         Text(l10n.localized(zh: "围棋道场", en: "Go Training Dojo", ja: "囲碁道場", ko: "바둑 도장", zhHant: "圍棋道場"))
-                            .font(.system(size: 20, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 20, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                         Text(l10n.localized(
                             zh: "\(DojoPuzzleBank.fullCatalog.count)+ 题库 · 定式破招 · 专项训练 · 考级室",
@@ -66,7 +66,7 @@ struct TrainingDojoView: View {
                             ko: "\(DojoPuzzleBank.fullCatalog.count)+ 사활 문제 · 정석 · 특훈 · 급·단 승급 시험",
                             zhHant: "\(DojoPuzzleBank.fullCatalog.count)+ 題庫 · 定石破招 · 專項訓練 · 考級室"
                         ))
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .font(AppFont.rounded(size: 11, weight: .semibold))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
                     .multilineTextAlignment(.center)
@@ -114,53 +114,6 @@ struct TrainingDojoView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    private var boardBackdrop: some View {
-        let palette = AppTheme.palette(for: .kayaWood)
-
-        return Canvas { context, size in
-            let bounds = CGRect(origin: .zero, size: size)
-            context.fill(
-                Path(bounds),
-                with: .linearGradient(
-                    Gradient(colors: [palette.boardBase, palette.boardGradientEnd]),
-                    startPoint: .zero,
-                    endPoint: CGPoint(x: size.width, y: size.height)
-                )
-            )
-
-            let cell: CGFloat = 38
-            let columns = Int(size.width / (2 * cell))
-            let rows = Int(size.height / (2 * cell))
-            var grid = Path()
-            for column in -columns...columns {
-                let x = bounds.midX + CGFloat(column) * cell
-                grid.move(to: CGPoint(x: x, y: 0))
-                grid.addLine(to: CGPoint(x: x, y: size.height))
-            }
-            for row in -rows...rows {
-                let y = bounds.midY + CGFloat(row) * cell
-                grid.move(to: CGPoint(x: 0, y: y))
-                grid.addLine(to: CGPoint(x: size.width, y: y))
-            }
-            context.stroke(grid, with: .color(palette.gridLine.opacity(0.19)), lineWidth: 1)
-
-            for x in [-3, 0, 3] {
-                for y in [-3, 0, 3] {
-                    let point = CGRect(
-                        x: bounds.midX + CGFloat(x) * cell - 3,
-                        y: bounds.midY + CGFloat(y) * cell - 3,
-                        width: 6,
-                        height: 6
-                    )
-                    context.fill(Path(ellipseIn: point), with: .color(palette.starPoint.opacity(0.28)))
-                }
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
     private func sectionTab(_ section: DojoSection, title: String, icon: String) -> some View {
         let active = selectedSection == section
         return Button {
@@ -170,7 +123,7 @@ struct TrainingDojoView: View {
             SoundAndHapticsManager.shared.playUITap()
         } label: {
             Label(title, systemImage: icon)
-                .font(.system(size: 13.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13.5, weight: .black))
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
                 .frame(minHeight: AppTheme.buttonFaceHeight)
@@ -194,7 +147,7 @@ struct TrainingDojoView: View {
                             SoundAndHapticsManager.shared.playUITap()
                         } label: {
                             Text(band.title(isChinese: l10n.language.isChinese))
-                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: .black))
                                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
@@ -224,7 +177,7 @@ struct TrainingDojoView: View {
                 ko: "엄선된 \(filteredDojoPuzzles.count)문제 (회전·반전·흑백 전환 지원으로 암기 방지)",
                 zhHant: "共篩選出 \(filteredDojoPuzzles.count) 道精校題目（支援棋盤旋轉、鏡像與黑白互換防背圖）"
             ))
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .bold))
                 .foregroundColor(AppTheme.inkSecondary)
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 270), spacing: 20)], spacing: 20) {
@@ -242,7 +195,7 @@ struct TrainingDojoView: View {
             SoundAndHapticsManager.shared.playUITap()
         } label: {
             Label(title, systemImage: icon)
-                .font(.system(size: 12, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .heavy))
                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -261,21 +214,21 @@ struct TrainingDojoView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(puzzle.rankBadge)
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(badgeFill))
                     Text(puzzle.category.displayTitle(isChinese: l10n.language.isChinese))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                     Spacer()
                     Text(puzzle.playerColor == .black ? "⚫️" : "⚪️")
-                        .font(.system(size: 12))
+                        .font(AppFont.rounded(size: 12, weight: .regular))
                 }
 
                 Text(puzzle.title(l10n))
-                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 17, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -285,7 +238,7 @@ struct TrainingDojoView: View {
                 HStack(spacing: 3) {
                     ForEach(1...3, id: \.self) { i in
                         Image(systemName: i <= stars ? "star.fill" : "star")
-                            .font(.system(size: 12))
+                            .font(.system(size: 12, design: .rounded))
                             .foregroundColor(i <= stars ? AppTheme.sunBottom : AppTheme.inkSecondary.opacity(0.55))
                     }
                 }
@@ -302,7 +255,7 @@ struct TrainingDojoView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 Image(systemName: "brain.head.profile")
-                    .font(.system(size: 26, weight: .black))
+                    .font(.system(size: 26, weight: .black, design: .rounded))
                     .foregroundColor(AppTheme.coralBottom)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(l10n.localized(
@@ -312,7 +265,7 @@ struct TrainingDojoView: View {
                         ko: "에빙하우스 간격 반복 오답노트 (1일 → 3일 → 7일 복습)",
                         zhHant: "艾賓浩斯間隔重複錯題本（1天 → 3天 → 7天鞏固）"
                     ))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 15, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text(l10n.localized(
                         zh: "包含刷题错题 + AI 复盘一键转化的「我的实战恶手题」，连续答对 3 轮彻底毕业！",
@@ -321,7 +274,7 @@ struct TrainingDojoView: View {
                         ko: "사활 오답과 AI 복기에서 변환한 실전 악수 문제를 수록. 3회 연속 정답 시 마스터!",
                         zhHant: "包含刷題錯題 + AI 復盤一鍵轉化的「我的實戰惡手題」，連續答對 3 輪徹底畢業！"
                     ))
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
             }
@@ -329,7 +282,7 @@ struct TrainingDojoView: View {
 
             if appState.puzzleProgress.srsMistakeItems.isEmpty {
                 VStack(spacing: 10) {
-                    Text("🏆").font(.system(size: 46))
+                    Text("🏆").font(AppFont.rounded(size: 46, weight: .regular))
                     Text(l10n.localized(
                         zh: "目前没有待复习的错题！去刷题或用 AI 复盘收集实战恶手吧。",
                         en: "No mistakes due! Solve puzzles or convert game blunders in AI Review.",
@@ -337,7 +290,7 @@ struct TrainingDojoView: View {
                         ko: "복습할 오답이 없습니다! 문제를 풀거나 AI 복기에서 실전 악수를 수집해 보세요.",
                         zhHant: "目前沒有待複習的錯題！去刷題或用 AI 復盤收集實戰惡手吧。"
                     ))
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
                 .frame(maxWidth: .infinity)
@@ -355,22 +308,22 @@ struct TrainingDojoView: View {
                                         Text(item.isDueNow
                                              ? l10n.localized(zh: "今日待复习", en: "Due Now", ja: "本日復習", ko: "오늘 복습", zhHant: "今日待複習")
                                              : l10n.localized(zh: "\(item.intervalDays)天后复习", en: "In \(item.intervalDays)d", ja: "\(item.intervalDays)日後に復習", ko: "\(item.intervalDays)일 후 복습", zhHant: "\(item.intervalDays)天後複習"))
-                                            .font(.system(size: 11, weight: .black, design: .rounded))
+                                            .font(AppFont.rounded(size: 11, weight: .black))
                                             .foregroundColor(.white)
                                             .padding(.horizontal, 9)
                                             .padding(.vertical, 3)
                                             .background(Capsule().fill(item.isDueNow ? AppTheme.coralBottom : AppTheme.mintBottom))
                                         Spacer()
                                         Text(l10n.localized(zh: "巩固进度 \(item.correctStreak)/3", en: "Mastery \(item.correctStreak)/3", ja: "定着度 \(item.correctStreak)/3", ko: "숙달도 \(item.correctStreak)/3", zhHant: "鞏固進度 \(item.correctStreak)/3"))
-                                            .font(.system(size: 11, weight: .heavy, design: .rounded))
+                                            .font(AppFont.rounded(size: 11, weight: .heavy))
                                             .foregroundColor(AppTheme.skyBottom)
                                     }
                                     Text(puzzle.title(l10n))
-                                        .font(.system(size: 15, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 15, weight: .black))
                                         .foregroundColor(AppTheme.inkPrimary)
                                         .lineLimit(1)
                                     Text(puzzle.prompt(l10n))
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                        .font(AppFont.rounded(size: 12, weight: .semibold))
                                         .foregroundColor(AppTheme.inkSecondary)
                                         .lineLimit(2)
                                 }
@@ -397,7 +350,7 @@ struct TrainingDojoView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         HStack {
                             Text(course.rankBadge)
-                                .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 11.5, weight: .black))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
@@ -405,15 +358,15 @@ struct TrainingDojoView: View {
                             Spacer()
                             if done {
                                 Label(l10n.localized(zh: "已通关 ★", en: "Cleared ★", ja: "クリア済 ★", ko: "클리어 ★", zhHant: "已通關 ★"), systemImage: "checkmark.seal.fill")
-                                    .font(.system(size: 12, weight: .black, design: .rounded))
+                                    .font(AppFont.rounded(size: 12, weight: .black))
                                     .foregroundColor(AppTheme.mintBottom)
                             }
                         }
                         Text(course.title(l10n))
-                            .font(.system(size: 17, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 17, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                         Text(course.subtitle(l10n))
-                            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                            .font(AppFont.rounded(size: 12.5, weight: .semibold))
                             .foregroundColor(AppTheme.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -444,17 +397,17 @@ struct TrainingDojoView: View {
                 } label: {
                     HStack(spacing: 14) {
                         Image(systemName: kind.symbolName)
-                            .font(.system(size: 26, weight: .black))
+                            .font(.system(size: 26, weight: .black, design: .rounded))
                             .foregroundColor(pal.bottom)
                             .frame(width: 54, height: 54)
                             .background(Circle().fill(Color.white).shadow(color: pal.rim.opacity(0.28), radius: 6, y: 2))
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(kind.title(isChinese: l10n.language.isChinese))
-                                .font(.system(size: 17, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 17, weight: .black))
                                 .foregroundColor(.white)
                             Text(kind.subtitle(isChinese: l10n.language.isChinese))
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 12, weight: .bold))
                                 .foregroundColor(.white.opacity(0.92))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -475,11 +428,11 @@ struct TrainingDojoView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(l10n.localized(zh: "星弈正规段级位认证体系", en: "StarYi Official Rank Certification", ja: "StarYi 公式段級位認定システム", ko: "StarYi 공식 급·단 인증 시스템", zhHant: "星弈正規段級位認證體系"))
-                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 18, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Spacer()
                     Text(l10n.localized(zh: "当前认证：\(appState.profile.rankString)", en: "Current: \(appState.profile.rankString)", ja: "現在の段級位：\(appState.profile.rankString)", ko: "현재 인증: \(appState.profile.rankString)", zhHant: "當前認證：\(appState.profile.rankString)"))
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
@@ -492,14 +445,14 @@ struct TrainingDojoView: View {
                     ko: "각 급·단 인증을 받으려면 [무보조 필기시험 5문제 중 4문제 정답]과 [시간제한·무르기 금지 승급 대국]을 모두 통과해야 합니다!",
                     zhHant: "每個段級位都需要同時通過【考場無輔助筆試 5 題（對 4 題）】+【定時無悔棋晉級實戰賽】，真正檢驗棋力！"
                 ))
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
 
                 Button {
                     appState.navigationPath.append(.rankExamHall)
                 } label: {
                     Label(l10n.localized(zh: "进入星弈考级室 →", en: "Enter Rank Exam Hall →", ja: "段級位試験室へ →", ko: "승급 시험실 입장 →", zhHant: "進入星弈考級室 →"), systemImage: "rosette")
-                        .font(.system(size: 16, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 16, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)

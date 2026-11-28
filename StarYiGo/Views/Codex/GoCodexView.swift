@@ -19,7 +19,7 @@ struct GoCodexView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            SceneBackdrop.termAlbum
 
             VStack(spacing: 14) {
                 // Clean Top Bar
@@ -36,7 +36,7 @@ struct GoCodexView: View {
                     HStack(spacing: 5) {
                         StarCoinBadgeView(size: 17)
                         Text("\(appState.profile.starCoins)")
-                            .font(.system(size: 14.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 14.5, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
                     }
                     .padding(.horizontal, 14)
@@ -126,17 +126,17 @@ struct GoCodexView: View {
                     .frame(width: 5, height: 18)
 
                 Text(l10n.t(tier.titleKey))
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Text(l10n.t(tier.badgeKey))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .bold))
                     .foregroundColor(AppTheme.inkSecondary)
 
                 Spacer()
 
                 Text("\(done)/\(entries.count) ★")
-                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .heavy))
                     .foregroundColor(tierColor)
             }
             .padding(.horizontal, 4)
@@ -161,7 +161,7 @@ struct GoCodexView: View {
             SoundAndHapticsManager.shared.playUITap()
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13, weight: .black))
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 9)
@@ -176,10 +176,27 @@ struct GoCodexView: View {
         .tactileButton(scale: 0.95, sound: false)
     }
 
-    /// Clean, uncluttered card: tapping anywhere opens the large live demo modal (no redundant bottom button!).
+    /// Splits an optional parenthetical note like "真眼与假眼（两眼活棋）" or "Sealing the Escape (Turtle Shell)"
+    /// into a crisp single-line main title and a compact secondary note for uniform grid cards.
+    private func splitCardTitle(_ raw: String) -> (main: String, note: String?) {
+        if let open = raw.firstIndex(of: "（"), let close = raw.lastIndex(of: "）"), open < close {
+            let main = String(raw[..<open]).trimmingCharacters(in: .whitespaces)
+            let note = String(raw[raw.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
+            if !main.isEmpty { return (main, note.isEmpty ? nil : note) }
+        }
+        if let open = raw.firstIndex(of: "("), let close = raw.lastIndex(of: ")"), open < close {
+            let main = String(raw[..<open]).trimmingCharacters(in: .whitespaces)
+            let note = String(raw[raw.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
+            if !main.isEmpty { return (main, note.isEmpty ? nil : note) }
+        }
+        return (raw, nil)
+    }
+
+    /// Clean, uncluttered card: uniform height across all 36 entries & 5 languages; tapping opens the live demo modal.
     private func codexCard(_ entry: GoCodexEntry) -> some View {
         let mastered = appState.profile.unlockedCodexIds.contains(entry.id)
         let accent = Color(hex: entry.accentHex)
+        let titleParts = splitCardTitle(entry.term(l10n))
 
         return Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.80)) {
@@ -187,31 +204,40 @@ struct GoCodexView: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
                     Image(systemName: entry.symbolName)
-                        .font(.system(size: 16, weight: .black))
+                        .font(.system(size: 16, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(accent))
 
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(entry.term(l10n))
-                            .font(.system(size: 17, weight: .black, design: .rounded))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(titleParts.main)
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(AppTheme.inkPrimary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.78)
 
-                        HStack(spacing: 5) {
+                        HStack(spacing: 6) {
                             Text(entry.rankTag)
-                                .font(.system(size: 10.5, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 10.5, weight: .black))
                                 .foregroundColor(accent)
                                 .padding(.horizontal, 8)
-                                .padding(.vertical, 3.5)
+                                .padding(.vertical, 3)
                                 .background(Capsule().fill(accent.opacity(0.12)))
+                                .fixedSize()
+
+                            if let note = titleParts.note {
+                                Text(note)
+                                    .font(AppFont.rounded(size: 11, weight: .bold))
+                                    .foregroundColor(AppTheme.inkSecondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
 
                             if mastered {
                                 Image(systemName: "star.fill")
-                                    .font(.system(size: 14, weight: .black))
+                                    .font(.system(size: 13.5, weight: .black, design: .rounded))
                                     .foregroundStyle(
                                         LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom)
                                     )
@@ -223,15 +249,17 @@ struct GoCodexView: View {
 
                 // Row 2: Crisp 2-line metaphor summary with breathing space
                 Text(entry.metaphor(l10n))
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineSpacing(2.5)
                     .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 15)
-            .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 122, maxHeight: 122, alignment: .topLeading)
         }
         .buttonStyle(
             GlossyCapsuleButtonStyle(
@@ -366,7 +394,7 @@ private struct CodexDetailModal: View {
                 }
                 if states.count > 1 {
                     Text("\(step) / \(states.count - 1)")
-                        .font(.system(size: 13.5, weight: .black, design: .monospaced))
+                        .font(AppFont.rounded(size: 13.5, weight: .black))
                         .foregroundColor(AppTheme.inkSecondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -379,7 +407,7 @@ private struct CodexDetailModal: View {
     private var detailHeader: some View {
         HStack(spacing: 14) {
             Image(systemName: entry.symbolName)
-                .font(.system(size: 22, weight: .black))
+                .font(.system(size: 22, weight: .black, design: .rounded))
                 .foregroundColor(.white)
                 .frame(width: 50, height: 50)
                 .background(
@@ -390,20 +418,20 @@ private struct CodexDetailModal: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.term(l10n))
-                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 24, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(entry.rankTag)
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(.white)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color(hex: entry.accentHex)))
 
                 Text("\(l10n.t(entry.tier.titleKey)) · \(l10n.t(entry.tier.badgeKey))")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 13, weight: .bold))
                     .foregroundColor(AppTheme.skyBottom)
                     .lineLimit(1)
             }
@@ -420,10 +448,10 @@ private struct CodexDetailModal: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(l10n.t("codex.metaphorHeader"))
-                    .font(.system(size: 12.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .black))
                     .foregroundColor(AppTheme.sunBottom)
                 Text(entry.metaphor(l10n))
-                    .font(.system(size: 16.5, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 16.5, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -434,10 +462,10 @@ private struct CodexDetailModal: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(l10n.t("codex.ruleHeader"))
-                    .font(.system(size: 12.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12.5, weight: .black))
                     .foregroundColor(AppTheme.skyBottom)
                 Text(entry.explanation(l10n))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(AppFont.rounded(size: 15, weight: .semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -452,7 +480,7 @@ private struct CodexDetailModal: View {
         HStack(spacing: 12) {
             if isMastered {
                 Label(l10n.t("codex.masteredStamped"), systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 14.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 14.5, weight: .black))
                     .foregroundColor(AppTheme.sunBottom)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)
@@ -460,7 +488,7 @@ private struct CodexDetailModal: View {
             } else {
                 Button(action: onMarkLearned) {
                     Label(l10n.t("codex.stampLearned"), systemImage: "star.circle.fill")
-                        .font(.system(size: 14.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14.5, weight: .black))
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
@@ -470,7 +498,7 @@ private struct CodexDetailModal: View {
 
             Button(action: onPractice) {
                 Label(practiceButtonLabel, systemImage: "play.fill")
-                    .font(.system(size: 15.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 15.5, weight: .black))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)

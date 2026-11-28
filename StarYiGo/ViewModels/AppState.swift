@@ -13,7 +13,7 @@ enum AppRoute: Hashable {
     case puzzleHub(initialMistakesOnly: Bool)
     case islandDetail(islandId: String)
     case puzzlePlay(puzzleId: String, isDailyChallenge: Bool = false, isStarterBootcamp: Bool = false, forceRandomTransform: Bool = false, dailyDojoQueueIds: [String] = [])
-    case puzzleGauntlet(nodeId: String, masteryTier: StageMasteryTier = .normal)
+    case puzzleGauntlet(nodeId: String, masteryTier: StageMasteryTier = .normal, sectionIndex: Int? = nil)
     case puzzleRush
     case seaSkipGate(seaId: String)
     case srsGhostBuster(islandId: String)
@@ -28,6 +28,7 @@ enum AppRoute: Hashable {
     case rankExamHall
     case rankExamTest(tier: Int)
     case passport
+    case savedGames
     case photoJudge
 }
 
@@ -46,10 +47,16 @@ final class AppState: ObservableObject {
     @Published var showSettingsSheet: Bool = false
     @Published var showEyeCareAlert: Bool = false
     @Published var newlyUnlockedCodexToast: GoCodexEntry? = nil
+    @Published var isLaunchSplashActive: Bool = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"] == nil
+    @Published var isLaunchSplashRevealing: Bool = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"] != nil
 
     /// Keeps an ongoing game alive so kids can return home and resume seamlessly.
     @Published var activeGameViewModel: GameViewModel?
     @Published var pausedAIMatch: PausedAIMatchSnapshot? = nil
+
+    #if DEBUG
+    @Published var isDebugModeEnabled: Bool = false
+    #endif
 
     private let storage: StorageService
     private var eyeCareTimer: Timer?
@@ -185,6 +192,9 @@ final class AppState: ObservableObject {
         self.savedGames = loadedGames
         self.photoJudgeHistory = loadedPhotoHistory
         self.pausedAIMatch = loadedPausedMatch
+        #if DEBUG
+        self.isDebugModeEnabled = storage.loadDebugModeEnabled()
+        #endif
 
         if self.puzzleProgress.refreshGauntletHearts() {
             storage.savePuzzleProgress(self.puzzleProgress, for: loadedProfile.id)
@@ -206,19 +216,32 @@ final class AppState: ObservableObject {
     func updateProfile(_ mutate: (inout UserProfile) -> Void) {
         mutate(&profile)
         storage.saveProfile(profile)
-        familyProfiles = storage.loadFamilyProfiles()
+        if let idx = familyProfiles.firstIndex(where: { $0.id == profile.id }) {
+            familyProfiles[idx] = profile
+        } else {
+            familyProfiles.append(profile)
+        }
     }
 
     func switchProfile(to target: UserProfile) {
         guard target.id != profile.id else { return }
+        activeGameViewModel?.setSuspended(true)
         storage.saveProfile(profile)
         storage.savePuzzleProgress(puzzleProgress, for: profile.id)
 
-        profile = target
+        var nextProfile = target
+        storage.normalizeDailyCounters(&nextProfile)
+        profile = nextProfile
         storage.saveProfile(profile)
         pendingIslandUnlocks.removeAll()
-        puzzleProgress = storage.loadPuzzleProgress(for: target.id)
-        familyProfiles = storage.loadFamilyProfiles()
+        var loadedProgress = storage.loadPuzzleProgress(for: target.id)
+        if loadedProgress.refreshGauntletHearts() {
+            storage.savePuzzleProgress(loadedProgress, for: target.id)
+        }
+        puzzleProgress = loadedProgress
+        if let idx = familyProfiles.firstIndex(where: { $0.id == profile.id }) {
+            familyProfiles[idx] = profile
+        }
         pausedAIMatch = storage.loadPausedAIMatch(for: target.id)
         activeGameViewModel = nil
         SoundAndHapticsManager.shared.playUITap()
@@ -258,15 +281,22 @@ final class AppState: ObservableObject {
         guard familyProfiles.count > 1 else { return }
         let list = familyProfiles.filter { $0.id != target.id }
         guard !list.isEmpty else { return }
+        storage.deleteProfileData(for: target.id)
         storage.saveFamilyProfiles(list)
         familyProfiles = list
 
         if profile.id == target.id {
-            let nextProfile = list[0]
+            activeGameViewModel?.setSuspended(true)
+            var nextProfile = list[0]
+            storage.normalizeDailyCounters(&nextProfile)
             profile = nextProfile
             storage.saveProfile(nextProfile)
             pendingIslandUnlocks.removeAll()
-            puzzleProgress = storage.loadPuzzleProgress(for: nextProfile.id)
+            var loadedProgress = storage.loadPuzzleProgress(for: nextProfile.id)
+            if loadedProgress.refreshGauntletHearts() {
+                storage.savePuzzleProgress(loadedProgress, for: nextProfile.id)
+            }
+            puzzleProgress = loadedProgress
             pausedAIMatch = storage.loadPausedAIMatch(for: nextProfile.id)
             activeGameViewModel = nil
         }
@@ -364,7 +394,8 @@ final class AppState: ObservableObject {
         SoundAndHapticsManager.shared.soundEnabled = settings.soundEnabled
         SoundAndHapticsManager.shared.bgmEnabled = settings.bgmEnabled
         SoundAndHapticsManager.shared.voiceEnabled = settings.voiceEnabled
-        SoundAndHapticsManager.shared.voiceLanguageCode = settings.language.isChinese ? "zh" : settings.language.resolvedCode
+        SoundAndHapticsManager.shared.voiceLanguageCode = settings.language.voiceLanguageCode
+        AppFont.activeLanguageCode = settings.language.resolvedCode
         SoundAndHapticsManager.shared.zenDojoMode = settings.zenDojoMode
         SoundAndHapticsManager.shared.hapticsEnabled = settings.hapticsEnabled
         SoundAndHapticsManager.shared.updateBGMPlayback()
@@ -385,7 +416,7 @@ final class AppState: ObservableObject {
             }
         case .puzzlePlay, .puzzleGauntlet, .puzzleRush, .seaSkipGate, .srsGhostBuster, .reviewGame, .josekiTrainer, .miniDrill, .rankExamTest, .dailyKnowledge:
             SoundAndHapticsManager.shared.setMusicMood(.match)
-        case .puzzleHub, .islandDetail, .codex, .archive, .trainingDojo, .dailyDojo, .rankExamHall, .passport, .photoJudge:
+        case .puzzleHub, .islandDetail, .codex, .archive, .trainingDojo, .dailyDojo, .rankExamHall, .passport, .savedGames, .photoJudge:
             SoundAndHapticsManager.shared.setMusicMood(.island)
         }
     }
@@ -395,9 +426,15 @@ final class AppState: ObservableObject {
         isAppActive = active
         SoundAndHapticsManager.shared.setAppActive(active)
         if active {
+            var normalized = profile
+            if storage.normalizeDailyCounters(&normalized) {
+                profile = normalized
+                storage.saveProfile(normalized)
+            }
             refreshGauntletHearts()
             scheduleEyeCareTimerIfNeeded()
         } else {
+            activeGameViewModel?.setSuspended(true)
             eyeCareTimer?.invalidate()
             eyeCareTimer = nil
         }
@@ -704,13 +741,15 @@ final class AppState: ObservableObject {
             } else if clamped > existing {
                 puzzleProgress.starsByPuzzleId[puzzleId] = clamped
             }
-            // Spaced-Repetition (SRS) Mistake Book progression: 1d -> 3d -> 7d -> Mastered!
+            // Spaced-Repetition (SRS) Mistake Book progression: only advance when due so rapid retries don't skip intervals
             if let srsIdx = puzzleProgress.srsMistakeItems.firstIndex(where: { $0.puzzleId == puzzleId }) {
-                if let nextItem = puzzleProgress.srsMistakeItems[srsIdx].advancingOnCorrect() {
-                    puzzleProgress.srsMistakeItems[srsIdx] = nextItem
-                } else {
-                    puzzleProgress.srsMistakeItems.remove(at: srsIdx)
-                    puzzleProgress.mistakeBookIds.removeAll { $0 == puzzleId }
+                if puzzleProgress.srsMistakeItems[srsIdx].isDueNow {
+                    if let nextItem = puzzleProgress.srsMistakeItems[srsIdx].advancingOnCorrect() {
+                        puzzleProgress.srsMistakeItems[srsIdx] = nextItem
+                    } else {
+                        puzzleProgress.srsMistakeItems.remove(at: srsIdx)
+                        puzzleProgress.mistakeBookIds.removeAll { $0 == puzzleId }
+                    }
                 }
             } else {
                 puzzleProgress.mistakeBookIds.removeAll { $0 == puzzleId }
@@ -735,6 +774,61 @@ final class AppState: ObservableObject {
         let unlocked = pendingIslandUnlocks
         pendingIslandUnlocks.removeAll()
         return unlocked
+    }
+
+    func navigateToCampaignNode(
+        _ node: CampaignNode,
+        replaceTopRoute: Bool = true,
+        masteryTier: StageMasteryTier = .normal
+    ) {
+        if replaceTopRoute && !navigationPath.isEmpty {
+            navigationPath.removeLast()
+        }
+        switch node.kind {
+        case .puzzleGauntlet:
+            let nextSec = StarYiCampaign.nextSectionIndex(for: node, progress: puzzleProgress)
+            navigationPath.append(.puzzleGauntlet(nodeId: node.id, masteryTier: masteryTier, sectionIndex: nextSec))
+        case .miniDrill(let kind, let offset, let count):
+            navigationPath.append(.miniDrill(kind: kind, campaignNodeId: node.id, startOffset: offset, targetCount: count))
+        case .josekiTrial(let courseId):
+            navigationPath.append(.josekiTrainer(courseId: courseId, campaignNodeId: node.id))
+        case .tacticalScenario(let scenarioId):
+            if let scenario = TacticalScenariosLibrary.scenario(withId: scenarioId) {
+                startTacticalScenario(scenario, campaignNodeId: node.id)
+            }
+        }
+    }
+
+    func recordCampaignSectionCleared(
+        nodeId: String,
+        sectionIndex: Int,
+        stars: Int,
+        masteryTier: StageMasteryTier
+    ) {
+        guard let node = StarYiCampaign.node(withId: nodeId) else {
+            recordCampaignNodeCleared(nodeId: nodeId, stars: stars, masteryTier: masteryTier)
+            return
+        }
+        let totalSections = node.sectionCount
+        let clampedIndex = max(0, min(sectionIndex, totalSections - 1))
+        var cleared = StarYiCampaign.clearedSections(for: node, progress: puzzleProgress)
+        let isFirstClearOfSection = !cleared.contains(clampedIndex)
+        cleared.insert(clampedIndex)
+        puzzleProgress.campaignNodeClearedSections[nodeId] = cleared
+
+        let allSectionsCleared = cleared.count >= totalSections
+        if allSectionsCleared {
+            recordCampaignNodeCleared(nodeId: nodeId, stars: stars, masteryTier: masteryTier)
+        } else {
+            storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+            let coinReward = isFirstClearOfSection ? 12 : 4
+            let xpReward = isFirstClearOfSection ? 18 : 6
+            updateProfile { p in
+                p.xp += xpReward
+                p.starCoins += coinReward
+                advanceDailyStreak(&p)
+            }
+        }
     }
 
     func recordCampaignNodeCleared(
@@ -763,10 +857,12 @@ final class AppState: ObservableObject {
 
         storage.savePuzzleProgress(puzzleProgress, for: profile.id)
 
-        let tierBonus = masteryTier == .examCrown ? 25 : (masteryTier == .transformed ? 12 : 0)
-        let coinReward = (prevStars == 0 ? 25 : 8) + tierBonus + (clampedStars == 3 ? 10 : 0)
+        let isNewTier = masteryTier.rawValue > prevTier
+        let tierBonus = isNewTier ? (masteryTier == .examCrown ? 25 : (masteryTier == .transformed ? 12 : 0)) : 0
+        let starBonus = (clampedStars == 3 && prevStars < 3) ? 10 : 0
+        let coinReward = (prevStars == 0 ? 25 : 4) + tierBonus + starBonus
         updateProfile { p in
-            p.xp += (prevStars == 0 ? 40 : 12) + tierBonus
+            p.xp += (prevStars == 0 ? 40 : 8) + tierBonus
             p.starCoins += coinReward
             advanceDailyStreak(&p)
         }
@@ -777,12 +873,14 @@ final class AppState: ObservableObject {
 
     func unlockSeaViaSkipGate(seaId: String) {
         guard let targetSea = StarYiCampaign.sea(withId: seaId) else { return }
+        let wasAlreadyUnlocked = puzzleProgress.unlockedSeaIds.contains(targetSea.id)
         // Unlock target sea and all preceding seas so player isn't blocked from replaying earlier content
         for sea in StarYiCampaign.allSeas where sea.index <= targetSea.index {
             puzzleProgress.unlockedSeaIds.insert(sea.id)
         }
         puzzleProgress.didCompletePlacement = true
         storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+        guard !wasAlreadyUnlocked else { return }
         updateProfile { p in
             p.xp += 60
             p.starCoins += 40
@@ -813,6 +911,9 @@ final class AppState: ObservableObject {
         case "pl-10k":
             settings.preferredBoardSize = .thirteen
             settings.preferredDifficulty = .panda
+        case "pl-5k":
+            settings.preferredBoardSize = .nineteen
+            settings.preferredDifficulty = .crane
         case "pl-1d":
             settings.preferredBoardSize = .nineteen
             settings.preferredDifficulty = .dragon
@@ -939,9 +1040,10 @@ final class AppState: ObservableObject {
     }
 
     func recordExamWrittenPass(tier: Int) {
-        puzzleProgress.rankExamRecord.writtenPassedTiers.insert(tier)
+        let isFirstPass = puzzleProgress.rankExamRecord.writtenPassedTiers.insert(tier).inserted
         checkAndCertifyExamRank(tier: tier)
         storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+        guard isFirstPass else { return }
         updateProfile { p in
             p.xp += 45
             p.starCoins += 25
@@ -978,19 +1080,7 @@ final class AppState: ObservableObject {
     }
 
     func findAnyPuzzle(withId id: String) -> GoPuzzle? {
-        if let custom = puzzleProgress.customMistakePuzzles.first(where: { $0.id == id }) {
-            return custom
-        }
-        if let codex = GoTermCodex.codexPracticePuzzles.first(where: { $0.id == id }) {
-            return codex
-        }
-        if let dojo = DojoPuzzleBank.findPuzzle(withId: id) {
-            return dojo
-        }
-        if let pack = PuzzlePackLoader.findPuzzle(withId: id) {
-            return pack
-        }
-        return StarYiIslands.findAnyPuzzle(withId: id)
+        PuzzleCatalog.findPuzzle(withId: id, customPuzzles: puzzleProgress.customMistakePuzzles)
     }
 
     func saveCompletedGame(
@@ -1144,4 +1234,94 @@ final class AppState: ObservableObject {
         StarYiIslands.orderedPuzzles.first { (puzzleProgress.starsByPuzzleId[$0.id] ?? 0) == 0 }
             ?? StarYiIslands.orderedPuzzles[0]
     }
+
+    #if DEBUG
+    // MARK: - Debug Mode (Compiled out in Release builds)
+
+    func setDebugModeEnabled(_ enabled: Bool) {
+        isDebugModeEnabled = enabled
+        storage.saveDebugModeEnabled(enabled)
+    }
+
+    func debugGrantCoinsAndXP(coins: Int = 500, xp: Int = 200) {
+        updateProfile { p in
+            p.starCoins += coins
+            p.xp += xp
+        }
+        SoundAndHapticsManager.shared.playSuccess()
+    }
+
+    func debugUnlockAllContent() {
+        for sea in StarYiCampaign.allSeas {
+            puzzleProgress.unlockedSeaIds.insert(sea.id)
+        }
+        puzzleProgress.didCompletePlacement = true
+        storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+
+        updateProfile { p in
+            for theme in BoardTheme.allCases {
+                p.unlockedThemeIds.insert(theme.rawValue)
+            }
+            for style in StoneStyle.allCases {
+                p.unlockedStoneStyleIds.insert(style.rawValue)
+            }
+        }
+        SoundAndHapticsManager.shared.playWonderMoment()
+    }
+
+    func debugSetCertifiedRankTier(_ tier: Int) {
+        let clamped = max(0, min(8, tier))
+        updateProfile { p in
+            p.certifiedRankTier = clamped
+        }
+        SoundAndHapticsManager.shared.playUITap()
+    }
+
+    func debugSetGauntletHearts(_ hearts: Int) {
+        let clamped = max(0, min(PuzzleProgressStore.maxGauntletHearts, hearts))
+        puzzleProgress.gauntletHearts = clamped
+        puzzleProgress.gauntletHeartLastRegenDate = clamped < PuzzleProgressStore.maxGauntletHearts ? Date() : nil
+        storage.savePuzzleProgress(puzzleProgress, for: profile.id)
+        SoundAndHapticsManager.shared.playUITap()
+    }
+
+    func debugResetTodayDailyDojo() {
+        let today = StorageService.todayStamp()
+        updateProfile { p in
+            p.dailyDojoDateStamp = today
+            p.dailyDojoWarmupDone = false
+            p.dailyDojoCoreSolvedIds = []
+            p.dailyDojoCoreFirstTryIds = []
+            p.dailyDojoKnowledgeDone = false
+            p.dailyDojoStampClaimedToday = false
+            p.dailyDojoStampDates.remove(today)
+            if p.dailyChallengeCompletedStamp == today {
+                p.dailyChallengeCompletedStamp = ""
+            }
+        }
+        SoundAndHapticsManager.shared.playUITap()
+    }
+
+    func debugTriggerEyeCareAlert() {
+        showSettingsSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.showEyeCareAlert = true
+        }
+    }
+
+    func debugResetCurrentProfileProgress() {
+        let keepId = profile.id
+        let keepName = profile.nickname
+        let keepAvatar = profile.avatarEmoji
+        let freshProfile = UserProfile(id: keepId, nickname: keepName, avatarEmoji: keepAvatar)
+        profile = freshProfile
+        storage.saveProfile(freshProfile)
+        familyProfiles = storage.loadFamilyProfiles()
+
+        pendingIslandUnlocks.removeAll()
+        puzzleProgress = PuzzleProgressStore()
+        storage.savePuzzleProgress(puzzleProgress, for: keepId)
+        SoundAndHapticsManager.shared.playUITap(weight: .light)
+    }
+    #endif
 }

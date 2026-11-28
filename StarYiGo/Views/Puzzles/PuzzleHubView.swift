@@ -14,6 +14,7 @@ struct PuzzleHubView: View {
     let initialMistakesOnly: Bool
 
     @State private var scrolledSeaId: String? = "sea-1"
+    @State private var selectedIslandId: String = "s1-reef"
     @State private var programmaticScrollNonce: Int = 0
     @State private var programmaticScrollAnimated: Bool = true
     @State private var hasInitializedScroll: Bool = false
@@ -44,6 +45,23 @@ struct PuzzleHubView: View {
         StarYiCampaign.isSeaUnlocked(activeSea, progress: appState.puzzleProgress)
     }
 
+    /// Currently focused unlocked island inside the visible region (powers the Hero Pawn & Expedition Card).
+    private var focusedIslandInActiveSea: CampaignIsland? {
+        if let current = activeSea.islands.first(where: { $0.id == selectedIslandId }),
+           StarYiCampaign.unlockState(for: current, progress: appState.puzzleProgress).isUnlocked {
+            return current
+        }
+        // Prefer the active frontier island in this region, or the last cleared island.
+        if let activeFrontier = activeSea.islands.first(where: {
+            StarYiCampaign.unlockState(for: $0, progress: appState.puzzleProgress) == .active
+        }) {
+            return activeFrontier
+        }
+        return activeSea.islands.last(where: {
+            StarYiCampaign.unlockState(for: $0, progress: appState.puzzleProgress).isUnlocked
+        })
+    }
+
     private var mistakePuzzles: [GoPuzzle] {
         appState.puzzleProgress.mistakeBookIds.compactMap { appState.findAnyPuzzle(withId: $0) }
     }
@@ -72,7 +90,16 @@ struct PuzzleHubView: View {
                         }
                         .overlay(alignment: .leading) {
                             ZStack(alignment: .leading) {
-                                // Sailing and cross-sea flight routes
+                                // Biome-specific ambient atmosphere per region (dandelions, bamboo leaves, sakura, snow, embers)
+                                ForEach(seas) { sea in
+                                    let centerX = seaOriginX(sea.index, pageW: pageW, pageH: pageH) + pageW / 2
+                                    let art = seaArtSize(pageW: pageW, pageH: pageH)
+                                    BiomeAtmosphereOverlay(seaIndex: sea.index, reduceMotion: reduceMotion)
+                                        .frame(width: art.width, height: art.height)
+                                        .position(x: centerX, y: pageH / 2)
+                                }
+
+                                // Nintendo Go-Stone Star Roads & Cross-Sea Flight Arcs
                                 Canvas { context, _ in
                                     let progress = appState.puzzleProgress
                                     let allIslands = StarYiCampaign.allIslands
@@ -80,9 +107,9 @@ struct PuzzleHubView: View {
                                     for (source, destination) in zip(allIslands, allIslands.dropFirst()) {
                                         let isCrossSea = (source.seaId != destination.seaId)
                                         let isOpen = StarYiCampaign.unlockState(for: destination, progress: progress).isUnlocked
-                                        let route = worldRoute(from: source, to: destination, pageW: pageW, pageH: pageH)
 
                                         if isCrossSea {
+                                            let route = worldRoute(from: source, to: destination, pageW: pageW, pageH: pageH)
                                             let dash: [CGFloat] = isOpen ? [10, 8] : [6, 12]
                                             context.stroke(
                                                 route,
@@ -99,17 +126,54 @@ struct PuzzleHubView: View {
                                                 style: StrokeStyle(lineWidth: isOpen ? 6.5 : 3.5, lineCap: .round, dash: dash)
                                             )
                                         } else {
-                                            let dash: [CGFloat] = isOpen ? [] : [5, 12]
+                                            let controlPts = intraSeaControlPoints(from: source, to: destination, pageW: pageW, pageH: pageH)
+                                            let spline = OverworldSpline.smoothPath(through: controlPts)
+
+                                            // Subtle warm road bed glow underneath Go-stone stepping pips
                                             context.stroke(
-                                                route,
-                                                with: .color(isOpen ? AppTheme.sunRim.opacity(0.70) : AppTheme.inkPrimary.opacity(0.52)),
-                                                style: StrokeStyle(lineWidth: isOpen ? 7 : 5.5, lineCap: .round, dash: dash)
+                                                spline,
+                                                with: .color(isOpen ? AppTheme.sunRim.opacity(0.32) : Color.black.opacity(0.18)),
+                                                style: StrokeStyle(lineWidth: isOpen ? 11 : 6, lineCap: .round, lineJoin: .round)
                                             )
-                                            context.stroke(
-                                                route,
-                                                with: .color(isOpen ? Color(red: 1, green: 0.93, blue: 0.67) : .white.opacity(0.92)),
-                                                style: StrokeStyle(lineWidth: isOpen ? 4.5 : 3, lineCap: .round, dash: dash)
-                                            )
+                                            if isOpen {
+                                                context.stroke(
+                                                    spline,
+                                                    with: .color(Color(red: 1.0, green: 0.95, blue: 0.72).opacity(0.68)),
+                                                    style: StrokeStyle(lineWidth: 4.5, lineCap: .round, lineJoin: .round)
+                                                )
+                                            }
+
+                                            // Nintendo-style evenly spaced Go-stone stepping pips along the spline!
+                                            let pips = OverworldSpline.sampledPoints(through: controlPts, spacing: 26, endTrim: 34)
+                                            for (idx, pt) in pips.enumerated() {
+                                                let r: CGFloat = isOpen ? 5.2 : 3.6
+                                                let shadowRect = CGRect(x: pt.x - r, y: pt.y - r + 2.0, width: r * 2, height: r * 2)
+                                                context.fill(Path(ellipseIn: shadowRect), with: .color(Color.black.opacity(0.28)))
+
+                                                let stoneRect = CGRect(x: pt.x - r, y: pt.y - r, width: r * 2, height: r * 2)
+                                                if isOpen {
+                                                    let isGold = (idx % 2 == 0)
+                                                    context.fill(
+                                                        Path(ellipseIn: stoneRect),
+                                                        with: .color(isGold ? AppTheme.sunTop : Color.white)
+                                                    )
+                                                    context.stroke(
+                                                        Path(ellipseIn: stoneRect),
+                                                        with: .color(AppTheme.sunRim.opacity(0.85)),
+                                                        lineWidth: 1.5
+                                                    )
+                                                } else {
+                                                    context.fill(
+                                                        Path(ellipseIn: stoneRect),
+                                                        with: .color(Color.white.opacity(0.68))
+                                                    )
+                                                    context.stroke(
+                                                        Path(ellipseIn: stoneRect),
+                                                        with: .color(Color.black.opacity(0.28)),
+                                                        lineWidth: 1.0
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -129,7 +193,7 @@ struct PuzzleHubView: View {
                                         .position(x: straitCenterX(beforeSea: idx + 1, pageW: pageW, pageH: pageH), y: pageH * 0.44)
                                 }
 
-                                // Full-island elliptical hit zones covering the entire illustrated island artwork
+                                // Full-island elliptical hit zones covering the entire illustrated clearing/landmark
                                 ForEach(StarYiCampaign.allIslands) { island in
                                     let hitFrame = islandHitArea(for: island, pageW: pageW, pageH: pageH)
                                     Button {
@@ -144,16 +208,26 @@ struct PuzzleHubView: View {
                                     .accessibilityHidden(true)
                                 }
 
-                                // Interactive island pins
+                                // 2.5D Grounded Go-Stone Stage Pedestals
                                 ForEach(StarYiCampaign.allIslands) { island in
                                     islandMapPin(island)
                                         .phaseAnimator([0, 1, 2], trigger: newlyUnlockedIslandIDs.contains(island.id)) { pin, phase in
-                                            pin.scaleEffect(!reduceMotion && phase == 1 ? 1.13 : 1)
+                                            pin.scaleEffect(!reduceMotion && phase == 1 ? 1.16 : 1)
                                         } animation: { _ in
                                             .spring(response: 0.29, dampingFraction: 0.72)
                                         }
-                                        .scaleEffect(pageH < 470 ? 0.78 : 1)
                                         .position(worldPoint(for: island, pageW: pageW, pageH: pageH))
+                                }
+
+                                // Live Nintendo Hero Pawn standing on the focused unlocked stage & hopping smoothly!
+                                if let focused = focusedIslandInActiveSea {
+                                    let heroPos = worldPoint(for: focused, pageW: pageW, pageH: pageH)
+                                    OverworldHeroPawn(bobbing: activePulse, reduceMotion: reduceMotion)
+                                        .position(x: heroPos.x, y: heroPos.y - 34)
+                                        .animation(
+                                            reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.72),
+                                            value: focused.id
+                                        )
                                 }
                             }
                             .frame(width: totalW, height: pageH)
@@ -231,17 +305,20 @@ struct PuzzleHubView: View {
                     hasInitializedScroll = true
                     if let highestUnlocked = seas.last(where: { StarYiCampaign.isSeaUnlocked($0, progress: appState.puzzleProgress) }) {
                         scrolledSeaId = highestUnlocked.id
+                        syncFocusedIsland(for: highestUnlocked)
                         programmaticScrollAnimated = false
                         programmaticScrollNonce += 1
                         scrollProxy.scrollTo(highestUnlocked.id, anchor: .leading)
                     }
-                } else if let newlyUnlockedSeaId = freshUnlocks
-                    .compactMap({ StarYiCampaign.island(withId: $0)?.seaId })
-                    .first(where: { $0 != scrolledSeaId }) {
-                    scrolledSeaId = newlyUnlockedSeaId
-                    programmaticScrollAnimated = !reduceMotion
-                    programmaticScrollNonce += 1
-                    scrollProxy.scrollTo(newlyUnlockedSeaId, anchor: .leading)
+                } else if let newlyUnlockedId = freshUnlocks.first,
+                          let newlyUnlockedIsland = StarYiCampaign.island(withId: newlyUnlockedId) {
+                    selectedIslandId = newlyUnlockedId
+                    if newlyUnlockedIsland.seaId != scrolledSeaId {
+                        scrolledSeaId = newlyUnlockedIsland.seaId
+                        programmaticScrollAnimated = !reduceMotion
+                        programmaticScrollNonce += 1
+                        scrollProxy.scrollTo(newlyUnlockedIsland.seaId, anchor: .leading)
+                    }
                 }
                 if !reduceMotion {
                     if !activePulse {
@@ -255,6 +332,9 @@ struct PuzzleHubView: View {
                         }
                     }
                 }
+            }
+            .onChange(of: scrolledSeaId) { _, _ in
+                syncFocusedIsland(for: activeSea)
             }
             .onDisappear {
                 toastDismissTask?.cancel()
@@ -278,148 +358,56 @@ struct PuzzleHubView: View {
         }
     }
 
-    // MARK: - Biome World Artwork & Nintendo Cloud-Bank Transitions
+    // MARK: - Biome World Artwork
 
     private func seaMapArtwork(pageW: CGFloat, pageH: CGFloat, totalW: CGFloat) -> some View {
         let art = seaArtSize(pageW: pageW, pageH: pageH)
         let gap = seaGapW(pageW: pageW, pageH: pageH)
         let slotW = pageW + gap
-        let cloudBankW = max(240, pageW * 0.36)
+        let overlap = min(slotW * 0.30, pageH * 0.58)
+        let backdropW = slotW + overlap
+        let fadeEnd = overlap / max(1, backdropW)
 
         return ZStack(alignment: .leading) {
-            // 1. Each biome fills its full page slot with a matching ambient extension + razor-sharp 2400×1792 diorama centerpiece.
+            // Blend adjacent landscape edges behind the sharp, tappable map artwork.
             ForEach(seas) { sea in
                 let centerX = seaOriginX(sea.index, pageW: pageW, pageH: pageH) + pageW / 2
-                ZStack {
-                    Image(sea.mapImageName)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: slotW + 24, height: pageH + 24)
-                        .blur(radius: 18)
-                        .scaleEffect(1.06)
-                        .clipped()
-
-                    Image(sea.mapImageName)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: art.width, height: art.height)
-                        .mask { seaArtEdgeFade(from: .leading, to: .trailing) }
-                        .mask { seaArtEdgeFade(from: .top, to: .bottom) }
-                }
-                .frame(width: slotW, height: pageH)
-                .clipped()
-                .position(x: centerX, y: pageH / 2)
+                Image(sea.mapImageName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: backdropW, height: pageH)
+                    .clipped()
+                    .blur(radius: 12, opaque: true)
+                    .mask {
+                        if sea.index == 0 {
+                            Rectangle()
+                        } else {
+                            LinearGradient(stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white.opacity(0.15), location: fadeEnd * 0.25),
+                                .init(color: .white.opacity(0.85), location: fadeEnd * 0.75),
+                                .init(color: .white, location: fadeEnd)
+                            ], startPoint: .leading, endPoint: .trailing)
+                        }
+                    }
+                    .position(x: centerX, y: pageH / 2)
             }
 
-            // 2. ~1/3-screen-wide Nintendo fluffy 3D cloud banks seamlessly bridging each adjacent biome!
-            ForEach(0..<max(0, seas.count - 1), id: \.self) { idx in
-                cloudSeamBank(seamIndex: idx, width: cloudBankW, height: pageH)
-                    .position(
-                        x: straitCenterX(beforeSea: idx + 1, pageW: pageW, pageH: pageH),
-                        y: pageH / 2
-                    )
+            ForEach(seas) { sea in
+                let centerX = seaOriginX(sea.index, pageW: pageW, pageH: pageH) + pageW / 2
+                Image(sea.mapImageName)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: art.width, height: art.height)
+                    .mask { seaArtEdgeFade(from: .leading, to: .trailing) }
+                    .mask { seaArtEdgeFade(from: .top, to: .bottom) }
+                    .position(x: centerX, y: pageH / 2)
             }
         }
         .frame(width: totalW, height: pageH)
         .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-
-    private func cloudSeamBank(seamIndex: Int, width: CGFloat, height: CGFloat) -> some View {
-        let undersideTint: Color = {
-            switch seamIndex {
-            case 0: return Color(red: 0.78, green: 0.90, blue: 0.98) // Island -> Forest: airy sky tint
-            case 1: return Color(red: 0.98, green: 0.92, blue: 0.80) // Forest -> Desert: warm sunlit cream
-            case 2: return Color(red: 0.82, green: 0.92, blue: 1.00) // Desert -> Snow: crisp alpine blue
-            default: return Color(red: 0.96, green: 0.82, blue: 0.76) // Snow -> Volcano: ember-kissed dusk
-            }
-        }()
-
-        let drift: CGFloat = reduceMotion ? 0 : (flightBob ? -5 : 5)
-
-        return ZStack {
-            // Soft full-height mist veil that completely erases the biome boundary
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0.0),
-                    .init(color: Color.white.opacity(0.45), location: 0.16),
-                    .init(color: Color.white.opacity(0.92), location: 0.36),
-                    .init(color: Color.white.opacity(0.96), location: 0.50),
-                    .init(color: Color.white.opacity(0.92), location: 0.64),
-                    .init(color: Color.white.opacity(0.45), location: 0.84),
-                    .init(color: .clear, location: 1.0)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-
-            // Layered vector Nintendo cloud puffs (infinitely sharp on Retina iPad Pro!)
-            Canvas { context, size in
-                let w = size.width
-                let h = size.height
-                let puffCount = 11
-
-                // Layer A: Outer soft-edge puffs (gives organic wavy cloud silhouette on both sides)
-                for i in 0..<puffCount {
-                    let t = CGFloat(i) / CGFloat(puffCount - 1)
-                    let y = t * h
-                    let wave = sin(Double(i) * 1.65 + Double(seamIndex) * 1.1)
-                    let leftX = w * (0.28 + 0.08 * CGFloat(wave))
-                    let rightX = w * (0.72 - 0.08 * CGFloat(cos(Double(i) * 1.4 + Double(seamIndex))))
-                    let rOuter = max(w * 0.23, h * 0.095)
-
-                    let leftRect = CGRect(x: leftX - rOuter, y: y - rOuter, width: rOuter * 2, height: rOuter * 2)
-                    let rightRect = CGRect(x: rightX - rOuter, y: y - rOuter, width: rOuter * 2, height: rOuter * 2)
-                    context.fill(Path(ellipseIn: leftRect), with: .color(undersideTint.opacity(0.58)))
-                    context.fill(Path(ellipseIn: rightRect), with: .color(undersideTint.opacity(0.58)))
-                }
-
-                // Layer B: Shaded volumetric cloud undersides
-                for i in 0..<(puffCount + 2) {
-                    let t = (CGFloat(i) - 0.5) / CGFloat(puffCount)
-                    let y = t * h + 10
-                    let xJitter = CGFloat(sin(Double(i) * 2.1 + Double(seamIndex) * 0.7)) * w * 0.14
-                    let cx = w * 0.50 + xJitter
-                    let rx = max(w * 0.25, h * 0.105)
-                    let ry = rx * 0.88
-                    let rect = CGRect(x: cx - rx, y: y - ry, width: rx * 2, height: ry * 2)
-                    context.fill(Path(ellipseIn: rect), with: .color(undersideTint.opacity(0.88)))
-                }
-
-                // Layer C: Bright sunlit pure-white Nintendo cloud crests
-                for i in 0..<(puffCount + 2) {
-                    let t = (CGFloat(i) - 0.5) / CGFloat(puffCount)
-                    let y = t * h - 3
-                    let xJitter = CGFloat(sin(Double(i) * 2.1 + Double(seamIndex) * 0.7)) * w * 0.13
-                    let cx = w * 0.50 + xJitter
-                    let rx = max(w * 0.22, h * 0.092)
-                    let ry = rx * 0.84
-                    let rect = CGRect(x: cx - rx, y: y - ry, width: rx * 2, height: ry * 2)
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .linearGradient(
-                            Gradient(colors: [.white, Color.white.opacity(0.95), undersideTint.opacity(0.35)]),
-                            startPoint: CGPoint(x: cx, y: rect.minY),
-                            endPoint: CGPoint(x: cx, y: rect.maxY)
-                        )
-                    )
-                }
-
-                // Layer D: Center puffy pillow highlights
-                for i in 0..<8 {
-                    let t = (CGFloat(i) + 0.5) / 8.0
-                    let y = t * h
-                    let xOff = CGFloat(cos(Double(i) * 1.9 + Double(seamIndex))) * w * 0.09
-                    let cx = w * 0.50 + xOff
-                    let r = max(w * 0.16, h * 0.072)
-                    let rect = CGRect(x: cx - r, y: y - r, width: r * 2, height: r * 2)
-                    context.fill(Path(ellipseIn: rect), with: .color(Color.white.opacity(0.96)))
-                }
-            }
-            .offset(y: drift)
-        }
-        .frame(width: width, height: height + 60)
     }
 
     private func seaArtEdgeFade(from start: UnitPoint, to end: UnitPoint) -> some View {
@@ -456,7 +444,7 @@ struct PuzzleHubView: View {
                         .overlay(Circle().strokeBorder(.white, lineWidth: 3))
                         .shadow(color: (unlocked ? AppTheme.sunRim : AppTheme.skyRim).opacity(0.45), radius: 8, y: 4)
                     Text(unlocked ? "✈️" : "🔑")
-                        .font(.system(size: 22))
+                        .font(AppFont.rounded(size: 22, weight: .regular))
                 }
                 Text(unlocked
                      ? l10n.localized(
@@ -473,7 +461,7 @@ struct PuzzleHubView: View {
                          ko: "\(shortRegionName(nextSea.index)) 월반",
                          zhHant: "跳級\(shortRegionName(nextSea.index))"
                      ))
-                    .font(.system(size: 10.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 10.5, weight: .black))
                     .foregroundColor(AppTheme.inkPrimary)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 3)
@@ -498,13 +486,13 @@ struct PuzzleHubView: View {
                 HStack(spacing: 4) {
                     if !isNext {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .black))
+                            .font(.system(size: 13, weight: .black, design: .rounded))
                     }
                     Text(isNext ? (unlocked ? "✈️" : "🔑") : targetSea.emoji)
-                        .font(.system(size: 18))
+                        .font(AppFont.rounded(size: 18, weight: .regular))
                     if isNext {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .black))
+                            .font(.system(size: 13, weight: .black, design: .rounded))
                     }
                 }
                 .foregroundColor(isNext ? .white : AppTheme.inkPrimary)
@@ -524,11 +512,11 @@ struct PuzzleHubView: View {
                          ko: shortRegionName(targetSea.index),
                          zhHant: shortRegionName(targetSea.index)
                      ))
-                    .font(.system(size: 10.5, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 10.5, weight: .black))
                     .foregroundColor(isNext ? .white : AppTheme.inkPrimary)
 
                 Text(targetSea.rankRange)
-                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 9, weight: .heavy))
                     .foregroundColor(isNext ? .white.opacity(0.92) : AppTheme.skyBottom)
             }
             .padding(.horizontal, 11)
@@ -592,7 +580,7 @@ struct PuzzleHubView: View {
                     l10n.t("home.puzzleCard.mistakes", appState.puzzleProgress.mistakeBookIds.count),
                     systemImage: "bookmark.fill"
                 )
-                .font(.system(size: 13.5, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 13.5, weight: .black))
                 .foregroundColor(showMistakesDrawer ? .white : AppTheme.coralBottom)
                 .padding(.horizontal, 15)
                 .padding(.vertical, 10)
@@ -630,7 +618,7 @@ struct PuzzleHubView: View {
                     flyToSea(sea, scrollProxy: scrollProxy)
                 } label: {
                     HStack(spacing: 5) {
-                        Text(unlocked ? sea.emoji : "🔒").font(.system(size: 12.5))
+                        Text(unlocked ? sea.emoji : "🔒").font(AppFont.rounded(size: 12.5, weight: .regular))
                         Text(isSelected
                              ? l10n.localized(
                                  zh: "\(shortRegionName(idx)) · \(sea.rankRange)",
@@ -640,7 +628,7 @@ struct PuzzleHubView: View {
                                  zhHant: "\(shortRegionName(idx)) · \(sea.rankRange)"
                              )
                              : sea.rankRange)
-                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 11.5, weight: .black))
                             .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
                     }
                     .padding(.horizontal, isSelected ? 13 : 10)
@@ -660,7 +648,7 @@ struct PuzzleHubView: View {
 
                 if idx + 1 < seas.count {
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 9, weight: .black))
+                        .font(.system(size: 9, weight: .black, design: .rounded))
                         .foregroundColor(.white.opacity(0.85))
                 }
             }
@@ -672,9 +660,9 @@ struct PuzzleHubView: View {
 
     private func shortRegionName(_ index: Int) -> String {
         switch index {
-        case 0: return l10n.localized(zh: "海岛", en: "Islands", ja: "海島", ko: "해섬", zhHant: "海島")
+        case 0: return l10n.localized(zh: "草地", en: "Meadow", ja: "草原", ko: "초원", zhHant: "草地")
         case 1: return l10n.localized(zh: "森林", en: "Forest", ja: "森", ko: "숲", zhHant: "森林")
-        case 2: return l10n.localized(zh: "沙漠", en: "Desert", ja: "砂漠", ko: "사막", zhHant: "沙漠")
+        case 2: return l10n.localized(zh: "湖泊", en: "Lake", ja: "湖", ko: "호수", zhHant: "湖泊")
         case 3: return l10n.localized(zh: "雪山", en: "Snow", ja: "雪山", ko: "설산", zhHant: "雪山")
         default: return l10n.localized(zh: "火山", en: "Volcano", ja: "火山", ko: "화산", zhHant: "火山")
         }
@@ -699,12 +687,34 @@ struct PuzzleHubView: View {
     /// Pixel aspect ratio of every ultra-HD region artwork (2400 × 1792).
     private static let seaArtAspect: CGFloat = 2400.0 / 1792.0
 
-    /// On-screen size of one sea artwork. The art keeps its true aspect ratio (never cropped
-    /// differently per device), so island pins always sit exactly on top of the painted islands.
+    /// On-screen size of one sea artwork tailored for iPad Landscape (4:3 / 1.34:1).
+    /// Keeps the artwork's true 4:3 aspect ratio so pedestals and Go-stone roads align with millimeter precision.
     private func seaArtSize(pageW: CGFloat, pageH: CGFloat) -> CGSize {
-        let heightScale: CGFloat = pageH < 470 ? 0.88 : 1.08
-        let h = min(pageH * heightScale, pageW / Self.seaArtAspect)
+        let h = min(pageH * 1.02, pageW / Self.seaArtAspect)
         return CGSize(width: h * Self.seaArtAspect, height: h)
+    }
+
+    private func syncFocusedIsland(for sea: CampaignSea) {
+        if let active = sea.islands.first(where: {
+            StarYiCampaign.unlockState(for: $0, progress: appState.puzzleProgress) == .active
+        }) {
+            selectedIslandId = active.id
+        } else if let lastUnlocked = sea.islands.last(where: {
+            StarYiCampaign.unlockState(for: $0, progress: appState.puzzleProgress).isUnlocked
+        }) {
+            selectedIslandId = lastUnlocked.id
+        }
+    }
+
+    /// World-space control points (start -> waypoints -> destination) for intra-region Go-stone star roads.
+    private func intraSeaControlPoints(from source: CampaignIsland, to destination: CampaignIsland, pageW: CGFloat, pageH: CGFloat) -> [CGPoint] {
+        let sIdx = seaIndex(for: source)
+        var pts: [CGPoint] = [worldPoint(for: source, pageW: pageW, pageH: pageH)]
+        for wp in source.pathToNextWaypoints {
+            pts.append(artPoint(sea: sIdx, x: wp.x, y: wp.y, pageW: pageW, pageH: pageH))
+        }
+        pts.append(worldPoint(for: destination, pageW: pageW, pageH: pageH))
+        return pts
     }
 
     /// Include the water already visible in each page's side margins.
@@ -739,31 +749,11 @@ struct PuzzleHubView: View {
         artPoint(sea: seaIndex(for: island), x: island.mapX, y: island.mapY, pageW: pageW, pageH: pageH)
     }
 
-    /// Bounding rect in world coordinates matching the full painted island footprint for each of the 5 slots.
     private func islandHitArea(for island: CampaignIsland, pageW: CGFloat, pageH: CGFloat) -> CGRect {
         let art = seaArtSize(pageW: pageW, pageH: pageH)
-        let normCenter: (CGFloat, CGFloat)
-        let normSize: (CGFloat, CGFloat)
-        switch island.orderInSea {
-        case 0:
-            normCenter = (0.195, 0.66)
-            normSize = (0.29, 0.34)
-        case 1:
-            normCenter = (0.305, 0.27)
-            normSize = (0.29, 0.30)
-        case 2:
-            normCenter = (0.515, 0.48)
-            normSize = (0.31, 0.33)
-        case 3:
-            normCenter = (0.78, 0.68)
-            normSize = (0.30, 0.34)
-        default:
-            normCenter = (0.795, 0.28)
-            normSize = (0.25, 0.33)
-        }
-        let center = artPoint(sea: seaIndex(for: island), x: normCenter.0, y: normCenter.1, pageW: pageW, pageH: pageH)
-        let width = max(110, normSize.0 * art.width)
-        let height = max(110, normSize.1 * art.height)
+        let center = worldPoint(for: island, pageW: pageW, pageH: pageH)
+        let width = max(44, art.width * 0.20)
+        let height = max(44, art.height * 0.20)
         return CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
     }
 
@@ -771,9 +761,17 @@ struct PuzzleHubView: View {
         let unlockState = StarYiCampaign.unlockState(for: island, progress: appState.puzzleProgress)
         switch unlockState {
         case .active, .cleared:
-            SoundAndHapticsManager.shared.playUITap()
             showMistakesDrawer = false
-            appState.navigationPath.append(.islandDetail(islandId: island.id))
+            lockedToastMessage = nil
+            if selectedIslandId == island.id {
+                SoundAndHapticsManager.shared.playUITap()
+                appState.navigationPath.append(.islandDetail(islandId: island.id))
+            } else {
+                SoundAndHapticsManager.shared.playStonePlace()
+                withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.74)) {
+                    selectedIslandId = island.id
+                }
+            }
         case .locked:
             let islandSea = StarYiCampaign.sea(withId: island.seaId) ?? activeSea
             let seaUnlocked = StarYiCampaign.isSeaUnlocked(islandSea, progress: appState.puzzleProgress)
@@ -816,200 +814,43 @@ struct PuzzleHubView: View {
             let ctrl2 = CGPoint(x: borderX + span * 0.12, y: end.y + pageH * 0.02)
             route.addCurve(to: end, control1: ctrl1, control2: ctrl2)
         } else {
-            let index = seaIndex(for: source)
-            let controls: (CGPoint, CGPoint)
-            switch (source.orderInSea, destination.orderInSea) {
-            case (0, 1):
-                controls = (CGPoint(x: 0.34, y: 0.54), CGPoint(x: 0.16, y: 0.43))
-            case (1, 2):
-                controls = (CGPoint(x: 0.52, y: 0.27), CGPoint(x: 0.40, y: 0.46))
-            case (2, 3):
-                controls = (CGPoint(x: 0.51, y: 0.73), CGPoint(x: 0.66, y: 0.75))
-            case (3, 4):
-                controls = (CGPoint(x: 0.95, y: 0.58), CGPoint(x: 0.91, y: 0.39))
-            default:
-                let midX = (source.mapX + destination.mapX) / 2
-                controls = (CGPoint(x: midX, y: source.mapY), CGPoint(x: midX, y: destination.mapY))
-            }
-            route.addCurve(
-                to: end,
-                control1: artPoint(sea: index, x: controls.0.x, y: controls.0.y, pageW: pageW, pageH: pageH),
-                control2: artPoint(sea: index, x: controls.1.x, y: controls.1.y, pageW: pageW, pageH: pageH)
-            )
+            let midX = (start.x + end.x) / 2
+            route.addCurve(to: end, control1: CGPoint(x: midX, y: start.y),
+                           control2: CGPoint(x: midX, y: end.y))
         }
         return route
     }
 
-    // MARK: - Island Map Pin (Active / Cleared / Locked + SRS Mistake Ghost Badge!)
+    // MARK: - 2.5D Embedded Go-Stone Stage Pedestal Pin
 
     @ViewBuilder
     private func islandMapPin(_ island: CampaignIsland) -> some View {
-        let cleared = StarYiCampaign.clearedNodeCount(for: island, progress: appState.puzzleProgress)
-        let total = island.nodes.count
         let unlockState = StarYiCampaign.unlockState(for: island, progress: appState.puzzleProgress)
         let pal = GlossyPalette.forIsland(island.id)
         let shakeCount = shakeCounters[island.id] ?? 0
         let dueGhosts = StarYiCampaign.dueMistakeGhosts(for: island, progress: appState.puzzleProgress)
+        let bossDefeated = StarYiCampaign.isBossDefeated(for: island, progress: appState.puzzleProgress)
+        let earned = StarYiCampaign.earnedStars(for: island, progress: appState.puzzleProgress)
+        let maxS = StarYiCampaign.maxStars(for: island)
+        let worldNumber = seaIndex(for: island) + 1
+        let stageCode = "\(worldNumber)-\(island.orderInSea + 1)"
+        let isSelected = (focusedIslandInActiveSea?.id == island.id) && unlockState.isUnlocked
 
-        switch unlockState {
-        case .active:
-            Button {
-                handleIslandTap(island)
-            } label: {
-                VStack(spacing: 6) {
-                    ZStack {
-                        Circle()
-                            .fill(pal.top.opacity(activePulse ? 0.44 : 0.20))
-                            .frame(width: activePulse ? 90 : 78, height: activePulse ? 90 : 78)
-
-                        Circle()
-                            .stroke(Color.white.opacity(activePulse ? 0.90 : 0.45), lineWidth: 3)
-                            .frame(width: activePulse ? 76 : 68, height: activePulse ? 76 : 68)
-
-                        CharacterAvatarView(character: island.boss.difficulty, mood: .greeting, size: 58)
-
-                        if !dueGhosts.isEmpty {
-                            ghostBadge(count: dueGhosts.count)
-                                .offset(x: 26, y: -22)
-                        }
-                    }
-
-                    VStack(spacing: 2) {
-                        HStack(spacing: 4) {
-                            Text(island.localizedName(l10n))
-                                .font(.system(size: 13.5, weight: .black, design: .rounded))
-                                .foregroundColor(.white)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .black))
-                                .foregroundColor(.white.opacity(0.92))
-                        }
-
-                        Text(l10n.localized(
-                            zh: "\(island.rankRange) · \(cleared)/\(total)关",
-                            en: "\(island.rankRange) · \(cleared)/\(total)Q",
-                            ja: "\(island.rankRange) · \(cleared)/\(total)関",
-                            ko: "\(island.rankRange) · \(cleared)/\(total)관",
-                            zhHant: "\(island.rankRange) · \(cleared)/\(total)關"
-                        ))
-                            .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .foregroundColor(.white.opacity(0.95))
-                    }
-                    .padding(.horizontal, 13)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(LinearGradient(colors: [pal.top, pal.bottom], startPoint: .top, endPoint: .bottom))
-                            .overlay(Capsule().strokeBorder(.white, lineWidth: 2.5))
-                            .shadow(color: pal.glow.opacity(0.40), radius: 10, y: 5)
-                    )
-                }
-                .scaleEffect(1.04)
-            }
-            .buttonStyle(TactileButtonStyle(pressedScale: 0.96, playTapSound: false))
-            .accessibilityIdentifier("IslandPin_\(island.id)")
-
-        case .cleared:
-            let bossDefeated = StarYiCampaign.isBossDefeated(for: island, progress: appState.puzzleProgress)
-            Button {
-                handleIslandTap(island)
-            } label: {
-                VStack(spacing: 5) {
-                    ZStack(alignment: .topTrailing) {
-                        CharacterAvatarView(character: island.boss.difficulty, mood: bossDefeated ? .cheering : .calm, size: 56)
-
-                        if !dueGhosts.isEmpty {
-                            ghostBadge(count: dueGhosts.count)
-                                .offset(x: 8, y: -6)
-                        } else {
-                            Image(systemName: bossDefeated ? "trophy.fill" : "crown.fill")
-                                .font(.system(size: 11, weight: .black))
-                                .foregroundColor(.white)
-                                .frame(width: 24, height: 24)
-                                .background(
-                                    Circle()
-                                        .fill(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
-                                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                                )
-                                .offset(x: 6, y: -5)
-                        }
-                    }
-
-                    VStack(spacing: 1) {
-                        Text(island.localizedName(l10n))
-                            .font(.system(size: 12.5, weight: .black, design: .rounded))
-                            .foregroundColor(AppTheme.inkPrimary)
-                        Text(bossDefeated ? "🏆 \(island.rankRange)" : "★ \(cleared)/\(total)")
-                            .font(.system(size: 10, weight: .heavy, design: .rounded))
-                            .foregroundColor(AppTheme.sunBottom)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.96))
-                            .overlay(Capsule().strokeBorder(.white, lineWidth: 2.5))
-                            .shadow(color: Color.black.opacity(0.16), radius: 8, y: 4)
-                    )
-                }
-            }
-            .buttonStyle(TactileButtonStyle(pressedScale: 0.96, playTapSound: false))
-            .accessibilityIdentifier("IslandPin_\(island.id)")
-
-        case .locked:
-            Button {
-                handleIslandTap(island)
-            } label: {
-                VStack(spacing: 5) {
-                    ZStack(alignment: .bottomTrailing) {
-                        CharacterAvatarView(character: island.boss.difficulty, mood: .calm, size: 52, isLocked: true)
-
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 11, weight: .black))
-                            .foregroundColor(.white)
-                            .frame(width: 22, height: 22)
-                            .background(
-                                Circle()
-                                    .fill(Color(red: 0.44, green: 0.49, blue: 0.56))
-                                    .overlay(Circle().strokeBorder(Color.white.opacity(0.92), lineWidth: 2))
-                            )
-                            .offset(x: 4, y: 4)
-                            .modifier(LockedShakeEffect(shakes: shakeCount, amplitude: 3))
-                    }
-
-                    VStack(spacing: 1) {
-                        Text(island.localizedName(l10n))
-                            .font(.system(size: 11.5, weight: .heavy, design: .rounded))
-                            .foregroundColor(Color(red: 0.42, green: 0.47, blue: 0.54))
-                        Text(island.rankRange)
-                            .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                            .foregroundColor(Color(red: 0.50, green: 0.55, blue: 0.62))
-                    }
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color(red: 0.86, green: 0.89, blue: 0.93).opacity(0.94))
-                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.75), lineWidth: 2))
-                    )
-                }
-                .scaleEffect(0.92)
-            }
-            .buttonStyle(TactileButtonStyle(pressedScale: 0.96, playTapSound: false))
-            .accessibilityIdentifier("IslandPinLocked_\(island.id)")
-        }
-    }
-
-    private func ghostBadge(count: Int) -> some View {
-        HStack(spacing: 2) {
-            Text("👻").font(.system(size: 11))
-            Text("\(count)")
-                .font(.system(size: 10.5, weight: .black, design: .rounded))
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(Capsule().fill(AppTheme.coralBottom).overlay(Capsule().strokeBorder(.white, lineWidth: 1.5)))
-        .shadow(color: AppTheme.coralRim.opacity(0.4), radius: 4, y: 2)
+        GoStonePedestalPin(
+            island: island,
+            stageCode: stageCode,
+            displayName: island.localizedName(l10n),
+            unlockState: unlockState,
+            isSelected: isSelected,
+            isBossDefeated: bossDefeated,
+            earnedStars: earned,
+            maxStars: maxS,
+            dueGhostCount: dueGhosts.count,
+            palette: pal,
+            activePulse: activePulse,
+            shakeCount: shakeCount,
+            onTap: { handleIslandTap(island) }
+        )
     }
 
     // MARK: - Bottom Docks (Locked Sea Skip Gate vs Active Adventure Dock)
@@ -1037,7 +878,7 @@ struct PuzzleHubView: View {
                 appState.navigationPath.append(.seaSkipGate(seaId: activeSea.id))
             } label: {
                 HStack(spacing: 12) {
-                    Text("🔑").font(.system(size: 26))
+                    Text("🔑").font(AppFont.rounded(size: 26, weight: .regular))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(compact ? compactTitle : l10n.localized(
                             zh: "开启「\(activeSea.localizedName(l10n))」跳级试炼门",
@@ -1046,7 +887,7 @@ struct PuzzleHubView: View {
                             ko: "「\(activeSea.localizedName(l10n))」 월반 시험 도전",
                             zhHant: "開啟「\(activeSea.localizedName(l10n))」跳級試煉門"
                         ))
-                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .font(AppFont.rounded(size: 16, weight: .black))
                             .foregroundColor(.white)
                         Text(compact ? compactSubtitle : l10n.localized(
                             zh: "水平够强不想从头刷？无辅助答对 4/5 题直接空降本海域！",
@@ -1055,12 +896,12 @@ struct PuzzleHubView: View {
                             ko: "실력에 자신 있나요? 힌트 없이 5문제 중 4문제를 맞혀 이 해역으로 바로 점프!",
                             zhHant: "水平夠強不想從頭刷？無輔助答對 4/5 題直接空降本海域！"
                         ))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .font(AppFont.rounded(size: 12, weight: .bold))
                             .foregroundColor(.white.opacity(0.94))
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 24, weight: .black))
+                        .font(.system(size: 24, weight: .black, design: .rounded))
                         .foregroundColor(.white)
                 }
                 .padding(.horizontal, 20)
@@ -1079,30 +920,35 @@ struct PuzzleHubView: View {
         let total = StarterBootcamp.puzzles.count
         let nextLesson = StarterBootcamp.nextUnsolved(progress: appState.puzzleProgress)
 
-        return HStack(spacing: 10) {
+        return HStack(spacing: 12) {
+            // Nintendo-Style Focused Stage Expedition Card (shows Boss, progress & juicy Enter Stage button)
+            if let focused = focusedIslandInActiveSea {
+                focusedStageExpeditionCard(focused)
+            }
+
             puzzleRushButton
 
             if activeSeaIndex == 0 {
                 Button {
                     appState.navigationPath.append(.puzzlePlay(puzzleId: nextLesson.id, isDailyChallenge: false, isStarterBootcamp: true))
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .black))
+                            .font(.system(size: 15, weight: .black, design: .rounded))
                             .foregroundColor(.white)
-                            .frame(width: 34, height: 34)
+                            .frame(width: 30, height: 30)
                             .background(Circle().fill(LinearGradient(colors: [AppTheme.mintTop, AppTheme.mintBottom], startPoint: .top, endPoint: .bottom)))
                         VStack(alignment: .leading, spacing: 1) {
                             Text("\(l10n.t("islands.starterDock.title")) (\(solved)/\(total))")
-                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .font(AppFont.rounded(size: 12.5, weight: .black))
                                 .foregroundColor(AppTheme.inkPrimary)
                             Text(l10n.localized(zh: "零基础5路启蒙", en: "5×5 Starter", ja: "5路盤・入門", ko: "5줄 바둑 입문", zhHant: "零基礎5路啟蒙"))
-                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .font(AppFont.rounded(size: 10, weight: .bold))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
                 .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
             }
@@ -1120,13 +966,87 @@ struct PuzzleHubView: View {
                     ),
                     systemImage: "rosette"
                 )
-                .font(.system(size: 13, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12.5, weight: .black))
                 .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
             .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
         }
+    }
+
+    private func focusedStageExpeditionCard(_ island: CampaignIsland) -> some View {
+        let cleared = StarYiCampaign.clearedNodeCount(for: island, progress: appState.puzzleProgress)
+        let total = island.nodes.count
+        let bossDefeated = StarYiCampaign.isBossDefeated(for: island, progress: appState.puzzleProgress)
+        let pal = GlossyPalette.forIsland(island.id)
+        let stageCode = "W\(seaIndex(for: island) + 1)-\(island.orderInSea + 1)"
+
+        return HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                CharacterAvatarView(character: island.boss.difficulty, mood: bossDefeated ? .cheering : .greeting, size: 46)
+                if bossDefeated {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(AppTheme.sunBottom).overlay(Circle().strokeBorder(.white, lineWidth: 1.5)))
+                        .offset(x: 4, y: 4)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(stageCode)
+                        .font(AppFont.rounded(size: 10.5, weight: .black))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(LinearGradient(colors: [pal.top, pal.bottom], startPoint: .top, endPoint: .bottom)))
+                    Text(island.localizedName(l10n))
+                        .font(AppFont.rounded(size: 15, weight: .black))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .lineLimit(1)
+                }
+                Text(l10n.localized(
+                    zh: "\(island.rankRange) · 已通 \(cleared)/\(total) 关 · \(island.descZh)",
+                    en: "\(island.rankRange) · \(cleared)/\(total) Cleared · \(island.descEn)",
+                    ja: "\(island.rankRange) · \(cleared)/\(total) 関クリア",
+                    ko: "\(island.rankRange) · \(cleared)/\(total) 관 완료",
+                    zhHant: "\(island.rankRange) · 已通 \(cleared)/\(total) 關 · \(island.descZh)"
+                ))
+                .font(AppFont.rounded(size: 11, weight: .bold))
+                .foregroundColor(AppTheme.inkSecondary)
+                .lineLimit(1)
+            }
+
+            Button {
+                SoundAndHapticsManager.shared.playUITap()
+                appState.navigationPath.append(.islandDetail(islandId: island.id))
+            } label: {
+                HStack(spacing: 5) {
+                    Text(l10n.localized(zh: "进入闯关", en: "Enter", ja: "出発", ko: "도전", zhHant: "進入闖關"))
+                        .font(AppFont.rounded(size: 13.5, weight: .black))
+                        .foregroundColor(.white)
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .black))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5, playTapSound: false))
+            .accessibilityIdentifier("EnterFocusedStageButton")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.95))
+                .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
+                .shadow(color: Color.black.opacity(0.18), radius: 12, y: 5)
+        )
     }
 
     private var puzzleRushButton: some View {
@@ -1136,7 +1056,7 @@ struct PuzzleHubView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "flame.fill")
-                    .font(.system(size: 16, weight: .black))
+                    .font(.system(size: 16, weight: .black, design: .rounded))
                     .foregroundColor(.white)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(l10n.localized(
@@ -1146,7 +1066,7 @@ struct PuzzleHubView: View {
                         ko: "연속 도전 · 30K→5D",
                         zhHant: "無盡衝關 · 30K→5D"
                     ))
-                        .font(.system(size: 13.5, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .black))
                         .foregroundColor(.white)
                     Text(best > 0
                          ? l10n.localized(
@@ -1163,7 +1083,7 @@ struct PuzzleHubView: View {
                              ko: "하트 3개로 한계 도전!",
                              zhHant: "3顆心測真實上限！"
                          ))
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 10.5, weight: .bold))
                         .foregroundColor(.white.opacity(0.94))
                 }
             }
@@ -1179,7 +1099,7 @@ struct PuzzleHubView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
-                    Text("🧭").font(.system(size: 48))
+                    Text("🧭").font(AppFont.rounded(size: 48, weight: .regular))
                     Text(l10n.localized(
                         zh: "选择你当前的围棋水平",
                         en: "Choose Your Starting Go Level",
@@ -1187,7 +1107,7 @@ struct PuzzleHubView: View {
                         ko: "현재 바둑 실력을 선택하세요",
                         zhHant: "選擇你當前的圍棋水平"
                     ))
-                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 22, weight: .black))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text(l10n.localized(
                         zh: "选定后立刻飞往对应海域起航！前面的基础海域也会保留开放，随时可以回去刷星拿皇冠。",
@@ -1196,7 +1116,7 @@ struct PuzzleHubView: View {
                         ko: "선택하면 실력에 맞는 해역으로 바로 이동합니다! 이전 기초 해역도 계속 열려 있어 언제든 별과 왕관을 모을 수 있어요.",
                         zhHant: "選定後立刻飛往對應海域起航！前面的基礎海域也會保留開放，隨時可以回去刷星拿皇冠。"
                     ))
-                        .font(.system(size: 13.5, weight: .bold, design: .rounded))
+                        .font(AppFont.rounded(size: 13.5, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
@@ -1213,26 +1133,26 @@ struct PuzzleHubView: View {
                             }
                         } label: {
                             HStack(spacing: 14) {
-                                Text(opt.emoji).font(.system(size: 32))
+                                Text(opt.emoji).font(AppFont.rounded(size: 32, weight: .regular))
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 8) {
                                         Text(localizedPlacementTitle(opt))
-                                            .font(.system(size: 16, weight: .black, design: .rounded))
+                                            .font(AppFont.rounded(size: 16, weight: .black))
                                             .foregroundColor(AppTheme.inkPrimary)
                                         Text(opt.rankLabel)
-                                            .font(.system(size: 11.5, weight: .black, design: .rounded))
+                                            .font(AppFont.rounded(size: 11.5, weight: .black))
                                             .foregroundColor(.white)
                                             .padding(.horizontal, 9)
                                             .padding(.vertical, 3)
                                             .background(Capsule().fill(AppTheme.skyBottom))
                                     }
                                     Text(localizedPlacementDesc(opt))
-                                        .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                                        .font(AppFont.rounded(size: 12.5, weight: .semibold))
                                         .foregroundColor(AppTheme.inkSecondary)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .black))
+                                    .font(.system(size: 14, weight: .black, design: .rounded))
                                     .foregroundColor(AppTheme.skyBottom)
                             }
                             .padding(16)
@@ -1273,11 +1193,11 @@ struct PuzzleHubView: View {
     private func localizedPlacementDesc(_ opt: PlacementOption) -> String {
         switch opt.id {
         case "pl-30k":
-            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "盤面・呼吸点・石取りを学び、第1海域・碧の海島から楽しくスタート", ko: "바둑판, 활로, 따내기부터 제1해역 푸른 해섬에서 가볍게 시작", zhHant: "剛認識棋盤、氣與提子，從第一區域·碧藍海島輕鬆起步")
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "盤面・呼吸点・石取りを学び、第1海域・風車の草原から楽しくスタート", ko: "바둑판, 활로, 따내기부터 제1해역 바람개비 초원에서 가볍게 시작", zhHant: "剛認識棋盤、氣與提子，從第一區域·風起棋丘輕鬆起步")
         case "pl-18k":
             return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "両アタリやシチョウが分かる方は、第2海域・翡翠の森へ直行！", ko: "양단수와 축을 알고 있다면 제2해역 비취 숲으로 바로 이동!", zhHant: "已會雙打吃與征子，直接飛往第二區域·翡翠森林")
         case "pl-10k":
-            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "詰碁や攻め合いに慣れている方は、第3海域・黄金砂漠へ！", ko: "사활과 수상전에 익숙하다면 제3해역 황금 사막으로!", zhHant: "熟悉死活與對殺，直奔第三區域·金色沙漠")
+            return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "詰碁や攻め合いに慣れている方は、第3海域・双月の鏡湖へ！", ko: "사활과 수상전에 익숙하다면 제3해역 쌍월 거울호수으로!", zhHant: "熟悉死活與對殺，直奔第三區域·雙月鏡湖")
         case "pl-5k":
             return l10n.localized(zh: opt.descZh, en: opt.descEn, ja: "有段を目指す実力者は、第4海域・白銀雪山へ挑戦！", ko: "아마추어 단위에 도전한다면 제4해역 백은 설산으로!", zhHant: "衝刺業餘段位，直闖第四區域·凜冬雪山")
         case "pl-1d":
@@ -1316,12 +1236,12 @@ struct PuzzleHubView: View {
     private func lockedToastPill(_ message: String) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.fill")
-                .font(.system(size: 14, weight: .black))
+                .font(.system(size: 14, weight: .black, design: .rounded))
                 .foregroundColor(.white)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color(red: 0.46, green: 0.51, blue: 0.59)))
             Text(message)
-                .font(.system(size: 14.5, weight: .heavy, design: .rounded))
+                .font(AppFont.rounded(size: 14.5, weight: .heavy))
                 .foregroundColor(AppTheme.inkPrimary)
         }
         .padding(.leading, 10)
@@ -1335,7 +1255,7 @@ struct PuzzleHubView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Label(l10n.t("puzzle.category.mistakes"), systemImage: "bookmark.fill")
-                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 18, weight: .black))
                     .foregroundColor(AppTheme.coralBottom)
                 Spacer()
                 GameCircleButton(icon: "xmark", palette: .snow, tint: AppTheme.inkSecondary, size: 36) {
@@ -1345,9 +1265,9 @@ struct PuzzleHubView: View {
 
             if mistakePuzzles.isEmpty {
                 HStack(spacing: 10) {
-                    Text("🌟").font(.system(size: 28))
+                    Text("🌟").font(AppFont.rounded(size: 28, weight: .regular))
                     Text(l10n.t("puzzle.mistakes.empty"))
-                        .font(.system(size: 16, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 16, weight: .heavy))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
                 .frame(maxWidth: .infinity, minHeight: 72)
@@ -1376,23 +1296,23 @@ struct PuzzleHubView: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("\(number)")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 13, weight: .black))
                         .foregroundColor(.white)
                         .frame(width: 26, height: 26)
                         .background(Circle().fill(solved ? AppTheme.mintBottom : AppTheme.coralBottom))
                     Text(puzzle.rankBadge)
-                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 11, weight: .black))
                         .foregroundColor(AppTheme.skyBottom)
                     Spacer()
                 }
                 Text(puzzle.title(l10n))
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .font(AppFont.rounded(size: 15, weight: .heavy))
                     .foregroundColor(AppTheme.inkPrimary)
                     .lineLimit(1)
                 HStack(spacing: 3) {
                     ForEach(1...3, id: \.self) { idx in
                         Image(systemName: idx <= stars ? "star.fill" : "star")
-                            .font(.system(size: 14))
+                            .font(.system(size: 14, design: .rounded))
                             .foregroundColor(idx <= stars ? AppTheme.sunBottom : AppTheme.subtleBorder)
                     }
                     Spacer()

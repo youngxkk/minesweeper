@@ -59,23 +59,29 @@ struct JosekiTrainerView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.brightArenaBackground
+            if campaignNodeId == nil {
+                SceneBackdrop.morningDojo
+            } else {
+                AppTheme.brightArenaBackground
+            }
 
             GeometryReader { geo in
                 let isCompact = geo.size.width < 700
                 let pad: CGFloat = isCompact ? 14 : 22
 
                 VStack(spacing: 12) {
-                    HStack {
-                        GameBackButton(title: l10n.t("common.back")) {
-                            appState.popRoute()
-                        }
-                        Spacer()
+                    ZStack {
                         GameTitleCrest(title: course.title(l10n), subtitle: course.rankBadge)
-                        Spacer()
-                        HStack(spacing: 6) {
-                            modePill(.learn, title: l10n.localized(zh: "演示学习", en: "Learn", ja: "学習モード", ko: "학습 모드", zhHant: "演示學習"))
-                            modePill(.quiz, title: l10n.localized(zh: "闯关测验", en: "Quiz", ja: "テスト", ko: "퀴즈", zhHant: "闖關測驗"))
+
+                        HStack {
+                            GameBackButton(title: l10n.t("common.back")) {
+                                appState.popRoute()
+                            }
+                            Spacer()
+                            HStack(spacing: 6) {
+                                modePill(.learn, title: l10n.localized(zh: "演示学习", en: "Learn", ja: "学習モード", ko: "학습 모드", zhHant: "演示學習"))
+                                modePill(.quiz, title: l10n.localized(zh: "闯关测验", en: "Quiz", ja: "テスト", ko: "퀴즈", zhHant: "闖關測驗"))
+                            }
                         }
                     }
 
@@ -112,7 +118,7 @@ struct JosekiTrainerView: View {
             SoundAndHapticsManager.shared.playUITap()
         } label: {
             Text(title)
-                .font(.system(size: 12, weight: .black, design: .rounded))
+                .font(AppFont.rounded(size: 12, weight: .black))
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
@@ -145,11 +151,11 @@ struct JosekiTrainerView: View {
                 Text(mode == .learn
                      ? l10n.localized(zh: "探索分支（点棋盘 A/B 或下方按钮）", en: "Explore Branches (Tap A/B on board or below)", ja: "変化を探索（盤上の A/B または下のボタンをタップ）", ko: "변화 탐색 (바둑판 위 A/B 또는 아래 버튼 선택)", zhHant: "探索分支（點棋盤 A/B 或下方按鈕）")
                      : l10n.localized(zh: "定式闯关：轮到你走正确定式！", en: "Joseki Quiz: Play the correct Joseki moves!", ja: "定石テスト：正しい定石の手を打ちましょう！", ko: "정석 퀴즈: 올바른 정석 수순을 두어 보세요!", zhHant: "定石闖關：輪到你走正確定石！"))
-                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .font(AppFont.rounded(size: 12, weight: .black))
                     .foregroundColor(AppTheme.grapeBottom)
 
                 Text(currentComment.isEmpty ? course.subtitle(l10n) : currentComment)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(AppFont.rounded(size: 14, weight: .bold))
                     .foregroundColor(quizWrongMessage != nil ? AppTheme.coralBottom : AppTheme.inkPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -157,13 +163,54 @@ struct JosekiTrainerView: View {
             .warmCard(cornerRadius: 22, padding: 14)
 
             if isQuizCompleted {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(AppTheme.mintBottom)
-                    Text(l10n.localized(zh: "定式通关！+20 🪙 已记录掌握", en: "Joseki Cleared! +20 🪙 Mastered", ja: "定石クリア！+20 🪙 習得済み", ko: "정석 클리어! +20 🪙 마스터 기록", zhHant: "定石通關！+20 🪙 已記錄掌握"))
-                        .font(.system(size: 14.5, weight: .black, design: .rounded))
-                        .foregroundColor(AppTheme.mintBottom)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 24, design: .rounded))
+                            .foregroundColor(AppTheme.mintBottom)
+                        Text(l10n.localized(zh: "定式通关！+20 🪙 已记录掌握", en: "Joseki Cleared! +20 🪙 Mastered", ja: "定石クリア！+20 🪙 習得済み", ko: "정석 클리어! +20 🪙 마스터 기록", zhHant: "定石通關！+20 🪙 已記錄掌握"))
+                            .font(AppFont.rounded(size: 14.5, weight: .black))
+                            .foregroundColor(AppTheme.mintBottom)
+                    }
+
+                    if let nodeId = campaignNodeId, let nextNode = StarYiCampaign.nextNode(after: nodeId) {
+                        Button {
+                            appState.navigateToCampaignNode(nextNode, replaceTopRoute: true)
+                        } label: {
+                            Text(l10n.localized(
+                                zh: "进入下一关 · \(nextNode.title(isChinese: true)) ▶",
+                                en: "Next Stage · \(nextNode.title(isChinese: false)) ▶",
+                                ja: "次のステージへ ▶",
+                                ko: "다음 스테이지 ▶",
+                                zhHant: "進入下一關 · \(nextNode.title(isChinese: true)) ▶"
+                            ))
+                                .font(AppFont.rounded(size: 14.5, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    } else if let nodeId = campaignNodeId, let island = StarYiCampaign.island(containingNodeId: nodeId) {
+                        Button {
+                            if !appState.navigationPath.isEmpty {
+                                appState.navigationPath.removeLast()
+                            }
+                            appState.startCampaignBossMatch(island: island)
+                        } label: {
+                            Text(l10n.localized(
+                                zh: "挑战守岛 Boss ▶",
+                                en: "Challenge Island Boss ▶",
+                                ja: "島のボスに挑戦 ▶",
+                                ko: "섬 보스 도전 ▶",
+                                zhHant: "挑戰守島 Boss ▶"
+                            ))
+                                .font(AppFont.rounded(size: 14.5, weight: .black))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .warmCard(cornerRadius: 20, padding: 14)
@@ -172,7 +219,7 @@ struct JosekiTrainerView: View {
             if mode == .learn, let node = currentNode, !node.children.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(l10n.localized(zh: "可选后续分支", en: "Available Continuations", ja: "次の変化候補", ko: "선택 가능한 후속 변화", zhHant: "可選後續分支"))
-                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 12, weight: .black))
                         .foregroundColor(AppTheme.inkSecondary)
 
                     ForEach(Array(node.children.enumerated()), id: \.offset) { idx, child in
@@ -183,12 +230,12 @@ struct JosekiTrainerView: View {
                             } label: {
                                 HStack {
                                     Text(isWrong ? "✕ \(pt.humanLabel(boardSize: course.boardSize))" : "\(idx + 1). \(pt.humanLabel(boardSize: course.boardSize))")
-                                        .font(.system(size: 13.5, weight: .black, design: .rounded))
+                                        .font(AppFont.rounded(size: 13.5, weight: .black))
                                     Spacer()
                                     Text(isWrong
                                          ? l10n.localized(zh: "常见错手", en: "Mistake", ja: "よくある悪手", ko: "자주 두는 실수", zhHant: "常見錯手")
                                          : l10n.localized(zh: "定式正着", en: "Joseki", ja: "定石の正着", ko: "정석 정착", zhHant: "定石正著"))
-                                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                                        .font(AppFont.rounded(size: 11, weight: .bold))
                                 }
                                 .foregroundColor(isWrong ? AppTheme.coralBottom : AppTheme.inkPrimary)
                                 .padding(.horizontal, 14)
@@ -206,7 +253,7 @@ struct JosekiTrainerView: View {
                     stepBack()
                 } label: {
                     Label(l10n.localized(zh: "退一步", en: "Back", ja: "1手戻る", ko: "한 수 뒤로", zhHant: "退一步"), systemImage: "arrow.uturn.backward")
-                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .heavy))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -218,7 +265,7 @@ struct JosekiTrainerView: View {
                     resetCourse()
                 } label: {
                     Label(l10n.localized(zh: "重来", en: "Reset", ja: "やり直す", ko: "처음부터", zhHant: "重來"), systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .font(AppFont.rounded(size: 14, weight: .black))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -294,13 +341,17 @@ struct JosekiTrainerView: View {
             return
         }
         if upperC.contains("CORRECT") || child.children.isEmpty {
-            isQuizCompleted = true
-            appState.markJosekiCompleted(course.id)
-            if let nodeId = campaignNodeId {
-                appState.recordCampaignNodeCleared(nodeId: nodeId, stars: 3, masteryTier: .normal)
+            if mode == .quiz && !isQuizCompleted {
+                isQuizCompleted = true
+                appState.markJosekiCompleted(course.id)
+                if let nodeId = campaignNodeId {
+                    appState.recordCampaignNodeCleared(nodeId: nodeId, stars: 3, masteryTier: .normal)
+                }
+                SoundAndHapticsManager.shared.playSuccess()
+                SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.14)
+            } else {
+                SoundAndHapticsManager.shared.playSuccess()
             }
-            SoundAndHapticsManager.shared.playSuccess()
-            SoundAndHapticsManager.shared.playVoice(.correct, delay: 0.14)
             return
         }
 

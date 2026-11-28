@@ -633,7 +633,9 @@ enum DojoPuzzleBank {
     private static func swapColorTermsZh(_ text: String, swap: Bool) -> String {
         guard swap else { return text }
         return text
-            .replacingOccurrences(of: "黑先", with: "白先")
+            .replacingOccurrences(of: "黑先", with: "__TB1__")
+            .replacingOccurrences(of: "白先", with: "黑先")
+            .replacingOccurrences(of: "__TB1__", with: "白先")
             .replacingOccurrences(of: "黑棋", with: "__TB__")
             .replacingOccurrences(of: "黑子", with: "__TBS__")
             .replacingOccurrences(of: "黑墙", with: "__TBW__")

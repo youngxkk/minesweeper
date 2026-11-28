@@ -16,14 +16,14 @@
                         <rect key="frame" x="0.0" y="0.0" width="1180" height="820"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchBackdrop.jpg" translatesAutoresizingMaskIntoConstraints="NO" id="StarYi-Launch-Bg">
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchSkyBackdrop.jpg" translatesAutoresizingMaskIntoConstraints="NO" id="StarYi-Launch-Bg">
                                 <rect key="frame" x="0.0" y="0.0" width="1180" height="820"/>
                             </imageView>
-                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="HomeLogoZH" translatesAutoresizingMaskIntoConstraints="NO" id="StarYi-Launch-Logo">
-                                <rect key="frame" x="410" y="195" width="360" height="360"/>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="LaunchEmblem.png" translatesAutoresizingMaskIntoConstraints="NO" id="StarYi-Launch-Logo">
+                                <rect key="frame" x="440" y="260" width="300" height="300"/>
                                 <constraints>
-                                    <constraint firstAttribute="width" constant="360" id="Logo-Width"/>
-                                    <constraint firstAttribute="height" constant="360" id="Logo-Height"/>
+                                    <constraint firstAttribute="width" constant="300" id="Logo-Width"/>
+                                    <constraint firstAttribute="height" constant="300" id="Logo-Height"/>
                                 </constraints>
                             </imageView>
                         </subviews>
@@ -45,8 +45,8 @@
         </scene>
     </scenes>
     <resources>
-        <image name="HomeLogoZH" width="1254" height="1254"/>
-        <image name="LaunchBackdrop.jpg" width="1600" height="1200"/>
+        <image name="LaunchEmblem.png" width="768" height="768"/>
+        <image name="LaunchSkyBackdrop.jpg" width="1800" height="1350"/>
         <namedColor name="LaunchBackground">
             <color red="0.9100000262260437" green="0.95300000905990601" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
         </namedColor>

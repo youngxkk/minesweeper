@@ -5,6 +5,7 @@
 //  后续版本开启时请同时在 StarYiGo.entitlements 启用 com.apple.developer.game-center 并在 App Store Connect 配置对应 ID。
 //
 
+#if ENABLE_GAME_CENTER
 import Foundation
 import GameKit
 import UIKit
@@ -205,3 +206,4 @@ final class GameCenterService: NSObject, ObservableObject, GKGameCenterControlle
         }
     }
 }
+#endif

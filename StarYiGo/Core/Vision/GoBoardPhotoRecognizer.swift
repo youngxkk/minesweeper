@@ -5,6 +5,7 @@
 
 import CoreGraphics
 import CoreImage
+import CoreML
 import Foundation
 import UIKit
 import Vision
@@ -35,9 +36,48 @@ struct BoardCornerQuad: Equatable, Sendable {
         )
     }
 
+    /// Exact 3×3 projective homography mapping normalized warped coordinates (u, v) in [0, 1]²
+    /// back into image space — matches `CIPerspectiveCorrection` even under steep 30°–45° handheld tilt.
+    func projectivePoint(u: CGFloat, v: CGFloat) -> CGPoint {
+        let x0 = Double(topLeft.x),     y0 = Double(topLeft.y)
+        let x1 = Double(topRight.x),    y1 = Double(topRight.y)
+        let x2 = Double(bottomRight.x), y2 = Double(bottomRight.y)
+        let x3 = Double(bottomLeft.x),  y3 = Double(bottomLeft.y)
+
+        let dx1 = x1 - x2, dy1 = y1 - y2
+        let dx2 = x3 - x2, dy2 = y3 - y2
+        let sx = x0 - x1 + x2 - x3
+        let sy = y0 - y1 + y2 - y3
+
+        let det = dx1 * dy2 - dx2 * dy1
+        guard abs(det) > 1e-9 else {
+            return point(u: u, v: v)
+        }
+
+        let g = (sx * dy2 - sy * dx2) / det
+        let h = (dx1 * sy - dy1 * sx) / det
+        let a = x1 - x0 + g * x1
+        let b = x3 - x0 + h * x3
+        let c = x0
+        let d = y1 - y0 + g * y1
+        let e = y3 - y0 + h * y3
+        let f = y0
+
+        let ud = Double(u)
+        let vd = Double(v)
+        let w = g * ud + h * vd + 1.0
+        guard abs(w) > 1e-9 else {
+            return point(u: u, v: v)
+        }
+        return CGPoint(
+            x: CGFloat((a * ud + b * vd + c) / w),
+            y: CGFloat((d * ud + e * vd + f) / w)
+        )
+    }
+
     func clamped() -> BoardCornerQuad {
         func clampPt(_ p: CGPoint) -> CGPoint {
-            CGPoint(x: min(0.99, max(0.01, p.x)), y: min(0.99, max(0.01, p.y)))
+            CGPoint(x: min(0.998, max(0.002, p.x)), y: min(0.998, max(0.002, p.y)))
         }
         return BoardCornerQuad(
             topLeft: clampPt(topLeft),
@@ -45,6 +85,18 @@ struct BoardCornerQuad: Equatable, Sendable {
             bottomRight: clampPt(bottomRight),
             bottomLeft: clampPt(bottomLeft)
         )
+    }
+
+    /// Returns the inner quadrilateral at normalized `inset` from all 4 edges using exact projective homography.
+    func insetBy(_ inset: CGFloat) -> BoardCornerQuad {
+        let i = min(0.25, max(0.0, inset))
+        guard i > 1e-5 else { return self }
+        return BoardCornerQuad(
+            topLeft: projectivePoint(u: i, v: i),
+            topRight: projectivePoint(u: 1.0 - i, v: i),
+            bottomRight: projectivePoint(u: 1.0 - i, v: 1.0 - i),
+            bottomLeft: projectivePoint(u: i, v: 1.0 - i)
+        ).clamped()
     }
 }
 
@@ -57,6 +109,27 @@ struct BoardRecognitionResult: Sendable {
     let averageConfidence: Double
     let lowConfidencePoints: [BoardPoint]
     let detectedCorners: BoardCornerQuad
+    let usedNeuralStoneClassifier: Bool
+
+    init(
+        boardState: GoBoardState,
+        warpedBoardImage: UIImage,
+        blackStoneCount: Int,
+        whiteStoneCount: Int,
+        averageConfidence: Double,
+        lowConfidencePoints: [BoardPoint],
+        detectedCorners: BoardCornerQuad,
+        usedNeuralStoneClassifier: Bool = false
+    ) {
+        self.boardState = boardState
+        self.warpedBoardImage = warpedBoardImage
+        self.blackStoneCount = blackStoneCount
+        self.whiteStoneCount = whiteStoneCount
+        self.averageConfidence = averageConfidence
+        self.lowConfidencePoints = lowConfidencePoints
+        self.detectedCorners = detectedCorners
+        self.usedNeuralStoneClassifier = usedNeuralStoneClassifier
+    }
 }
 
 /// Automatically detected board line count (19×19 / 13×13 / 9×9 / 7×7), outer wooden margin inset,
@@ -224,7 +297,24 @@ enum GoBoardPhotoRecognizer {
         let botW = hypot(q.bottomRight.x - q.bottomLeft.x, q.bottomRight.y - q.bottomLeft.y)
         let leftH = hypot(q.bottomLeft.x - q.topLeft.x, q.bottomLeft.y - q.topLeft.y)
         let rightH = hypot(q.bottomRight.x - q.topRight.x, q.bottomRight.y - q.topRight.y)
-        return min(topW, botW) >= 0.15 && min(leftH, rightH) >= 0.15
+        guard min(topW, botW) >= 0.15 && min(leftH, rightH) >= 0.15 else { return false }
+
+        // Verify strict convexity (all 4 edge cross products share the same non-zero sign)
+        let pts = [q.topLeft, q.topRight, q.bottomRight, q.bottomLeft]
+        var sign = 0.0
+        for i in 0..<4 {
+            let a = pts[i]
+            let b = pts[(i + 1) % 4]
+            let c = pts[(i + 2) % 4]
+            let cross = Double((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x))
+            if abs(cross) < 1e-6 { return false }
+            if sign == 0.0 {
+                sign = cross
+            } else if cross * sign < 0 {
+                return false
+            }
+        }
+        return true
     }
 
     /// Finds the dominant orthogonal Go grid angle using a fast Sobel orientation histogram,
@@ -378,24 +468,26 @@ enum GoBoardPhotoRecognizer {
         var bestCombinedScore: Double = -Double.infinity
 
         for (index, quad) in quadCandidates.enumerated() {
-            let gridInfo = detectBoardGridStructure(
-                from: upright,
-                corners: quad,
-                candidates: candidates,
-                snapCorners: true
-            )
-            // Small preference for higher-ranked Vision quads when grid scores are tied
-            let priorBonus = index == 0 ? 0.02 : 0.0
-            let totalScore = gridInfo.confidence + priorBonus
-
-            if totalScore > bestCombinedScore {
-                bestCombinedScore = totalScore
-                bestResult = AutoBoardDetectionResult(
-                    corners: gridInfo.refinedCorners ?? quad,
-                    boardSize: gridInfo.boardSize,
-                    gridInsetFraction: gridInfo.gridInsetFraction,
-                    confidence: gridInfo.confidence
+            autoreleasepool {
+                let gridInfo = detectBoardGridStructure(
+                    from: upright,
+                    corners: quad,
+                    candidates: candidates,
+                    snapCorners: true
                 )
+                // Small preference for higher-ranked Vision quads when grid scores are tied
+                let priorBonus = index == 0 ? 0.02 : 0.0
+                let totalScore = gridInfo.confidence + priorBonus
+
+                if totalScore > bestCombinedScore {
+                    bestCombinedScore = totalScore
+                    bestResult = AutoBoardDetectionResult(
+                        corners: gridInfo.refinedCorners ?? quad,
+                        boardSize: gridInfo.boardSize,
+                        gridInsetFraction: gridInfo.gridInsetFraction,
+                        confidence: gridInfo.confidence
+                    )
+                }
             }
         }
 
@@ -455,17 +547,28 @@ enum GoBoardPhotoRecognizer {
         )
     }
 
-    /// Ensures 4 corners are strictly ordered as (topLeft, topRight, bottomRight, bottomLeft).
+    /// Ensures 4 corners are strictly ordered clockwise as (topLeft, topRight, bottomRight, bottomLeft),
+    /// robust even near 45° rotation or steep perspective tilt.
     static func orderCornersClockwise(_ pts: [CGPoint]) -> BoardCornerQuad {
         guard pts.count == 4 else { return .defaultCentered }
-        let sortedBySum = pts.sorted { ($0.x + $0.y) < ($1.x + $1.y) }
-        let tl = sortedBySum[0]
-        let br = sortedBySum[3]
-        let remaining = [sortedBySum[1], sortedBySum[2]]
-        let sortedByDiff = remaining.sorted { ($0.x - $0.y) < ($1.x - $1.y) }
-        let bl = sortedByDiff[0]
-        let tr = sortedByDiff[1]
-        return BoardCornerQuad(topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl)
+        let cx = pts.reduce(0.0) { $0 + Double($1.x) } / 4.0
+        let cy = pts.reduce(0.0) { $0 + Double($1.y) } / 4.0
+        // In UIKit top-left origin coordinates (y increases downward), ascending atan2(dy, dx) orders clockwise
+        let cw = pts.sorted {
+            atan2(Double($0.y) - cy, Double($0.x) - cx) < atan2(Double($1.y) - cy, Double($1.x) - cx)
+        }
+        // Rotate cyclic order so the vertex closest to (0, 0) becomes topLeft
+        let tlIndex = cw.indices.min { lhs, rhs in
+            let dl = cw[lhs].x * cw[lhs].x + cw[lhs].y * cw[lhs].y
+            let dr = cw[rhs].x * cw[rhs].x + cw[rhs].y * cw[rhs].y
+            return dl < dr
+        } ?? 0
+        return BoardCornerQuad(
+            topLeft: cw[tlIndex],
+            topRight: cw[(tlIndex + 1) % 4],
+            bottomRight: cw[(tlIndex + 2) % 4],
+            bottomLeft: cw[(tlIndex + 3) % 4]
+        )
     }
 
     // MARK: - 3. Perspective Unwarp (CoreImage)
@@ -522,7 +625,7 @@ enum GoBoardPhotoRecognizer {
         candidates: [BoardSize] = [.nineteen, .thirteen, .nine, .seven],
         snapCorners: Bool = false
     ) -> DetectedGridStructure {
-        let side = 540
+        let side = 720
         let warped = warpBoard(image: image, corners: corners, outputSide: side) ?? normalizedUpImage(image, maxDimension: CGFloat(side))
         guard let cgImage = warped.cgImage,
               let rgba = extractRGBA(from: cgImage) else {
@@ -545,10 +648,10 @@ enum GoBoardPhotoRecognizer {
         }
 
         // Multi-scale stone-invariant dark-ridge projection:
-        // A grid line is a thin dark valley (1-6px) flanked by brighter wood at +-d1 or +-d2 pixels.
+        // A grid line is a thin dark valley (1-7px) flanked by brighter wood at +-d1 or +-d2 pixels.
         // Interiors of black stones (dark on both sides) and white stones (bright on both sides) cancel to ~0.
-        let d1 = max(2, Int((Double(min(w, h)) / 180.0).rounded()))
-        let d2 = max(d1 + 2, Int((Double(min(w, h)) / 92.0).rounded()))
+        let d1 = max(2, Int((Double(min(w, h)) / 200.0).rounded()))
+        let d2 = max(d1 + 2, Int((Double(min(w, h)) / 100.0).rounded()))
         let marginX = max(d2 + 2, w / 28)
         let marginY = max(d2 + 2, h / 28)
 
@@ -573,7 +676,7 @@ enum GoBoardPhotoRecognizer {
                 if flank2 > 0.18 {
                     ridge = max(ridge, flank2 - center)
                 }
-                if ridge > 0.025 {
+                if ridge > 0.022 {
                     rowSum += min(ridge, 0.45)
                 }
             }
@@ -594,7 +697,7 @@ enum GoBoardPhotoRecognizer {
                 if flank2 > 0.18 {
                     ridge = max(ridge, flank2 - center)
                 }
-                if ridge > 0.025 {
+                if ridge > 0.022 {
                     colSum += min(ridge, 0.45)
                 }
             }
@@ -603,6 +706,13 @@ enum GoBoardPhotoRecognizer {
 
         normalizeProfile(&rowProfile)
         normalizeProfile(&colProfile)
+
+        // Count distinct prominent grid-line peaks along both axes to guard against coarse harmonic misdetection
+        // (e.g. a 19x19 board with 18 intervals falsely matching 7x7's 6 intervals).
+        let minPeakSpacing = max(12, min(w, h) / 28)
+        let xPeakCount = countDistinctPeaks(in: colProfile, threshold: 0.28, minDistance: minPeakSpacing)
+        let yPeakCount = countDistinctPeaks(in: rowProfile, threshold: 0.28, minDistance: minPeakSpacing)
+        let minAxisPeaks = min(xPeakCount, yPeakCount)
 
         struct CandidateFit {
             let size: BoardSize
@@ -620,7 +730,15 @@ enum GoBoardPhotoRecognizer {
             let yFit = findBestAxisFit(profile: rowProfile, lineCount: n)
             // Combine both axes and reward consistent aspect/span between X and Y
             let spanDiff = abs((xFit.endFrac - xFit.startFrac) - (yFit.endFrac - yFit.startFrac))
-            let combined = (xFit.score + yFit.score) * 0.5 - spanDiff * 0.15
+            var combined = (xFit.score + yFit.score) * 0.5 - spanDiff * 0.15
+
+            // Penalize small board candidates when both axes clearly show far more distinct grid lines
+            if minAxisPeaks >= 14 && n <= 9 {
+                combined -= 0.35
+            } else if minAxisPeaks >= 10 && n == 7 {
+                combined -= 0.28
+            }
+
             fits.append(CandidateFit(size: candidate, score: combined, xFit: xFit, yFit: yFit))
         }
 
@@ -724,10 +842,10 @@ enum GoBoardPhotoRecognizer {
             let v0 = CGFloat(vStart - vSpan * factor)
             let v1 = CGFloat(vEnd + vSpan * factor)
 
-            let tl = corners.point(u: u0, v: v0)
-            let tr = corners.point(u: u1, v: v0)
-            let br = corners.point(u: u1, v: v1)
-            let bl = corners.point(u: u0, v: v1)
+            let tl = corners.projectivePoint(u: u0, v: v0)
+            let tr = corners.projectivePoint(u: u1, v: v0)
+            let br = corners.projectivePoint(u: u1, v: v1)
+            let bl = corners.projectivePoint(u: u0, v: v1)
 
             let allInside = [tl, tr, br, bl].allSatisfy { p in
                 p.x >= 0.005 && p.x <= 0.995 && p.y >= 0.005 && p.y <= 0.995
@@ -747,13 +865,36 @@ enum GoBoardPhotoRecognizer {
     }
 
     private static func normalizeProfile(_ profile: inout [Double]) {
-        guard !profile.isEmpty else { return }
-        let sorted = profile.sorted()
-        let p98 = sorted[min(sorted.count - 1, Int(Double(sorted.count) * 0.985))]
-        guard p98 > 1e-6 else { return }
+        guard profile.count > 20 else { return }
+        // Normalize using the interior [3%...97%] so thick dark outer wooden frames never crush interior 19x19 grid lines.
+        let lo = max(0, Int(Double(profile.count) * 0.03))
+        let hi = min(profile.count - 1, Int(Double(profile.count) * 0.97))
+        let interiorSorted = profile[lo...hi].sorted()
+        let ref = interiorSorted[min(interiorSorted.count - 1, Int(Double(interiorSorted.count) * 0.97))]
+        guard ref > 1e-6 else { return }
         for i in 0..<profile.count {
-            profile[i] = min(1.5, profile[i] / p98)
+            profile[i] = min(1.5, profile[i] / ref)
         }
+    }
+
+    private static func countDistinctPeaks(in profile: [Double], threshold: Double, minDistance: Int) -> Int {
+        guard profile.count > 6 else { return 0 }
+        var candidates: [(idx: Int, val: Double)] = []
+        for i in 2..<(profile.count - 2) {
+            let v = profile[i]
+            if v >= threshold && v >= profile[i - 1] && v >= profile[i + 1] && v >= profile[i - 2] && v >= profile[i + 2] {
+                candidates.append((i, v))
+            }
+        }
+        // Greedy non-maximum suppression by peak strength
+        candidates.sort { $0.val > $1.val }
+        var accepted: [Int] = []
+        for c in candidates {
+            if accepted.allSatisfy({ abs($0 - c.idx) >= minDistance }) {
+                accepted.append(c.idx)
+            }
+        }
+        return accepted.count
     }
 
     private static func axisGridAlignmentScore(
@@ -770,14 +911,27 @@ enum GoBoardPhotoRecognizer {
         let step = span / Double(n - 1)
         guard step >= 10.0 else { return -1.0 }
 
-        let lineTol = max(2, min(4, Int((step * 0.08).rounded())))
-        let subTol = max(1, min(3, Int((step * 0.07).rounded())))
+        // Use a fair, line-width-based tolerance so 19x19 isn't unfairly penalized vs 7x7 under slight lens bow
+        let lineTol = max(3, min(5, Int((step * 0.08).rounded())))
+        let subTol = lineTol
 
         @inline(__always)
         func localPeak(around pos: Double, tol: Int) -> Double {
             let center = Int(pos.rounded())
             let lo = max(0, center - tol)
             let hi = min(len - 1, center + tol)
+            var peak = 0.0
+            for idx in lo...hi {
+                if profile[idx] > peak { peak = profile[idx] }
+            }
+            return peak
+        }
+
+        @inline(__always)
+        func rangeMax(from loPos: Double, to hiPos: Double) -> Double {
+            let lo = max(0, Int(loPos.rounded()))
+            let hi = min(len - 1, Int(hiPos.rounded()))
+            guard lo <= hi else { return 0.0 }
             var peak = 0.0
             for idx in lo...hi {
                 if profile[idx] > peak { peak = profile[idx] }
@@ -795,8 +949,9 @@ enum GoBoardPhotoRecognizer {
             }
         }
 
-        // Harmonic-safe interior penalty:
-        // Checks 1/2 (blocks 7x7 matching 13x13) AND 1/3 & 2/3 (blocks 7x7 matching 19x19)
+        // Full-interval interior penalty:
+        // On a true N×N board, the middle [22%...78%] of each cell between two adjacent grid lines is empty wood.
+        // On a 19×19 board tested as 7×7 (18 = 3×6) or 9×9, every interval contains 1–2 real grid lines inside!
         var interiorPenaltySum = 0.0
         for k in 0..<(n - 1) {
             let base = start + Double(k) * step
@@ -804,7 +959,8 @@ enum GoBoardPhotoRecognizer {
             let third1 = localPeak(around: base + step / 3.0, tol: subTol)
             let third2 = localPeak(around: base + (2.0 * step) / 3.0, tol: subTol)
             let harmonicPeak = max(halfPeak, (third1 + third2) * 0.5)
-            interiorPenaltySum += harmonicPeak
+            let maxInterior = rangeMax(from: base + step * 0.22, to: base + step * 0.78)
+            interiorPenaltySum += max(harmonicPeak, maxInterior * 0.85)
         }
 
         // Exterior-line penalty:
@@ -824,7 +980,7 @@ enum GoBoardPhotoRecognizer {
         let meanLine = lineSum / Double(n)
         let meanInterior = interiorPenaltySum / Double(n - 1)
         let coverage = Double(hitCount) / Double(n)
-        let raw = meanLine - 1.25 * meanInterior - 0.65 * exteriorPenalty
+        let raw = meanLine - 1.35 * meanInterior - 0.70 * exteriorPenalty
         return raw * (0.45 + 0.55 * coverage)
     }
 
@@ -844,8 +1000,37 @@ enum GoBoardPhotoRecognizer {
         gridInsetFraction: CGFloat = 0.045,
         komi: Double? = nil
     ) -> BoardRecognitionResult {
-        let outputSide = 760
-        let warped = warpBoard(image: image, corners: corners, outputSide: outputSide) ?? normalizedUpImage(image, maxDimension: CGFloat(outputSide))
+        let n = boardSize.rawValue
+        let outputSide = 900
+        let rawInset = min(0.18, max(0.0, gridInsetFraction))
+
+        // When corners are aligned directly to the outermost grid intersections (gridInsetFraction ≈ 0),
+        // expand the warp quad slightly outward so corner/edge stones are never clipped on the bitmap edge.
+        let desiredMinInset = CGFloat(max(0.042, 0.72 / Double(max(2, n - 1))))
+        var warpQuad = corners
+        var effectiveInset = rawInset
+
+        if rawInset < desiredMinInset {
+            let neededPad = (desiredMinInset - rawInset) / max(0.5, 1.0 - 2.0 * desiredMinInset)
+            // Try desired padding first, falling back to smaller padding if the board touches the photo border
+            for scale in [1.0, 0.7, 0.45, 0.25] {
+                let pad = neededPad * CGFloat(scale)
+                let tl = corners.projectivePoint(u: -pad, v: -pad)
+                let tr = corners.projectivePoint(u: 1.0 + pad, v: -pad)
+                let br = corners.projectivePoint(u: 1.0 + pad, v: 1.0 + pad)
+                let bl = corners.projectivePoint(u: -pad, v: 1.0 + pad)
+                let allInside = [tl, tr, br, bl].allSatisfy { p in
+                    p.x >= 0.0 && p.x <= 1.0 && p.y >= 0.0 && p.y <= 1.0
+                }
+                if allInside {
+                    warpQuad = BoardCornerQuad(topLeft: tl, topRight: tr, bottomRight: br, bottomLeft: bl)
+                    effectiveInset = (rawInset + pad) / (1.0 + 2.0 * pad)
+                    break
+                }
+            }
+        }
+
+        let warped = warpBoard(image: image, corners: warpQuad, outputSide: outputSide) ?? normalizedUpImage(image, maxDimension: CGFloat(outputSide))
         let effectiveKomi = komi ?? boardSize.defaultKomi
 
         guard let cgImage = warped.cgImage,
@@ -861,10 +1046,9 @@ enum GoBoardPhotoRecognizer {
             )
         }
 
-        let n = boardSize.rawValue
         let width = rgba.width
         let height = rgba.height
-        let inset = min(0.18, max(0.0, gridInsetFraction))
+        let inset = min(0.18, max(0.0, effectiveInset))
         let startX = Double(width) * Double(inset)
         let startY = Double(height) * Double(inset)
         let spanX = Double(width) * (1.0 - 2.0 * Double(inset))
@@ -874,48 +1058,148 @@ enum GoBoardPhotoRecognizer {
         let cellStep = min(stepX, stepY)
         let sampleRadius = max(3, Int((cellStep * 0.30).rounded()))
 
-        // Step A: Measure local cell features at every intersection
-        var features: [CellFeatures] = []
-        features.reserveCapacity(n * n)
-
-        for r in 0..<n {
-            for c in 0..<n {
-                let cx = Int((startX + Double(c) * stepX).rounded())
-                let cy = Int((startY + Double(r) * stepY).rounded())
-                let feat = sampleDisk(
-                    rgba: rgba,
-                    cx: cx,
-                    cy: cy,
-                    radius: sampleRadius
-                )
-                features.append(feat)
-            }
-        }
-
-        // Step B: Estimate the board's empty wood/surface reference from mid-tone, warm/saturated cells
-        let woodRef = estimateWoodReference(from: features)
-
-        // Step C: Classify every intersection relative to the adaptive wood reference
+        // Primary path (Option A): On-device CoreML lightweight 3-class CNN (`StarPointStoneClassifier`)
+        // Scores all N×N intersections in a single batched forward pass (~5–20ms on iPad).
         var grid: [StoneColor?] = Array(repeating: nil, count: n * n)
         var blackCount = 0
         var whiteCount = 0
         var confidenceSum = 0.0
         var lowConfidence: [BoardPoint] = []
+        var usedNeural = false
 
-        for idx in 0..<(n * n) {
-            let f = features[idx]
-            let (stone, conf) = classifyCell(f, wood: woodRef)
-            grid[idx] = stone
-            if stone == .black { blackCount += 1 }
-            else if stone == .white { whiteCount += 1 }
-            confidenceSum += conf
-            if conf < 0.62 {
-                lowConfidence.append(BoardPoint(row: idx / n, col: idx % n))
+        if let neuralPredictions = classifyGridWithCoreML(
+            rgba: rgba,
+            boardSize: n,
+            startX: startX,
+            startY: startY,
+            stepX: stepX,
+            stepY: stepY
+        ) {
+            usedNeural = true
+            for idx in 0..<(n * n) {
+                let (stone, conf) = neuralPredictions[idx]
+                grid[idx] = stone
+                if stone == .black { blackCount += 1 }
+                else if stone == .white { whiteCount += 1 }
+                confidenceSum += conf
+                if conf < 0.72 {
+                    lowConfidence.append(BoardPoint(row: idx / n, col: idx % n))
+                }
+            }
+        } else {
+            // Fallback: Classical adaptive color/luminance classification relative to local + global wood reference
+            var features: [CellFeatures] = []
+            features.reserveCapacity(n * n)
+
+            for r in 0..<n {
+                for c in 0..<n {
+                    let cx = Int((startX + Double(c) * stepX).rounded())
+                    let cy = Int((startY + Double(r) * stepY).rounded())
+                    let feat = sampleDisk(
+                        rgba: rgba,
+                        cx: cx,
+                        cy: cy,
+                        radius: sampleRadius
+                    )
+                    features.append(feat)
+                }
+            }
+
+            let globalWoodRef = estimateWoodReference(from: features)
+            let halfCellRadius = max(2, Int((cellStep * 0.14).rounded()))
+            var halfCellWood: [[WoodReference]] = []
+            if n >= 2 {
+                halfCellWood.reserveCapacity(n - 1)
+                for r in 0..<(n - 1) {
+                    var rowRefs: [WoodReference] = []
+                    rowRefs.reserveCapacity(n - 1)
+                    for c in 0..<(n - 1) {
+                        let hx = Int((startX + (Double(c) + 0.5) * stepX).rounded())
+                        let hy = Int((startY + (Double(r) + 0.5) * stepY).rounded())
+                        let hf = sampleDisk(rgba: rgba, cx: hx, cy: hy, radius: halfCellRadius)
+                        rowRefs.append(WoodReference(luma: hf.medianLuma, r: hf.meanR, g: hf.meanG, b: hf.meanB, sat: hf.meanSat))
+                    }
+                    halfCellWood.append(rowRefs)
+                }
+            }
+
+            @inline(__always)
+            func isCleanWoodSample(_ lw: WoodReference) -> Bool {
+                abs(lw.luma - globalWoodRef.luma) < 0.14 && abs(lw.sat - globalWoodRef.sat) < 0.18
+            }
+
+            for idx in 0..<(n * n) {
+                let r = idx / n
+                let c = idx % n
+                let f = features[idx]
+
+                let effectiveWood: WoodReference
+                if n >= 2 {
+                    var sumL = 0.0, sumR = 0.0, sumG = 0.0, sumB = 0.0, sumS = 0.0
+                    var cnt = 0.0
+                    for dr in [-1, 0] {
+                        let hr = r + dr
+                        guard hr >= 0 && hr < n - 1 else { continue }
+                        for dc in [-1, 0] {
+                            let hc = c + dc
+                            guard hc >= 0 && hc < n - 1 else { continue }
+                            let lw = halfCellWood[hr][hc]
+                            if isCleanWoodSample(lw) {
+                                sumL += lw.luma; sumR += lw.r; sumG += lw.g; sumB += lw.b; sumS += lw.sat
+                                cnt += 1.0
+                            }
+                        }
+                    }
+                    if cnt < 2.0 {
+                        for dr in -2...1 {
+                            let hr = r + dr
+                            guard hr >= 0 && hr < n - 1 else { continue }
+                            for dc in -2...1 {
+                                let hc = c + dc
+                                guard hc >= 0 && hc < n - 1 else { continue }
+                                if (dr == -1 || dr == 0) && (dc == -1 || dc == 0) { continue }
+                                let lw = halfCellWood[hr][hc]
+                                if isCleanWoodSample(lw) {
+                                    sumL += lw.luma; sumR += lw.r; sumG += lw.g; sumB += lw.b; sumS += lw.sat
+                                    cnt += 1.0
+                                }
+                            }
+                        }
+                    }
+                    if cnt > 0 {
+                        let alpha = 0.48
+                        effectiveWood = WoodReference(
+                            luma: alpha * (sumL / cnt) + (1.0 - alpha) * globalWoodRef.luma,
+                            r: alpha * (sumR / cnt) + (1.0 - alpha) * globalWoodRef.r,
+                            g: alpha * (sumG / cnt) + (1.0 - alpha) * globalWoodRef.g,
+                            b: alpha * (sumB / cnt) + (1.0 - alpha) * globalWoodRef.b,
+                            sat: alpha * (sumS / cnt) + (1.0 - alpha) * globalWoodRef.sat
+                        )
+                    } else {
+                        effectiveWood = globalWoodRef
+                    }
+                } else {
+                    effectiveWood = globalWoodRef
+                }
+
+                let (stone, conf) = classifyCell(f, wood: effectiveWood)
+                grid[idx] = stone
+                if stone == .black { blackCount += 1 }
+                else if stone == .white { whiteCount += 1 }
+                confidenceSum += conf
+                if conf < 0.62 {
+                    lowConfidence.append(BoardPoint(row: idx / n, col: idx % n))
+                }
             }
         }
 
         var state = GoBoardState(size: n, komi: effectiveKomi)
-        state.grid = grid
+        for idx in 0..<(n * n) {
+            if let stone = grid[idx] {
+                state.setSetupStone(stone, at: BoardPoint(row: idx / n, col: idx % n))
+            }
+        }
+        state.resetPositionHistoryToCurrent()
 
         return BoardRecognitionResult(
             boardState: state,
@@ -924,8 +1208,186 @@ enum GoBoardPhotoRecognizer {
             whiteStoneCount: whiteCount,
             averageConfidence: confidenceSum / Double(max(1, n * n)),
             lowConfidencePoints: lowConfidence,
-            detectedCorners: corners
+            detectedCorners: corners,
+            usedNeuralStoneClassifier: usedNeural
         )
+    }
+
+    // MARK: - 4.5 On-Device CoreML Stone Patch Classifier (Option A)
+
+    private static let stoneModelLock = NSLock()
+    private static var cachedStoneModel: MLModel?
+    private static var didAttemptStoneModelLoad = false
+
+    private static func loadStoneClassifierModel(cpuOnly: Bool = false) -> MLModel? {
+        stoneModelLock.lock()
+        defer { stoneModelLock.unlock() }
+
+        if !cpuOnly && didAttemptStoneModelLoad {
+            return cachedStoneModel
+        }
+        didAttemptStoneModelLoad = true
+
+        guard let modelURL = locateStoneClassifierModelURL() else {
+            return nil
+        }
+
+        let config = MLModelConfiguration()
+        #if targetEnvironment(simulator)
+        config.computeUnits = .cpuOnly
+        #else
+        config.computeUnits = cpuOnly ? .cpuOnly : .all
+        #endif
+
+        if let model = try? MLModel(contentsOf: modelURL, configuration: config) {
+            cachedStoneModel = model
+            return model
+        }
+        if !cpuOnly {
+            let fallbackConfig = MLModelConfiguration()
+            fallbackConfig.computeUnits = .cpuOnly
+            if let model = try? MLModel(contentsOf: modelURL, configuration: fallbackConfig) {
+                cachedStoneModel = model
+                return model
+            }
+        }
+        return nil
+    }
+
+    private static func locateStoneClassifierModelURL() -> URL? {
+        let bundles = [Bundle.main] + Bundle.allBundles
+        for bundle in bundles {
+            if let url = bundle.url(forResource: "StarPointStoneClassifier", withExtension: "mlmodelc") {
+                return url
+            }
+            if let url = bundle.url(forResource: "StarPointStoneClassifier", withExtension: "mlmodelc", subdirectory: "Models") {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private static func classifyGridWithCoreML(
+        rgba: RGBABuffer,
+        boardSize n: Int,
+        startX: Double,
+        startY: Double,
+        stepX: Double,
+        stepY: Double
+    ) -> [(StoneColor?, Double)]? {
+        let total = n * n
+        guard total >= 1, total <= 361 else { return nil }
+        guard let model = loadStoneClassifierModel() else { return nil }
+
+        let patchSide = 32
+        let shape: [NSNumber] = [NSNumber(value: total), 3, NSNumber(value: patchSide), NSNumber(value: patchSide)]
+        guard let inputArray = try? MLMultiArray(shape: shape, dataType: .float32) else { return nil }
+
+        let ptr = inputArray.dataPointer.assumingMemoryBound(to: Float.self)
+        let planeSize = patchSide * patchSide
+        let patchStride = 3 * planeSize
+        let halfSpanX = stepX * 0.675
+        let halfSpanY = stepY * 0.675
+        let maxX = Double(rgba.width - 1)
+        let maxY = Double(rgba.height - 1)
+        let bytes = rgba.bytes
+        let imgW = rgba.width
+
+        // Bilinearly crop 32x32 RGB patches centered at every intersection (covering 1.35x cell width)
+        for r in 0..<n {
+            let cy = startY + Double(r) * stepY
+            for c in 0..<n {
+                let cx = startX + Double(c) * stepX
+                let baseOffset = (r * n + c) * patchStride
+
+                for py in 0..<patchSide {
+                    let v = -1.0 + 2.0 * Double(py) / Double(patchSide - 1)
+                    let sy = min(maxY, max(0.0, cy + v * halfSpanY))
+                    let y0 = Int(sy)
+                    let y1 = min(rgba.height - 1, y0 + 1)
+                    let fy = sy - Double(y0)
+                    let row0 = y0 * imgW * 4
+                    let row1 = y1 * imgW * 4
+
+                    for px in 0..<patchSide {
+                        let u = -1.0 + 2.0 * Double(px) / Double(patchSide - 1)
+                        let sx = min(maxX, max(0.0, cx + u * halfSpanX))
+                        let x0 = Int(sx)
+                        let x1 = min(rgba.width - 1, x0 + 1)
+                        let fx = sx - Double(x0)
+
+                        let w00 = (1.0 - fx) * (1.0 - fy)
+                        let w10 = fx * (1.0 - fy)
+                        let w01 = (1.0 - fx) * fy
+                        let w11 = fx * fy
+
+                        let i00 = row0 + x0 * 4
+                        let i10 = row0 + x1 * 4
+                        let i01 = row1 + x0 * 4
+                        let i11 = row1 + x1 * 4
+
+                        let rVal = (w00 * Double(bytes[i00]) + w10 * Double(bytes[i10]) + w01 * Double(bytes[i01]) + w11 * Double(bytes[i11])) / 255.0
+                        let gVal = (w00 * Double(bytes[i00 + 1]) + w10 * Double(bytes[i10 + 1]) + w01 * Double(bytes[i01 + 1]) + w11 * Double(bytes[i11 + 1])) / 255.0
+                        let bVal = (w00 * Double(bytes[i00 + 2]) + w10 * Double(bytes[i10 + 2]) + w01 * Double(bytes[i01 + 2]) + w11 * Double(bytes[i11 + 2])) / 255.0
+
+                        let pixIdx = py * patchSide + px
+                        ptr[baseOffset + pixIdx] = Float(rVal)
+                        ptr[baseOffset + planeSize + pixIdx] = Float(gVal)
+                        ptr[baseOffset + 2 * planeSize + pixIdx] = Float(bVal)
+                    }
+                }
+            }
+        }
+
+        guard let provider = try? MLDictionaryFeatureProvider(dictionary: [
+            "patches": MLFeatureValue(multiArray: inputArray)
+        ]) else {
+            return nil
+        }
+
+        stoneModelLock.lock()
+        let output = try? model.prediction(from: provider)
+        stoneModelLock.unlock()
+
+        guard let output,
+              let probs = output.featureValue(for: "probs")?.multiArrayValue,
+              probs.count >= total * 3 else {
+            return nil
+        }
+
+        var results: [(StoneColor?, Double)] = []
+        results.reserveCapacity(total)
+
+        if probs.dataType == .float32 {
+            let outPtr = probs.dataPointer.assumingMemoryBound(to: Float.self)
+            for i in 0..<total {
+                let pEmpty = Double(outPtr[i * 3])
+                let pBlack = Double(outPtr[i * 3 + 1])
+                let pWhite = Double(outPtr[i * 3 + 2])
+                if pBlack >= pEmpty && pBlack >= pWhite {
+                    results.append((.black, pBlack))
+                } else if pWhite >= pEmpty && pWhite >= pBlack {
+                    results.append((.white, pWhite))
+                } else {
+                    results.append((nil, pEmpty))
+                }
+            }
+        } else {
+            for i in 0..<total {
+                let pEmpty = probs[i * 3].doubleValue
+                let pBlack = probs[i * 3 + 1].doubleValue
+                let pWhite = probs[i * 3 + 2].doubleValue
+                if pBlack >= pEmpty && pBlack >= pWhite {
+                    results.append((.black, pBlack))
+                } else if pWhite >= pEmpty && pWhite >= pBlack {
+                    results.append((.white, pWhite))
+                } else {
+                    results.append((nil, pEmpty))
+                }
+            }
+        }
+
+        return results
     }
 
     // MARK: - Pixel Sampling & Adaptive Classification
@@ -938,6 +1400,7 @@ enum GoBoardPhotoRecognizer {
 
     private struct CellFeatures {
         let medianLuma: Double
+        let q25Luma: Double
         let darkRatio: Double
         let brightRatio: Double
         let meanSat: Double
@@ -1040,6 +1503,7 @@ enum GoBoardPhotoRecognizer {
 
         return CellFeatures(
             medianLuma: med,
+            q25Luma: q25,
             darkRatio: Double(darkCount) / Double(count),
             brightRatio: Double(brightCount) / Double(count),
             meanSat: sumSat / Double(count),
@@ -1084,36 +1548,45 @@ enum GoBoardPhotoRecognizer {
         )
 
         // 1. Black stone detection:
-        // Significantly darker than wood OR majority of pixels are very dark (robust to glossy white glare dot in center!)
-        let blackThreshold = min(0.38, wood.luma - 0.20)
-        if f.medianLuma < blackThreshold || f.darkRatio >= 0.56 {
-            let margin = max(blackThreshold - f.medianLuma, f.darkRatio - 0.50)
+        // Significantly darker than wood OR majority of pixels are very dark OR deep dark lower quartile
+        // (robust to large glossy specular glare spots on Yunzi/glass black stones!)
+        let blackThreshold = min(0.40, wood.luma - 0.19)
+        if f.medianLuma < blackThreshold
+            || f.darkRatio >= 0.52
+            || (f.q25Luma < min(0.24, wood.luma - 0.28) && f.medianLuma < wood.luma - 0.14) {
+            let margin = max(blackThreshold - f.medianLuma, f.darkRatio - 0.48)
             let conf = min(0.99, max(0.55, 0.72 + margin * 1.4))
             return (.black, conf)
         }
 
         // 2. White stone detection:
         // Significantly brighter AND noticeably less saturated (more neutral/achromatic) than warm wooden board.
-        let woodIsWarm = wood.sat >= 0.14
+        let woodIsWarm = wood.sat >= 0.13
         let satDrop = wood.sat - f.meanSat
-        let whiteLumaThreshold = min(0.86, max(0.68, wood.luma + 0.12))
+        let whiteLumaThreshold = min(0.84, max(0.56, wood.luma + 0.11))
 
-        let isBrightEnough = f.medianLuma > whiteLumaThreshold || f.brightRatio >= 0.65
-        let isNeutralEnough = woodIsWarm ? (f.meanSat < max(0.18, wood.sat * 0.62) || satDrop > 0.10) : (lumaDiff > 0.16)
+        let isBrightEnough = f.medianLuma > whiteLumaThreshold || f.brightRatio >= 0.62
+        let isNeutralEnough = woodIsWarm ? (f.meanSat < max(0.19, wood.sat * 0.65) || satDrop > 0.09) : (lumaDiff > 0.14)
 
-        if isBrightEnough && isNeutralEnough && colorDist > 0.11 {
+        if isBrightEnough && isNeutralEnough && colorDist > 0.10 {
             let margin = max(f.medianLuma - whiteLumaThreshold, satDrop)
             let conf = min(0.99, max(0.55, 0.70 + margin * 1.3))
             return (.white, conf)
         }
 
-        // 3. Secondary white stone check for dim lighting (white stone in shadow is still much brighter & whiter than wood)
-        if lumaDiff > 0.18 && f.meanSat < 0.16 && colorDist > 0.15 {
+        // 3. Bright-board chromaticity check (white stone on very bright kaya/bamboo board: slightly brighter + strongly desaturated)
+        if woodIsWarm && lumaDiff > 0.05 && satDrop > 0.13 && f.meanSat < wood.sat * 0.52 && colorDist > 0.12 {
+            let conf = min(0.94, max(0.52, 0.64 + satDrop * 1.1))
+            return (.white, conf)
+        }
+
+        // 4. Secondary white stone check for dim lighting (white stone in shadow is still much brighter & whiter than wood)
+        if lumaDiff > 0.15 && f.meanSat < 0.18 && colorDist > 0.13 {
             let conf = min(0.92, max(0.50, 0.62 + lumaDiff))
             return (.white, conf)
         }
 
-        // 4. Empty intersection
+        // 5. Empty intersection
         let distToBlack = abs(f.medianLuma - blackThreshold)
         let distToWhite = abs(f.medianLuma - whiteLumaThreshold)
         let safetyMargin = min(distToBlack, distToWhite)

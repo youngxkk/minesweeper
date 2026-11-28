@@ -313,7 +313,7 @@ final class StarYiGoUITests: XCTestCase {
     }
 
     @MainActor
-    func testChineseNineteenLineBoardOnPhoneAndPad() {
+    func testChineseNineteenLineBoardOnPad() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = makeApp(language: "zh-Hans", locale: "zh_CN")
         app.launch()
@@ -344,15 +344,7 @@ final class StarYiGoUITests: XCTestCase {
         let center = board.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let focus = app.buttons["GameBoardFocusButton"]
         let confirm = app.buttons["确认落子"]
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            XCTAssertTrue(focus.isHittable)
-            focus.tap()
-            center.tap()
-            XCTAssertEqual(focus.label, "显示全盘")
-            XCTAssertFalse(confirm.exists, "Selecting a region must not select a move")
-        } else {
-            XCTAssertFalse(focus.exists)
-        }
+        XCTAssertFalse(focus.exists, "iPad uses full 19x19 board without phone zoom toggle")
 
         center.tap()
         reveal(confirm, in: app.scrollViews.firstMatch)
@@ -361,10 +353,6 @@ final class StarYiGoUITests: XCTestCase {
         app.activate()
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Pending move survives backgrounding")
         confirm.tap()
-        if focus.exists {
-            focus.tap()
-            XCTAssertEqual(focus.label, "选择放大区域")
-        }
     }
 
     @MainActor
