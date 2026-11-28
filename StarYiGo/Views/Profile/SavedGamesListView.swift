@@ -11,42 +11,84 @@ struct SavedGameRecordRow: View {
     let onReview: () -> Void
     let onRequestDelete: () -> Void
 
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    private static let cachedDateFormatters: [String: DateFormatter] = {
+        var map: [String: DateFormatter] = [:]
+
+        let cjk = DateFormatter()
+        cjk.dateFormat = "yyyy年M月d日 HH:mm"
+        map["zh-Hans"] = cjk
+        map["zh-Hant"] = cjk
+        map["ja"] = cjk
+
+        let ko = DateFormatter()
+        ko.dateFormat = "yyyy년 M월 d일 HH:mm"
+        map["ko"] = ko
+
+        let en = DateFormatter()
+        en.dateStyle = .medium
+        en.timeStyle = .short
+        map["en"] = en
+
+        return map
+    }()
+
+    private var formattedTimestamp: String {
+        let code = l10n.language.resolvedCode
+        let formatter = Self.cachedDateFormatters[code] ?? Self.cachedDateFormatters["en"]!
+        return formatter.string(from: record.date)
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Button(action: onReview) {
-                HStack(spacing: 10) {
-                    Text("\(record.boardSize)×\(record.boardSize)")
-                        .font(AppFont.rounded(size: 11, weight: .black))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(AppTheme.skyBottom))
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.fill")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundColor(AppTheme.grapeBottom)
 
-                    Text(record.resultString)
-                        .font(AppFont.rounded(size: 11, weight: .black))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(AppTheme.sunBottom))
+                            Text(formattedTimestamp)
+                                .font(AppFont.rounded(size: 15, weight: .black))
+                                .monospacedDigit()
+                                .foregroundColor(AppTheme.inkPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(record.blackName) vs \(record.whiteName)")
-                            .font(AppFont.rounded(size: 13, weight: .heavy))
-                            .foregroundColor(AppTheme.inkPrimary)
-                            .lineLimit(1)
-                        Text("\(l10n.t("game.moveCount", record.moveCount)) · \(record.date.formatted(date: .abbreviated, time: .shortened))")
-                            .font(AppFont.rounded(size: 11, weight: .semibold))
-                            .foregroundColor(AppTheme.inkSecondary)
+                        HStack(spacing: 6) {
+                            Text("\(record.boardSize)×\(record.boardSize)")
+                                .font(AppFont.rounded(size: 10.5, weight: .bold))
+                                .foregroundColor(AppTheme.skyBottom)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2.5)
+                                .background(Capsule().fill(AppTheme.skyTop.opacity(0.14)))
+
+                            Text(record.resultString)
+                                .font(AppFont.rounded(size: 10.5, weight: .bold))
+                                .foregroundColor(AppTheme.sunBottom)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2.5)
+                                .background(Capsule().fill(AppTheme.sunTop.opacity(0.18)))
+
+                            Text("\(record.blackName) vs \(record.whiteName) · \(l10n.t("game.moveCount", record.moveCount))")
+                                .font(AppFont.rounded(size: 11.5, weight: .semibold))
+                                .foregroundColor(AppTheme.inkSecondary(for: colorSchemeContrast))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
                     }
 
-                    Spacer()
+                    Spacer(minLength: 4)
 
                     Image(systemName: "play.circle.fill")
-                        .font(.system(size: 20, design: .rounded))
+                        .font(.system(size: 21, design: .rounded))
                         .foregroundColor(AppTheme.grapeBottom)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(Color.white.opacity(0.95))
@@ -152,13 +194,7 @@ struct SavedGamesListView: View {
     }
 
     private var topBar: some View {
-        HStack {
-            GameBackButton(title: l10n.t("common.back")) {
-                appState.popRoute()
-            }
-
-            Spacer()
-
+        ZStack {
             GameTitleCrest(
                 title: l10n.localized(
                     zh: "全部对局",
@@ -176,21 +212,26 @@ struct SavedGamesListView: View {
                 )
             )
 
-            Spacer()
-
-            HStack(spacing: 5) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.grapeBottom)
-                Text("\(appState.savedGames.count)")
-                    .font(AppFont.rounded(size: 14, weight: .black))
-                    .foregroundColor(AppTheme.inkPrimary)
+            HStack {
+                GameBackButton(title: l10n.t("common.back")) {
+                    appState.popRoute()
+                }
+                Spacer()
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundColor(AppTheme.grapeBottom)
+                    Text("\(appState.savedGames.count)")
+                        .font(AppFont.rounded(size: 14, weight: .black))
+                        .foregroundColor(AppTheme.inkPrimary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color.white.opacity(0.95)).shadow(color: AppTheme.grapeBottom.opacity(0.14), radius: 8, y: 3))
+                .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(Color.white.opacity(0.95)).shadow(color: AppTheme.grapeBottom.opacity(0.14), radius: 8, y: 3))
-            .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var emptyStateCard: some View {

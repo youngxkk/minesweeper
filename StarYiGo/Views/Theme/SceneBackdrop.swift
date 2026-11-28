@@ -6,35 +6,51 @@
 import SwiftUI
 
 enum SceneBackdrop: View {
-    case seasideRoom, tabletop, morningDojo, termAlbum, recordDesk, bambooPond, playerPassport, paperSettings
+    case seasideRoom, tabletop, morningDojo, termAlbum, recordDesk, bambooPond, playerPassport, paperSettings, mistakeNotebook
+
+    var body: some View {
+        SceneBackdropView(kind: self)
+    }
+}
+
+private struct SceneBackdropView: View {
+    let kind: SceneBackdrop
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         Group {
-            if self == .bambooPond {
-                ZStack {
-                    GeometryReader { geometry in
-                        Image("PhotoJudgeBackdrop")
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipped()
+            if kind == .bambooPond {
+                if reduceTransparency {
+                    kind.baseGradient
+                } else {
+                    ZStack {
+                        GeometryReader { geometry in
+                            Image("PhotoJudgeBackdrop")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
+                                .accessibilityIgnoresInvertColors()
+                        }
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(0.12), location: 0.0),
+                                .init(color: Color.clear, location: 0.30),
+                                .init(color: Color.clear, location: 0.74),
+                                .init(color: Color(red: 0.05, green: 0.25, blue: 0.45).opacity(0.16), location: 1.0)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     }
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.12), location: 0.0),
-                            .init(color: Color.clear, location: 0.30),
-                            .init(color: Color.clear, location: 0.74),
-                            .init(color: Color(red: 0.05, green: 0.25, blue: 0.45).opacity(0.16), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
                 }
             } else {
                 ZStack {
-                    baseGradient
-                    ambientLighting
-                    patternLayer
+                    kind.baseGradient
+                    if !reduceTransparency {
+                        kind.ambientLighting
+                        kind.patternLayer
+                    }
                 }
             }
         }
@@ -42,19 +58,22 @@ enum SceneBackdrop: View {
         .accessibilityHidden(true)
         .allowsHitTesting(false)
     }
+}
+
+private extension SceneBackdrop {
 
     // MARK: - Layer 1: High-Key Pastel Base Gradient (86%–98% Luminance)
 
     @ViewBuilder
-    private var baseGradient: some View {
+    var baseGradient: some View {
         switch self {
         case .seasideRoom:
-            // AI 对弈：晴空蓝灰竞技台面
+            // AI 对弈：清透冰川天蓝竞技台面
             LinearGradient(
                 colors: [
-                    Color(red: 0.90, green: 0.95, blue: 0.995),
-                    Color(red: 0.945, green: 0.975, blue: 1.00),
-                    Color(red: 0.875, green: 0.935, blue: 0.985)
+                    Color(red: 0.878, green: 0.940, blue: 0.996),
+                    Color(red: 0.922, green: 0.964, blue: 1.00),
+                    Color(red: 0.860, green: 0.928, blue: 0.992)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -73,24 +92,24 @@ enum SceneBackdrop: View {
             )
 
         case .morningDojo:
-            // 每日道场：晨光和纸障子墙面（极简暖米白/淡杏）
+            // 每日道场：清透浅樱粉和纸底（与主页柔樱粉按钮同色系）
             LinearGradient(
                 colors: [
-                    Color(red: 0.992, green: 0.968, blue: 0.925),
-                    Color(red: 0.984, green: 0.954, blue: 0.904),
-                    Color(red: 0.960, green: 0.924, blue: 0.868)
+                    Color(red: 0.996, green: 0.948, blue: 0.962),
+                    Color(red: 0.994, green: 0.966, blue: 0.974),
+                    Color(red: 0.984, green: 0.928, blue: 0.948)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
         case .termAlbum:
-            // 招式图鉴：星弈蓝图手账纸
+            // 招式图鉴：均匀清透的浅天蓝手账纸
             LinearGradient(
                 colors: [
-                    Color(red: 0.898, green: 0.952, blue: 0.998),
-                    Color(red: 0.948, green: 0.978, blue: 1.00),
-                    Color(red: 0.922, green: 0.962, blue: 0.995)
+                    Color(red: 0.845, green: 0.926, blue: 0.995),
+                    Color(red: 0.888, green: 0.950, blue: 0.998),
+                    Color(red: 0.838, green: 0.920, blue: 0.992)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -121,12 +140,12 @@ enum SceneBackdrop: View {
             )
 
         case .playerPassport:
-            // 围棋航海护照：浅海蓝精装护照内页
+            // 围棋航海护照：清透浅海碧蓝精装护照内页
             LinearGradient(
                 colors: [
-                    Color(red: 0.915, green: 0.962, blue: 0.985),
-                    Color(red: 0.965, green: 0.982, blue: 0.990),
-                    Color(red: 0.942, green: 0.962, blue: 0.952)
+                    Color(red: 0.845, green: 0.938, blue: 0.968),
+                    Color(red: 0.894, green: 0.958, blue: 0.978),
+                    Color(red: 0.832, green: 0.926, blue: 0.958)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -142,34 +161,34 @@ enum SceneBackdrop: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+
+        case .mistakeNotebook:
+            // 错题本：温润奶油杏色精装错题手账纸
+            LinearGradient(
+                colors: [
+                    Color(red: 0.992, green: 0.958, blue: 0.902),
+                    Color(red: 0.996, green: 0.974, blue: 0.935),
+                    Color(red: 0.984, green: 0.940, blue: 0.874)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
         }
     }
 
     // MARK: - Layer 2: Soft Ambient Sunlit Spotlight & Edge Depth
 
     @ViewBuilder
-    private var ambientLighting: some View {
+    var ambientLighting: some View {
         switch self {
         case .seasideRoom:
             ZStack {
-                // Soft center spotlight framing the Go board
+                // Soft center spotlight framing the Go board cleanly (no uneven corner blotches)
                 RadialGradient(
-                    colors: [Color.white.opacity(0.68), Color.white.opacity(0)],
+                    colors: [Color.white.opacity(0.46), Color.white.opacity(0)],
                     center: UnitPoint(x: 0.50, y: 0.48),
-                    startRadius: 20,
-                    endRadius: 520
-                )
-                RadialGradient(
-                    colors: [AppTheme.skyTop.opacity(0.11), AppTheme.skyTop.opacity(0)],
-                    center: UnitPoint(x: 0.08, y: 0.12),
-                    startRadius: 10,
-                    endRadius: 420
-                )
-                RadialGradient(
-                    colors: [AppTheme.skyBottom.opacity(0.08), AppTheme.skyBottom.opacity(0)],
-                    center: UnitPoint(x: 0.92, y: 0.90),
-                    startRadius: 10,
-                    endRadius: 420
+                    startRadius: 30,
+                    endRadius: 540
                 )
             }
 
@@ -198,41 +217,23 @@ enum SceneBackdrop: View {
 
         case .morningDojo:
             ZStack {
-                // Soft morning sunlit warmth from top-left
+                // Soft sunlit sakura-pink warmth (even and gentle)
                 RadialGradient(
-                    colors: [Color(red: 1.0, green: 0.94, blue: 0.78).opacity(0.52), Color.clear],
-                    center: UnitPoint(x: 0.14, y: 0.12),
-                    startRadius: 10,
-                    endRadius: 540
-                )
-                // Warm golden honey glow at far right edge (pure dawn dojo atmosphere)
-                RadialGradient(
-                    colors: [Color(red: 0.98, green: 0.85, blue: 0.60).opacity(0.18), Color.clear],
-                    center: UnitPoint(x: 0.92, y: 0.82),
-                    startRadius: 10,
-                    endRadius: 360
+                    colors: [Color.white.opacity(0.50), Color.clear],
+                    center: UnitPoint(x: 0.50, y: 0.48),
+                    startRadius: 20,
+                    endRadius: 520
                 )
             }
 
         case .termAlbum:
             ZStack {
+                // Gentle centered light lift only — no uneven corner halos
                 RadialGradient(
-                    colors: [Color.white.opacity(0.55), Color.clear],
-                    center: UnitPoint(x: 0.50, y: 0.45),
-                    startRadius: 20,
-                    endRadius: 500
-                )
-                RadialGradient(
-                    colors: [AppTheme.skyTop.opacity(0.12), Color.clear],
-                    center: UnitPoint(x: 0.12, y: 0.10),
-                    startRadius: 10,
-                    endRadius: 380
-                )
-                RadialGradient(
-                    colors: [AppTheme.sunTop.opacity(0.10), Color.clear],
-                    center: UnitPoint(x: 0.88, y: 0.90),
-                    startRadius: 10,
-                    endRadius: 340
+                    colors: [Color.white.opacity(0.32), Color.clear],
+                    center: UnitPoint(x: 0.50, y: 0.48),
+                    startRadius: 30,
+                    endRadius: 540
                 )
             }
 
@@ -277,16 +278,10 @@ enum SceneBackdrop: View {
         case .playerPassport:
             ZStack {
                 RadialGradient(
-                    colors: [Color.white.opacity(0.55), Color.clear],
-                    center: UnitPoint(x: 0.50, y: 0.42),
+                    colors: [Color.white.opacity(0.32), Color.clear],
+                    center: UnitPoint(x: 0.50, y: 0.45),
                     startRadius: 20,
                     endRadius: 520
-                )
-                RadialGradient(
-                    colors: [AppTheme.skyTop.opacity(0.09), Color.clear],
-                    center: UnitPoint(x: 0.86, y: 0.16),
-                    startRadius: 10,
-                    endRadius: 380
                 )
             }
 
@@ -297,30 +292,114 @@ enum SceneBackdrop: View {
                 startRadius: 10,
                 endRadius: 480
             )
+
+        case .mistakeNotebook:
+            RadialGradient(
+                colors: [Color.white.opacity(0.42), Color.clear],
+                center: UnitPoint(x: 0.50, y: 0.45),
+                startRadius: 20,
+                endRadius: 540
+            )
         }
     }
 
     // MARK: - Layer 3: Ultra-Subtle Nintendo Vector Patterns (3%–7% Opacity)
 
     @ViewBuilder
-    private var patternLayer: some View {
+    var patternLayer: some View {
         switch self {
         case .seasideRoom:
-            Canvas { context, size in
-                // Wide Nintendo Switch Sports diagonal sheen bands
-                let stripeWidth: CGFloat = 72
-                let step: CGFloat = 160
-                let span = size.width + size.height
-                var x: CGFloat = -size.height
-                while x < span {
-                    var band = Path()
-                    band.move(to: CGPoint(x: x, y: size.height))
-                    band.addLine(to: CGPoint(x: x + size.height * 0.65, y: 0))
-                    band.addLine(to: CGPoint(x: x + size.height * 0.65 + stripeWidth, y: 0))
-                    band.addLine(to: CGPoint(x: x + stripeWidth, y: size.height))
-                    band.closeSubpath()
-                    context.fill(band, with: .color(Color.white.opacity(0.24)))
-                    x += step
+            // AI 对弈：纯代码「星弈竞技六角蜂巢星阵」+ 交替星芒/棋星节点 + 竞技场细双线边框
+            ZStack {
+                // Layer A: Embossed hexagonal tactical lattice with subtle StarYi AI star-nodes
+                Canvas { context, size in
+                    let hexRadius: CGFloat = 34
+                    let hexW = hexRadius * sqrt(3) // horizontal center-to-center
+                    let rowStep = hexRadius * 1.5  // vertical center-to-center
+                    let cols = Int(size.width / hexW) + 3
+                    let rows = Int(size.height / rowStep) + 3
+
+                    var hexPaths = Path()
+                    var starNodes = Path()
+                    var ringNodes = Path()
+
+                    for row in -1...rows {
+                        let xOffset: CGFloat = row.isMultiple(of: 2) ? 0 : hexW * 0.5
+                        let cy = CGFloat(row) * rowStep
+                        for col in -1...cols {
+                            let cx = CGFloat(col) * hexW + xOffset
+
+                            // Pointy-top hexagon
+                            for i in 0..<6 {
+                                let angle = CGFloat(i) * (.pi / 3.0) - (.pi / 6.0)
+                                let pt = CGPoint(
+                                    x: cx + cos(angle) * hexRadius,
+                                    y: cy + sin(angle) * hexRadius
+                                )
+                                if i == 0 {
+                                    hexPaths.move(to: pt)
+                                } else {
+                                    hexPaths.addLine(to: pt)
+                                }
+                            }
+                            hexPaths.closeSubpath()
+
+                            // Alternating AI StarYi 4-point star & miniature tactical ring at cell centers
+                            if (row + col).isMultiple(of: 3) {
+                                let arm: CGFloat = 5.2
+                                let inner: CGFloat = 1.6
+                                starNodes.move(to: CGPoint(x: cx, y: cy - arm))
+                                starNodes.addLine(to: CGPoint(x: cx + inner, y: cy - inner))
+                                starNodes.addLine(to: CGPoint(x: cx + arm, y: cy))
+                                starNodes.addLine(to: CGPoint(x: cx + inner, y: cy + inner))
+                                starNodes.addLine(to: CGPoint(x: cx, y: cy + arm))
+                                starNodes.addLine(to: CGPoint(x: cx - inner, y: cy + inner))
+                                starNodes.addLine(to: CGPoint(x: cx - arm, y: cy))
+                                starNodes.addLine(to: CGPoint(x: cx - inner, y: cy - inner))
+                                starNodes.closeSubpath()
+                            } else if (row + col) % 3 == 1 || (row + col) % 3 == -2 {
+                                let r: CGFloat = 2.6
+                                ringNodes.addEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+                            }
+                        }
+                    }
+
+                    // Dual-pass letterpress emboss (crisp white highlight + cool sky-blue tactical ink)
+                    var emboss = context
+                    emboss.translateBy(x: 0.8, y: 1.0)
+                    emboss.stroke(hexPaths, with: .color(Color.white.opacity(0.55)), lineWidth: 1.1)
+                    context.stroke(hexPaths, with: .color(AppTheme.skyBottom.opacity(0.135)), lineWidth: 1.0)
+
+                    context.fill(starNodes, with: .color(AppTheme.skyBottom.opacity(0.16)))
+                    context.stroke(ringNodes, with: .color(AppTheme.skyBottom.opacity(0.15)), lineWidth: 1.1)
+                }
+                .mask(edgeBreathingMask(centerOpacity: 0.32, edgeOpacity: 1.0))
+
+                // Layer B: Crisp championship arena perimeter frame + subtle corner star brackets
+                Canvas { context, size in
+                    let inset: CGFloat = 16
+                    let outerRect = CGRect(
+                        x: inset,
+                        y: inset,
+                        width: max(0, size.width - inset * 2),
+                        height: max(0, size.height - inset * 2)
+                    )
+                    let innerRect = outerRect.insetBy(dx: 5, dy: 5)
+
+                    let outerPath = Path(roundedRect: outerRect, cornerRadius: 26, style: .continuous)
+                    let innerPath = Path(roundedRect: innerRect, cornerRadius: 22, style: .continuous)
+
+                    context.stroke(
+                        Path(roundedRect: outerRect.offsetBy(dx: 0, dy: 1), cornerRadius: 26, style: .continuous),
+                        with: .color(Color.white.opacity(0.58)),
+                        lineWidth: 1.4
+                    )
+                    context.stroke(outerPath, with: .color(AppTheme.skyBottom.opacity(0.15)), lineWidth: 1.3)
+                    context.stroke(
+                        innerPath,
+                        with: .color(AppTheme.skyBottom.opacity(0.09)),
+                        style: StrokeStyle(lineWidth: 1.0, lineCap: .round, dash: [6, 7])
+                    )
                 }
             }
 
@@ -440,13 +519,13 @@ enum SceneBackdrop: View {
                         }
                     }
 
-                    // Dual-pass letterpress emboss (white highlight + warm cedar ink)
+                    // Dual-pass letterpress emboss (white highlight + soft sakura-pink ink matching Daily Dojo palette)
                     var embossed = context
                     embossed.translateBy(x: 0.8, y: 1.0)
-                    embossed.stroke(pattern, with: .color(Color.white.opacity(0.42)), lineWidth: 1.0)
-                    context.stroke(pattern, with: .color(Color(red: 0.64, green: 0.45, blue: 0.24).opacity(0.058)), lineWidth: 0.9)
+                    embossed.stroke(pattern, with: .color(Color.white.opacity(0.56)), lineWidth: 1.1)
+                    context.stroke(pattern, with: .color(Color(red: 0.86, green: 0.40, blue: 0.55).opacity(0.14)), lineWidth: 1.05)
                 }
-                .mask(edgeBreathingMask(centerOpacity: 0.28, edgeOpacity: 1.0))
+                .mask(edgeBreathingMask(centerOpacity: 0.46, edgeOpacity: 1.0))
 
                 // Layer B & C: Soft morning shoji sunbeams + bottom-right Karesansui concentric Zen arcs
                 Canvas { context, size in
@@ -469,7 +548,7 @@ enum SceneBackdrop: View {
                             with: .linearGradient(
                                 Gradient(colors: [
                                     Color.white.opacity(opacity),
-                                    Color(red: 1.0, green: 0.96, blue: 0.84).opacity(opacity * 0.42),
+                                    Color(red: 1.0, green: 0.94, blue: 0.96).opacity(opacity * 0.42),
                                     Color.white.opacity(0.0)
                                 ]),
                                 startPoint: CGPoint(x: x0, y: 0),
@@ -478,131 +557,59 @@ enum SceneBackdrop: View {
                         )
                     }
 
-                    // Bottom-right Karesansui (枯山水) raked Zen ripples watermark
+                    // Bottom-right Karesansui (枯山水) raked Zen ripples watermark in matching soft sakura pink
                     let zenOrigin = CGPoint(x: size.width * 0.92, y: size.height * 0.90)
-                    let zenInk = Color(red: 0.66, green: 0.46, blue: 0.22)
+                    let zenInk = Color(red: 0.86, green: 0.40, blue: 0.55)
                     for i in 1...7 {
                         let r = CGFloat(i) * 34
                         let arcRect = CGRect(x: zenOrigin.x - r, y: zenOrigin.y - r, width: r * 2, height: r * 2)
-                        let alpha = max(0.025, 0.085 - Double(i) * 0.008)
+                        let alpha = max(0.055, 0.155 - Double(i) * 0.014)
                         context.stroke(
                             Path(ellipseIn: arcRect.offsetBy(dx: 0, dy: 1)),
-                            with: .color(Color.white.opacity(0.38)),
-                            lineWidth: 1.4
+                            with: .color(Color.white.opacity(0.48)),
+                            lineWidth: 1.5
                         )
                         context.stroke(
                             Path(ellipseIn: arcRect),
                             with: .color(zenInk.opacity(alpha)),
-                            lineWidth: 1.3
+                            lineWidth: 1.4
                         )
                     }
                 }
             }
 
         case .termAlbum:
-            // 3. 招式图鉴：《动物森友会》精装点阵手账纸 + 左侧书脊装订孔 + 右下角围棋手筋蓝图水印
-            ZStack {
-                // Layer A: Crisp stationery dot grid with periodic Go star-point (hoshi) crosses
-                Canvas { context, size in
-                    let cell: CGFloat = 30
-                    let cols = Int(size.width / cell) + 1
-                    let rows = Int(size.height / cell) + 1
-                    let dotColor = AppTheme.skyBottom.opacity(0.115)
-                    let hoshiColor = AppTheme.skyBottom.opacity(0.20)
-                    let highlight = Color.white.opacity(0.55)
+            // 3. 招式图鉴：统一清透的浅蓝点阵手账纹理
+            Canvas { context, size in
+                let cell: CGFloat = 30
+                let cols = Int(size.width / cell) + 1
+                let rows = Int(size.height / cell) + 1
+                let dotColor = AppTheme.skyBottom.opacity(0.18)
+                let hoshiColor = AppTheme.skyBottom.opacity(0.28)
+                let highlight = Color.white.opacity(0.58)
 
-                    for r in 1...rows {
-                        for c in 1...cols {
-                            let px = CGFloat(c) * cell
-                            let py = CGFloat(r) * cell
-                            if r.isMultiple(of: 4) && c.isMultiple(of: 4) {
-                                // Delicate star-point cross
-                                var cross = Path()
-                                cross.move(to: CGPoint(x: px - 4.2, y: py))
-                                cross.addLine(to: CGPoint(x: px + 4.2, y: py))
-                                cross.move(to: CGPoint(x: px, y: py - 4.2))
-                                cross.addLine(to: CGPoint(x: px, y: py + 4.2))
-                                context.stroke(cross, with: .color(hoshiColor), lineWidth: 1.3)
-                            } else {
-                                let hiRect = CGRect(x: px - 1.3, y: py - 0.5, width: 2.6, height: 2.6)
-                                context.fill(Path(ellipseIn: hiRect), with: .color(highlight))
-                                let dotRect = CGRect(x: px - 1.3, y: py - 1.3, width: 2.6, height: 2.6)
-                                context.fill(Path(ellipseIn: dotRect), with: .color(dotColor))
-                            }
+                for r in 1...rows {
+                    for c in 1...cols {
+                        let px = CGFloat(c) * cell
+                        let py = CGFloat(r) * cell
+                        if r.isMultiple(of: 4) && c.isMultiple(of: 4) {
+                            // Delicate star-point cross
+                            var cross = Path()
+                            cross.move(to: CGPoint(x: px - 4.4, y: py))
+                            cross.addLine(to: CGPoint(x: px + 4.4, y: py))
+                            cross.move(to: CGPoint(x: px, y: py - 4.4))
+                            cross.addLine(to: CGPoint(x: px, y: py + 4.4))
+                            context.stroke(cross, with: .color(hoshiColor), lineWidth: 1.4)
+                        } else {
+                            let hiRect = CGRect(x: px - 1.4, y: py - 0.5, width: 2.8, height: 2.8)
+                            context.fill(Path(ellipseIn: hiRect), with: .color(highlight))
+                            let dotRect = CGRect(x: px - 1.4, y: py - 1.4, width: 2.8, height: 2.8)
+                            context.fill(Path(ellipseIn: dotRect), with: .color(dotColor))
                         }
                     }
                 }
-                .mask(edgeBreathingMask(centerOpacity: 0.34, edgeOpacity: 1.0))
-
-                // Layer B & C: Left field-guide binding spine + bottom-right miniature Go tesuji blueprint watermark
-                Canvas { context, size in
-                    // Soft book-spine fold shadow on far left
-                    let spineRect = CGRect(x: 0, y: 0, width: 34, height: size.height)
-                    context.fill(
-                        Path(spineRect),
-                        with: .linearGradient(
-                            Gradient(colors: [
-                                AppTheme.skyBottom.opacity(0.10),
-                                AppTheme.skyBottom.opacity(0.03),
-                                Color.clear
-                            ]),
-                            startPoint: CGPoint(x: 0, y: 0),
-                            endPoint: CGPoint(x: 34, y: 0)
-                        )
-                    )
-                    // Subtle vertical margin rule
-                    var rule = Path()
-                    rule.move(to: CGPoint(x: 34, y: 0))
-                    rule.addLine(to: CGPoint(x: 34, y: size.height))
-                    context.stroke(rule, with: .color(AppTheme.skyBottom.opacity(0.11)), lineWidth: 1)
-
-                    // Minimalist binder ring eyelets along the left spine
-                    let holeStep: CGFloat = 78
-                    var hy: CGFloat = 68
-                    while hy < size.height - 40 {
-                        let holeRect = CGRect(x: 11, y: hy - 5.5, width: 11, height: 11)
-                        context.fill(Path(ellipseIn: holeRect), with: .color(Color.white.opacity(0.75)))
-                        context.stroke(Path(ellipseIn: holeRect), with: .color(AppTheme.skyBottom.opacity(0.18)), lineWidth: 1.4)
-                        hy += holeStep
-                    }
-
-                    // Bottom-right miniature 5×5 Go Tesuji ("Two True Eyes") blueprint watermark
-                    let gridStep: CGFloat = 26
-                    let boardSpan = gridStep * 4
-                    let ox = size.width - boardSpan - 36
-                    let oy = size.height - boardSpan - 32
-                    let bpInk = AppTheme.skyBottom.opacity(0.095)
-
-                    var miniGrid = Path()
-                    for i in 0...4 {
-                        let d = CGFloat(i) * gridStep
-                        miniGrid.move(to: CGPoint(x: ox + d, y: oy))
-                        miniGrid.addLine(to: CGPoint(x: ox + d, y: oy + boardSpan))
-                        miniGrid.move(to: CGPoint(x: ox, y: oy + d))
-                        miniGrid.addLine(to: CGPoint(x: ox + boardSpan, y: oy + d))
-                    }
-                    context.stroke(miniGrid, with: .color(bpInk), lineWidth: 1.2)
-
-                    // Classic "Two Eyes" stone silhouette on the miniature blueprint
-                    let filledStones: [(Int, Int)] = [(1, 1), (2, 1), (3, 1), (1, 2), (3, 2), (2, 2), (1, 3), (2, 3), (3, 3)]
-                    let hollowStones: [(Int, Int)] = [(0, 1), (0, 2), (0, 3), (4, 1), (4, 2), (4, 3)]
-                    let stoneR: CGFloat = 8.5
-                    for (c, r) in filledStones {
-                        let cx = ox + CGFloat(c) * gridStep
-                        let cy = oy + CGFloat(r) * gridStep
-                        let sRect = CGRect(x: cx - stoneR, y: cy - stoneR, width: stoneR * 2, height: stoneR * 2)
-                        context.fill(Path(ellipseIn: sRect), with: .color(AppTheme.skyBottom.opacity(0.085)))
-                        context.stroke(Path(ellipseIn: sRect), with: .color(AppTheme.skyBottom.opacity(0.14)), lineWidth: 1.1)
-                    }
-                    for (c, r) in hollowStones {
-                        let cx = ox + CGFloat(c) * gridStep
-                        let cy = oy + CGFloat(r) * gridStep
-                        let sRect = CGRect(x: cx - stoneR, y: cy - stoneR, width: stoneR * 2, height: stoneR * 2)
-                        context.fill(Path(ellipseIn: sRect), with: .color(Color.white.opacity(0.55)))
-                        context.stroke(Path(ellipseIn: sRect), with: .color(AppTheme.skyBottom.opacity(0.14)), lineWidth: 1.2)
-                    }
-                }
             }
+            .mask(edgeBreathingMask(centerOpacity: 0.55, edgeOpacity: 1.0))
 
         case .recordDesk:
             // 4. 棋谱书院 / 复盘馆：星光绫绢 · 青海波 (Seigaiha) + 名局星轨连线 + 藏书阁烫金角花
@@ -715,46 +722,77 @@ enum SceneBackdrop: View {
 
         case .playerPassport:
             Canvas { context, size in
-                // Animal Crossing passport-style fine guilloché wave watermarks
-                let waveSpacing: CGFloat = 52
-                let amplitude: CGFloat = 7
-                let wavelength: CGFloat = 140
+                let oceanInk = Color(red: 0.06, green: 0.46, blue: 0.66)
+
+                // Nautical passport-style embossed ocean guilloché wave watermarks
+                let waveSpacing: CGFloat = 46
+                let amplitude: CGFloat = 7.5
+                let wavelength: CGFloat = 144
                 var waves = Path()
-                var y: CGFloat = 24
+                var y: CGFloat = 20
                 while y < size.height + waveSpacing {
                     waves.move(to: CGPoint(x: 0, y: y))
                     var x: CGFloat = 0
                     while x <= size.width + 16 {
                         let dy = sin((x / wavelength) * .pi * 2) * amplitude
                         waves.addLine(to: CGPoint(x: x, y: y + dy))
-                        x += 14
+                        x += 12
                     }
                     y += waveSpacing
                 }
-                context.stroke(waves, with: .color(AppTheme.skyBottom.opacity(0.048)), lineWidth: 1)
+                var waveHighlight = context
+                waveHighlight.translateBy(x: 0, y: 1.1)
+                waveHighlight.stroke(waves, with: .color(Color.white.opacity(0.48)), lineWidth: 1.2)
+                context.stroke(waves, with: .color(oceanInk.opacity(0.145)), lineWidth: 1.1)
 
-                // Delicate compass-rose line-art watermark tucked softly in bottom-right
+                // Crisp nautical compass-rose line-art watermark tucked softly in bottom-right
                 let compassCenter = CGPoint(x: size.width * 0.86, y: size.height * 0.82)
-                let outerR: CGFloat = min(size.width, size.height) * 0.16
+                let outerR: CGFloat = min(size.width, size.height) * 0.17
                 let innerR = outerR * 0.68
-                let ink = AppTheme.skyBottom.opacity(0.065)
+                let compassInk = oceanInk.opacity(0.18)
 
                 context.stroke(
                     Path(ellipseIn: CGRect(x: compassCenter.x - outerR, y: compassCenter.y - outerR, width: outerR * 2, height: outerR * 2)),
-                    with: .color(ink),
-                    lineWidth: 1.4
+                    with: .color(compassInk),
+                    lineWidth: 1.6
                 )
                 context.stroke(
                     Path(ellipseIn: CGRect(x: compassCenter.x - innerR, y: compassCenter.y - innerR, width: innerR * 2, height: innerR * 2)),
-                    with: .color(ink),
-                    lineWidth: 1.0
+                    with: .color(oceanInk.opacity(0.13)),
+                    lineWidth: 1.1
                 )
                 let star = fourPointStarPath(center: compassCenter, radius: outerR * 0.92, innerRatio: 0.20)
-                context.stroke(star, with: .color(ink), lineWidth: 1.2)
+                context.fill(star, with: .color(oceanInk.opacity(0.06)))
+                context.stroke(star, with: .color(compassInk), lineWidth: 1.4)
             }
 
         case .paperSettings:
             EmptyView()
+
+        case .mistakeNotebook:
+            // 错题本：温润手账横格 + 细微坐标网格 + 柔和折角书签水印
+            Canvas { context, size in
+                let amberInk = Color(red: 0.72, green: 0.48, blue: 0.18)
+                let step: CGFloat = 34
+                var grid = Path()
+                var y: CGFloat = step
+                while y < size.height {
+                    grid.move(to: CGPoint(x: 0, y: y))
+                    grid.addLine(to: CGPoint(x: size.width, y: y))
+                    y += step
+                }
+                var x: CGFloat = step
+                while x < size.width {
+                    grid.move(to: CGPoint(x: x, y: 0))
+                    grid.addLine(to: CGPoint(x: x, y: size.height))
+                    x += step
+                }
+                var hi = context
+                hi.translateBy(x: 0, y: 1.0)
+                hi.stroke(grid, with: .color(Color.white.opacity(0.48)), lineWidth: 1.0)
+                context.stroke(grid, with: .color(amberInk.opacity(0.105)), lineWidth: 0.9)
+            }
+            .mask(edgeBreathingMask(centerOpacity: 0.48, edgeOpacity: 1.0))
         }
     }
 

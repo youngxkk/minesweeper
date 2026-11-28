@@ -334,3 +334,8 @@
 "common.ok" = "OK";
 "common.close" = "Close";
 "common.back" = "Back";
+
+/* Orientation Guidance */
+"orientation.portrait.title" = "Rotate for a Bigger Board";
+"orientation.portrait.subtitle" = "Turn your iPad to landscape for the best Go board and adventure experience.";
+"orientation.portrait.continueAnyway" = "Continue in Portrait";

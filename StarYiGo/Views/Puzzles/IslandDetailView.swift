@@ -281,7 +281,7 @@ struct IslandDetailView: View {
                 .padding(.horizontal, 13)
                 .padding(.vertical, 8)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
 
             if !dueGhosts.isEmpty {
                 Button {
@@ -302,7 +302,7 @@ struct IslandDetailView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
             }
         }
     }
@@ -483,7 +483,7 @@ struct IslandDetailView: View {
                     .padding(14)
                     .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 26, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true, pressStyle: .card))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 26, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true, pressStyle: .card))
                 .accessibilityIdentifier("IslandStageButton_\(stageNumber)")
             }
 
@@ -544,7 +544,7 @@ struct IslandDetailView: View {
                 .padding(15)
                 .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 3, whiteBorderWidth: 3, pressStyle: .card))
             .accessibilityIdentifier("IslandStageButton_\(stageNumber)")
 
         case .locked:
@@ -554,46 +554,113 @@ struct IslandDetailView: View {
                     message: l10n.t("islands.stageLockedToast", max(1, stageNumber - 1))
                 )
             } label: {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        ZStack {
-                            Circle().fill(GlossyPalette.locked.bottom).frame(width: 34, height: 34)
-                            Image(systemName: "lock.fill").font(.system(size: 14, weight: .black, design: .rounded)).foregroundColor(.white)
+                ZStack {
+                    // Soft moonlit-mist frosted card surface with dashed arcane seal border
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.945, green: 0.968, blue: 0.996),
+                                    Color(red: 0.895, green: 0.930, blue: 0.978)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(
+                                    Color(red: 0.48, green: 0.58, blue: 0.74).opacity(0.32),
+                                    style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [6, 5])
+                                )
+                                .padding(6)
+                        )
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            // Handcrafted moonlit-indigo & warm-gold seal crest
+                            ZStack(alignment: .bottomTrailing) {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color(red: 0.46, green: 0.55, blue: 0.72), Color(red: 0.30, green: 0.38, blue: 0.54)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .frame(width: 36, height: 36)
+                                    .overlay(Circle().strokeBorder(.white.opacity(0.85), lineWidth: 2))
+                                Text("\(stageNumber)")
+                                    .font(AppFont.rounded(size: 14, weight: .black))
+                                    .foregroundColor(.white.opacity(0.92))
+                                    .frame(width: 36, height: 36)
+
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 8.5, weight: .black, design: .rounded))
+                                    .foregroundColor(.white)
+                                    .frame(width: 17, height: 17)
+                                    .background(
+                                        Circle()
+                                            .fill(LinearGradient(colors: [AppTheme.sunTop, AppTheme.sunBottom], startPoint: .top, endPoint: .bottom))
+                                            .overlay(Circle().strokeBorder(.white, lineWidth: 1.5))
+                                    )
+                                    .offset(x: 4, y: 3)
+                            }
+
+                            Spacer()
+
+                            Text(node.rankBadge)
+                                .font(AppFont.rounded(size: 11, weight: .black))
+                                .foregroundColor(Color(red: 0.34, green: 0.44, blue: 0.62))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Capsule().fill(Color.white.opacity(0.72)))
                         }
-                        Spacer()
-                        Text(node.rankBadge)
-                            .font(AppFont.rounded(size: 11, weight: .bold))
-                            .foregroundColor(Color(red: 0.50, green: 0.55, blue: 0.62))
-                    }
 
-                    Text(localizedNodeTypeTag(node))
-                        .font(AppFont.rounded(size: 10.5, weight: .bold))
-                        .foregroundColor(Color(red: 0.52, green: 0.56, blue: 0.63))
-                        .lineLimit(1)
+                        Text(localizedNodeTypeTag(node))
+                            .font(AppFont.rounded(size: 10.5, weight: .bold))
+                            .foregroundColor(Color(red: 0.42, green: 0.50, blue: 0.64))
+                            .lineLimit(1)
 
-                    Text(node.title(isChinese: l10n.language.isChinese))
-                        .font(AppFont.rounded(size: 16, weight: .heavy))
-                        .foregroundColor(Color(red: 0.45, green: 0.49, blue: 0.56))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.84)
+                        Text(node.title(isChinese: l10n.language.isChinese))
+                            .font(AppFont.rounded(size: 15.5, weight: .black))
+                            .foregroundColor(AppTheme.inkPrimary.opacity(0.72))
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.84)
 
-                    Spacer(minLength: 2)
+                        Spacer(minLength: 2)
 
-                    HStack(spacing: 3) {
-                        ForEach(1...3, id: \.self) { _ in
-                            Image(systemName: "star").font(.system(size: 13, design: .rounded)).foregroundColor(Color(red: 0.65, green: 0.69, blue: 0.75))
+                        HStack(spacing: 5) {
+                            Image(systemName: "key.fill")
+                                .font(.system(size: 10, weight: .black, design: .rounded))
+                                .foregroundColor(AppTheme.sunBottom)
+                            Text(l10n.localized(
+                                zh: "通关第 \(max(1, stageNumber - 1)) 关解锁",
+                                en: "Clear Stage \(max(1, stageNumber - 1))",
+                                ja: "ステージ\(max(1, stageNumber - 1))クリアで解放",
+                                ko: "\(max(1, stageNumber - 1))단계 클리어 시 해금",
+                                zhHant: "通關第 \(max(1, stageNumber - 1)) 關解鎖"
+                            ))
+                            .font(AppFont.rounded(size: 10.5, weight: .black))
+                            .foregroundColor(Color(red: 0.36, green: 0.45, blue: 0.60))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                            Spacer(minLength: 0)
                         }
-                        Spacer()
-                        Text(l10n.t("islands.lockedBadge"))
-                            .font(AppFont.rounded(size: 10.5, weight: .heavy))
-                            .foregroundColor(Color(red: 0.48, green: 0.53, blue: 0.60))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Color.white.opacity(0.76)))
                     }
+                    .padding(15)
                 }
-                .padding(15)
                 .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .topLeading)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.92), lineWidth: 2.5)
+                )
+                .shadow(color: Color(red: 0.22, green: 0.30, blue: 0.46).opacity(0.12), radius: 8, y: 4)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .lockedCard, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 2.5, playTapSound: false, pressStyle: .card))
-            .opacity(0.92)
+            .buttonStyle(TactileButtonStyle(pressedScale: 0.96, playTapSound: false))
             .modifier(LockedShakeEffect(shakes: shakeCount))
             .accessibilityIdentifier("IslandStageLocked_\(stageNumber)")
         }
@@ -761,7 +828,7 @@ struct IslandDetailView: View {
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: bossDefeated ? .mint : .coral, cornerRadius: 28, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true, pressStyle: .card))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: bossDefeated ? .mint : .coral, cornerRadius: 28, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true, pressStyle: .card))
 
                 if islandCleared, let next = nextIsland {
                     let nextPal = GlossyPalette.forIsland(next.id)
@@ -797,7 +864,7 @@ struct IslandDetailView: View {
                         .padding(.horizontal, 18)
                         .padding(.vertical, 14)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: nextPal, cornerRadius: 28, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: nextPal, cornerRadius: 28, rimHeight: 4, whiteBorderWidth: 3.5, pressStyle: .card))
                 }
             } else {
                 Button {
@@ -852,7 +919,7 @@ struct IslandDetailView: View {
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .lockedCard, cornerRadius: 28, rimHeight: 5, whiteBorderWidth: 2.5, playTapSound: false, pressStyle: .card))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .lockedCard, cornerRadius: 28, rimHeight: 3, whiteBorderWidth: 2.5, playTapSound: false, pressStyle: .card))
                 .modifier(LockedShakeEffect(shakes: bossShake))
             }
         }

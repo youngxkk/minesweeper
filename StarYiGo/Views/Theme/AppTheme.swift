@@ -29,9 +29,39 @@ enum AppFont {
 
     private static let stateLock = NSLock()
     private static var registeredFiles: Set<String> = []
+    private static var accessibilityObserversInstalled: Bool = false
     private static var _activeLanguageCode: String = AppLanguage.system.resolvedCode
     private static var descriptorCache: [String: UIFontDescriptor] = [:]
     private static let fontCache = NSCache<NSString, UIFont>()
+
+    static func clearFontCache() {
+        fontCache.removeAllObjects()
+    }
+
+    private static func installAccessibilityObserversIfNeeded() {
+        stateLock.lock()
+        let shouldInstall = !accessibilityObserversInstalled
+        if shouldInstall {
+            accessibilityObserversInstalled = true
+        }
+        stateLock.unlock()
+
+        guard shouldInstall else { return }
+        NotificationCenter.default.addObserver(
+            forName: UIContentSizeCategory.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            clearFontCache()
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.boldTextStatusDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            clearFontCache()
+        }
+    }
 
     static var activeLanguageCode: String {
         get {
@@ -69,7 +99,10 @@ enum AppFont {
         }
     }
 
-    private static func isBoldWeight(_ weight: Font.Weight) -> Bool {
+    private static func isBoldWeight(_ weight: Font.Weight, boldTextEnabled: Bool) -> Bool {
+        if boldTextEnabled {
+            return true
+        }
         switch weight {
         case .ultraLight, .thin, .light, .regular, .medium, .semibold:
             return false
@@ -78,9 +111,13 @@ enum AppFont {
         }
     }
 
-    static func postScriptName(for weight: Font.Weight = .bold, languageCode: String? = nil) -> String {
+    static func postScriptName(
+        for weight: Font.Weight = .bold,
+        languageCode: String? = nil,
+        boldTextEnabled: Bool = UIAccessibility.isBoldTextEnabled
+    ) -> String {
         let code = languageCode ?? activeLanguageCode
-        let bold = isBoldWeight(weight)
+        let bold = isBoldWeight(weight, boldTextEnabled: boldTextEnabled)
         switch code {
         case "ja":
             return bold ? jpBoldPostScriptName : jpMediumPostScriptName
@@ -91,8 +128,12 @@ enum AppFont {
         }
     }
 
-    private static func fallbackPostScriptNames(for weight: Font.Weight, languageCode: String) -> [String] {
-        let bold = isBoldWeight(weight)
+    private static func fallbackPostScriptNames(
+        for weight: Font.Weight,
+        languageCode: String,
+        boldTextEnabled: Bool
+    ) -> [String] {
+        let bold = isBoldWeight(weight, boldTextEnabled: boldTextEnabled)
         let cn = bold ? boldPostScriptName : mediumPostScriptName
         let jp = bold ? jpBoldPostScriptName : jpMediumPostScriptName
         let kr = bold ? krBoldPostScriptName : krMediumPostScriptName
@@ -106,17 +147,28 @@ enum AppFont {
         }
     }
 
-    static func uiFont(size: CGFloat, weight: Font.Weight = .bold, languageCode: String? = nil) -> UIFont? {
+    static func uiFont(
+        size: CGFloat,
+        weight: Font.Weight = .bold,
+        languageCode: String? = nil,
+        maxScale: CGFloat = 1.40,
+        traitCollection: UITraitCollection? = nil,
+        boldTextEnabled: Bool = UIAccessibility.isBoldTextEnabled
+    ) -> UIFont? {
+        installAccessibilityObserversIfNeeded()
         let code = languageCode ?? activeLanguageCode
-        let primaryName = postScriptName(for: weight, languageCode: code)
-        let fontKey = "\(primaryName)#\(code)#\(Int((size * 10).rounded()))" as NSString
+        let effectiveTraits = traitCollection ?? UITraitCollection.current
+        let sizeCategory = effectiveTraits.preferredContentSizeCategory.rawValue
+        let clampedMaxScale = max(1.0, maxScale)
+        let primaryName = postScriptName(for: weight, languageCode: code, boldTextEnabled: boldTextEnabled)
+        let fontKey = "\(primaryName)#\(code)#\(Int((size * 10).rounded()))#\(sizeCategory)#\(boldTextEnabled ? 1 : 0)#\(Int((clampedMaxScale * 100).rounded()))" as NSString
         if let cachedFont = fontCache.object(forKey: fontKey) {
             return cachedFont
         }
 
         registerBundledFonts()
 
-        let descKey = "\(primaryName)#\(code)"
+        let descKey = "\(primaryName)#\(code)#\(boldTextEnabled ? 1 : 0)"
         stateLock.lock()
         let cachedDescriptor = descriptorCache[descKey]
         stateLock.unlock()
@@ -128,7 +180,7 @@ enum AppFont {
             guard UIFont(name: primaryName, size: size) != nil else {
                 return nil
             }
-            let fallbacks = fallbackPostScriptNames(for: weight, languageCode: code)
+            let fallbacks = fallbackPostScriptNames(for: weight, languageCode: code, boldTextEnabled: boldTextEnabled)
                 .filter { UIFont(name: $0, size: size) != nil }
                 .map { UIFontDescriptor(name: $0, size: 0) }
             var attributes: [UIFontDescriptor.AttributeName: Any] = [.name: primaryName]
@@ -143,20 +195,33 @@ enum AppFont {
         }
 
         let baseFont = UIFont(descriptor: descriptor, size: size)
-        // Respect Dynamic Type with a layout-safe ceiling (+25%) for compact game chrome
+        // Respect Dynamic Type (including live trait updates) with a layout-safe ceiling
         let scaled = UIFontMetrics(forTextStyle: .body).scaledFont(
             for: baseFont,
-            maximumPointSize: size * 1.25
+            maximumPointSize: size * clampedMaxScale,
+            compatibleWith: effectiveTraits
         )
         fontCache.setObject(scaled, forKey: fontKey)
         return scaled
     }
 
-    static func rounded(size: CGFloat, weight: Font.Weight = .bold, languageCode: String? = nil) -> Font {
-        if let font = uiFont(size: size, weight: weight, languageCode: languageCode) {
+    static func rounded(
+        size: CGFloat,
+        weight: Font.Weight = .bold,
+        maxScale: CGFloat = 1.40,
+        languageCode: String? = nil
+    ) -> Font {
+        let boldEnabled = UIAccessibility.isBoldTextEnabled
+        if let font = uiFont(
+            size: size,
+            weight: weight,
+            languageCode: languageCode,
+            maxScale: maxScale,
+            boldTextEnabled: boldEnabled
+        ) {
             return Font(font)
         }
-        let psName = postScriptName(for: weight, languageCode: languageCode)
+        let psName = postScriptName(for: weight, languageCode: languageCode, boldTextEnabled: boldEnabled)
         return .custom(psName, size: size, relativeTo: .body)
     }
 }
@@ -182,6 +247,21 @@ enum AppTheme {
     // High-contrast crisp typography colors
     static let inkPrimary = Color(red: 0.12, green: 0.16, blue: 0.25)          // Deep crisp slate-navy #1F2940
     static let inkSecondary = Color(red: 0.42, green: 0.49, blue: 0.60)        // Cool modern slate #6B7D99
+
+    /// Contrast-aware secondary ink for Increase Contrast accessibility mode.
+    static func inkSecondary(for contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? Color(red: 0.17, green: 0.22, blue: 0.32) : inkSecondary
+    }
+
+    /// Contrast-aware border color for cards and chrome.
+    static func subtleBorder(for contrast: ColorSchemeContrast) -> Color {
+        contrast == .increased ? inkPrimary.opacity(0.45) : subtleBorder
+    }
+
+    /// Transparency-aware card surface fill.
+    static func cardFill(reduceTransparency: Bool) -> Color {
+        reduceTransparency ? Color.white : Color.white.opacity(0.96)
+    }
 
     // Vivid Nintendo Switch Party Glossy Candy Palette
     static let skyTop = Color(red: 0.08, green: 0.74, blue: 1.00)              // Electric Sky #14BDFF
@@ -359,6 +439,10 @@ enum MotionToken {
     static let homePortalEntrance: Animation = .spring(response: 0.56, dampingFraction: 0.74)
     /// Graceful top-down cascade spring for home top-edge controls
     static let homeTopBarEntrance: Animation = .spring(response: 0.58, dampingFraction: 0.78)
+    /// Base delay for pushed-screen entrances so the cascade reads while the navigation slide settles
+    static let screenEntranceBaseDelay: Double = 0.10
+    /// Soft camera-settle for full-bleed screen backdrops (map / arena) on entry
+    static let screenBackdropSettle: Animation = .spring(response: 0.75, dampingFraction: 0.90)
     /// Stagger interval between grouped items (40–80ms)
     static let itemStagger: Double = 0.055
     /// Stagger interval between grid cards (80–120ms)
@@ -401,11 +485,17 @@ struct StaggeredEntranceModifier: ViewModifier {
     var offsetY: CGFloat = 12
     var initialScale: CGFloat = 1.0
     var animation: Animation = MotionToken.cardEntrance
+    var offsetX: CGFloat = 0
+    /// Set to false for full-bleed layers (e.g. map artwork) that should settle without revealing a blank background.
+    var fades: Bool = true
 
     func body(content: Content) -> some View {
         content
-            .opacity(appeared || reduceMotion ? 1 : 0)
-            .offset(y: appeared || reduceMotion ? 0 : offsetY)
+            .opacity(appeared || reduceMotion || !fades ? 1 : 0)
+            .offset(
+                x: appeared || reduceMotion ? 0 : offsetX,
+                y: appeared || reduceMotion ? 0 : offsetY
+            )
             .scaleEffect(appeared || reduceMotion ? 1.0 : initialScale)
             .animation(
                 reduceMotion ? nil : animation.delay(delay),
@@ -416,17 +506,21 @@ struct StaggeredEntranceModifier: ViewModifier {
 
 /// Crisp, glossy floating white Nintendo card surface (replaces old beige parchment cards).
 struct WarmCardModifier: ViewModifier {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var cornerRadius: CGFloat = 26
     var padding: CGFloat = 18
 
     func body(content: Content) -> some View {
+        let increasedContrast = (colorSchemeContrast == .increased)
         content
             .padding(padding)
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.white.opacity(0.96))
-                        .shadow(color: Color(red: 0.14, green: 0.28, blue: 0.48).opacity(0.10), radius: 16, x: 0, y: 8)
+                        .fill(AppTheme.cardFill(reduceTransparency: reduceTransparency))
+                        .shadow(color: Color(red: 0.14, green: 0.28, blue: 0.48).opacity(increasedContrast ? 0.14 : 0.10), radius: 16, x: 0, y: 8)
                 }
             )
             .overlay(
@@ -435,7 +529,7 @@ struct WarmCardModifier: ViewModifier {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(AppTheme.subtleBorder, lineWidth: 1)
+                    .strokeBorder(AppTheme.subtleBorder(for: colorSchemeContrast), lineWidth: increasedContrast ? 1.5 : 1)
             )
     }
 }

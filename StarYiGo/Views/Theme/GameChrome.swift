@@ -68,6 +68,8 @@ struct LockedShakeEffect: GeometryEffect {
 /// Rounded game button with a molded face and a stationary colored base.
 struct GlossyCapsuleButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     @Environment(\.minimumButtonFaceHeight) private var minimumHeight
 
@@ -77,7 +79,7 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
 
     var palette: GlossyPalette
     var cornerRadius: CGFloat = 999 // default true capsule
-    var rimHeight: CGFloat = 6
+    var rimHeight: CGFloat = 4
     var whiteBorderWidth: CGFloat = 3.0
     var showStripeSheen: Bool = false
     var playTapSound: Bool = true
@@ -89,7 +91,7 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
         let depth: CGFloat = switch pressStyle {
         case .button: rimHeight * 0.85
         case .homeEntrance: min(5, rimHeight * 0.65)
-        case .card: max(3, rimHeight * 0.55)
+        case .card: min(rimHeight * 0.80, max(1.8, rimHeight * 0.58))
         }
         let travel = pressed && !reduceMotion ? depth : 0
         let release: Animation = switch pressStyle {
@@ -153,9 +155,31 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
             .padding(.bottom, rimHeight)
     }
 
+    /// Scales the top white inner glow border and glossy sheen proportionally to button tier (`rimHeight`),
+    /// keeping hero buttons lush while making medium, small, and tiny circular buttons crisp and refined.
+    private var innerHighlightSpec: (strokeWidth: CGFloat, strokeOpacity: Double, sheenPeak: Double, sheenMid: Double, sheenMidStop: CGFloat, sheenEndStop: CGFloat) {
+        if rimHeight >= 7 {
+            // Hero / large buttons: keep full original lush inner glow
+            return (whiteBorderWidth * 0.55, 0.82, 0.26, 0.06, 0.26, 0.52)
+        } else if rimHeight >= 4 {
+            // Medium-large buttons (e.g. Home 4 secondary dock capsules)
+            return (min(1.25, whiteBorderWidth * 0.40), 0.76, 0.20, 0.04, 0.20, 0.40)
+        } else if rimHeight >= 3 {
+            // Standard medium buttons (e.g. Back button, dialog actions)
+            return (min(1.0, whiteBorderWidth * 0.36), 0.72, 0.17, 0.035, 0.17, 0.35)
+        } else if rimHeight >= 2.5 {
+            // Small / circular icon buttons (e.g. top-right GameCircleButton)
+            return (0.75, 0.68, 0.15, 0.025, 0.14, 0.30)
+        } else {
+            // Mini compact chips: razor-sharp 0.5pt hairline inner glow
+            return (0.5, 0.64, 0.13, 0.02, 0.12, 0.25)
+        }
+    }
+
     @ViewBuilder
     private func glossyBodyBackground(pressed: Bool, travel: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let highlight = innerHighlightSpec
         ZStack {
             // Grounded soft contact shadow tucked naturally beneath the rim
             shape
@@ -182,24 +206,26 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                         )
                     )
 
-                if showStripeSheen {
+                if showStripeSheen && !reduceTransparency {
                     DiagonalGlossStripes()
                         .fill(Color.white.opacity(0.065))
                         .clipShape(shape)
                 }
 
-                shape
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .white.opacity(pressed ? 0.11 : 0.26), location: 0),
-                                .init(color: .white.opacity(pressed ? 0.03 : 0.06), location: 0.26),
-                                .init(color: .clear, location: 0.52)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
+                if colorSchemeContrast != .increased {
+                    shape
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(pressed ? highlight.sheenPeak * 0.42 : highlight.sheenPeak), location: 0),
+                                    .init(color: .white.opacity(pressed ? highlight.sheenMid * 0.50 : highlight.sheenMid), location: highlight.sheenMidStop),
+                                    .init(color: .clear, location: highlight.sheenEndStop)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
                         )
-                    )
+                }
 
                 shape
                     .fill(Color.black.opacity(pressed ? 0.045 : 0))
@@ -207,11 +233,13 @@ struct GlossyCapsuleButtonStyle: ButtonStyle {
                 shape
                     .strokeBorder(
                         LinearGradient(
-                            colors: [.white.opacity(pressed ? 0.65 : 0.82), palette.rim.opacity(0.65)],
+                            colors: colorSchemeContrast == .increased
+                                ? [palette.rim, palette.rim]
+                                : [.white.opacity(pressed ? highlight.strokeOpacity * 0.78 : highlight.strokeOpacity), palette.rim.opacity(0.65)],
                             startPoint: .top,
                             endPoint: .bottom
                         ),
-                        lineWidth: whiteBorderWidth * 0.55
+                        lineWidth: colorSchemeContrast == .increased ? max(2.0, whiteBorderWidth * 0.75) : highlight.strokeWidth
                     )
             }
             .offset(y: travel)
@@ -243,7 +271,7 @@ struct GameBevelButtonStyle: ButtonStyle {
     var topColor: Color
     var bottomRimColor: Color
     var cornerRadius: CGFloat = 24
-    var rimHeight: CGFloat = 5
+    var rimHeight: CGFloat = 3
     var playTapSound: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
@@ -284,10 +312,60 @@ struct GameBackButton: View {
             GlossyCapsuleButtonStyle(
                 palette: .snow,
                 cornerRadius: 999,
-                rimHeight: 5,
-                whiteBorderWidth: 3
+                rimHeight: 3,
+                whiteBorderWidth: 2.5
             )
         )
+    }
+}
+
+/// Static snow-white capsule surface that reproduces the `GameBackButton` look
+/// (white molded face + gray `.snow` rim thickness) for non-`GlossyCapsuleButtonStyle`
+/// controls such as Menu labels and tactile chips. The rim hangs below the face
+/// without affecting layout, so existing paddings/sizes stay unchanged.
+struct SnowCapsuleSurface: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    var rimHeight: CGFloat = 3
+    var palette: GlossyPalette = .snow
+
+    var body: some View {
+        let shape = Capsule()
+        ZStack {
+            shape
+                .fill(palette.rim)
+                .offset(y: rimHeight)
+
+            shape
+                .fill(LinearGradient(colors: [palette.top, palette.bottom], startPoint: .top, endPoint: .bottom))
+
+            if colorSchemeContrast != .increased {
+                shape
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .white.opacity(0.17), location: 0),
+                                .init(color: .white.opacity(0.035), location: 0.17),
+                                .init(color: .clear, location: 0.35)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+
+            shape
+                .strokeBorder(
+                    LinearGradient(
+                        colors: colorSchemeContrast == .increased
+                            ? [palette.rim, palette.rim]
+                            : [.white.opacity(0.72), palette.rim.opacity(0.65)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: colorSchemeContrast == .increased ? 2.0 : 0.9
+                )
+        }
     }
 }
 
@@ -303,6 +381,7 @@ struct GameCircleButton: View {
 
     var body: some View {
         let diameter = max(size, minimumHeight)
+        let proportionalRim = max(2.0, min(3.0, (diameter * 0.055 * 2).rounded() / 2))
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: max(size * 0.42, diameter * 0.38), weight: .heavy, design: .rounded))
@@ -313,8 +392,8 @@ struct GameCircleButton: View {
             GlossyCapsuleButtonStyle(
                 palette: palette,
                 cornerRadius: diameter / 2,
-                rimHeight: 5,
-                whiteBorderWidth: 3,
+                rimHeight: proportionalRim,
+                whiteBorderWidth: 2.2,
                 playTapSound: playTapSound
             )
         )
@@ -804,7 +883,7 @@ struct GoTermQuickCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.5))
             } else {
                 Button(action: onDismiss) {
                     Text(l10n.localized(
@@ -819,7 +898,7 @@ struct GoTermQuickCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.5))
             }
         }
         .padding(20)
@@ -957,8 +1036,8 @@ struct GameDialogModifier: ViewModifier {
                                 GlossyCapsuleButtonStyle(
                                     palette: item.palette,
                                     cornerRadius: 999,
-                                    rimHeight: 5,
-                                    whiteBorderWidth: 3,
+                                    rimHeight: 3,
+                                    whiteBorderWidth: 2.5,
                                     playTapSound: false
                                 )
                             )

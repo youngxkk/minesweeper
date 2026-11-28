@@ -55,6 +55,8 @@ private struct GameClockPillView: View {
 struct GamePlayView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @ObservedObject var viewModel: GameViewModel
 
     @State private var showResignConfirm = false
@@ -68,6 +70,27 @@ struct GamePlayView: View {
     @State private var isChoosingFocus = false
     @State private var aiThinkingNudgeShake: CGFloat = 0
     @State private var aiThinkingNudgeFlash = false
+    @State private var hasEnteredArena = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Home-style staggered entrance choreography for arena elements on first push.
+    private func arenaEntrance(
+        _ delay: Double,
+        x: CGFloat = 0,
+        y: CGFloat = 0,
+        scale: CGFloat = 1,
+        animation: Animation = MotionToken.homePortalEntrance
+    ) -> StaggeredEntranceModifier {
+        StaggeredEntranceModifier(
+            appeared: hasEnteredArena,
+            delay: MotionToken.screenEntranceBaseDelay + delay,
+            reduceMotion: reduceMotion,
+            offsetY: y,
+            initialScale: scale,
+            animation: animation,
+            offsetX: x
+        )
+    }
 
     private func offersBoardFocus(for width: CGFloat) -> Bool {
         width < 680 && viewModel.boardSize == .nineteen && !viewModel.isTabletopFaceToFace
@@ -235,7 +258,12 @@ struct GamePlayView: View {
         .onDisappear {
             viewModel.setSuspended(true)
         }
-        .onAppear { viewModel.setSuspended(scenePhase != .active) }
+        .onAppear {
+            viewModel.setSuspended(scenePhase != .active)
+            if !hasEnteredArena {
+                hasEnteredArena = true
+            }
+        }
         .onChange(of: viewModel.isTabletopFaceToFace) { _, enabled in
             if enabled {
                 focusRegion = nil
@@ -404,10 +432,12 @@ struct GamePlayView: View {
         return VStack(spacing: 12) {
             gameTopBar
                 .frame(height: topBarHeight)
+                .modifier(arenaEntrance(0.0, y: -64, scale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
             HStack(spacing: pad) {
                 boardView
                     .frame(width: boardSide, height: boardSide)
+                    .modifier(arenaEntrance(0.06, y: 36, scale: 0.90))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 ScrollView(showsIndicators: false) {
@@ -432,10 +462,12 @@ struct GamePlayView: View {
         return VStack(spacing: 10) {
             gameTopBar
                 .frame(height: topBarHeight)
+                .modifier(arenaEntrance(0.0, y: -64, scale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
             if boardSide > 0 {
                 boardView
                     .frame(width: boardSide, height: boardSide)
+                    .modifier(arenaEntrance(0.06, y: 36, scale: 0.90))
             }
 
             ScrollView(showsIndicators: false) {
@@ -462,10 +494,13 @@ struct GamePlayView: View {
 
                 VStack(spacing: gap) {
                     tabletopPlayerDock(color: .white, length: dockWidth, thickness: dockHeight, rotation: .degrees(180))
+                        .modifier(arenaEntrance(0.12, y: -80, scale: 0.94))
                     boardView
                         .frame(width: boardSide, height: boardSide)
+                        .modifier(arenaEntrance(0.04, scale: 0.90))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     tabletopPlayerDock(color: .black, length: dockWidth, thickness: dockHeight, rotation: .degrees(0))
+                        .modifier(arenaEntrance(0.12, y: 80, scale: 0.94))
                 }
                 .padding(.horizontal, outerPad)
                 .padding(.top, 56)
@@ -478,14 +513,17 @@ struct GamePlayView: View {
                 HStack(spacing: gap) {
                     tabletopPlayerDock(color: .white, length: dockLength, thickness: dockThickness, rotation: .degrees(90))
                         .frame(width: dockThickness, height: dockLength)
+                        .modifier(arenaEntrance(0.12, x: -80, scale: 0.94))
                         .frame(maxHeight: .infinity, alignment: .center)
 
                     boardView
                         .frame(width: boardSide, height: boardSide)
+                        .modifier(arenaEntrance(0.04, scale: 0.90))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     tabletopPlayerDock(color: .black, length: dockLength, thickness: dockThickness, rotation: .degrees(-90))
                         .frame(width: dockThickness, height: dockLength)
+                        .modifier(arenaEntrance(0.12, x: 80, scale: 0.94))
                         .frame(maxHeight: .infinity, alignment: .center)
                 }
                 .padding(outerPad)
@@ -500,6 +538,7 @@ struct GamePlayView: View {
                 }
             }
             .padding(14)
+            .modifier(arenaEntrance(0.0, y: -48, scale: 0.9, animation: MotionToken.homeTopBarEntrance))
         }
         .overlay(alignment: .topTrailing) {
             GameCircleButton(icon: "rectangle.portrait.rotate", palette: .mint, tint: .white, size: 46) {
@@ -508,6 +547,7 @@ struct GamePlayView: View {
                 }
             }
             .padding(14)
+            .modifier(arenaEntrance(0.05, y: -48, scale: 0.9, animation: MotionToken.homeTopBarEntrance))
         }
     }
 
@@ -573,7 +613,7 @@ struct GamePlayView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                 } else if viewModel.showsConfirmPlacementButton && viewModel.pendingPoint != nil && isTurn {
                     Button {
                         viewModel.confirmPendingPlacement()
@@ -584,7 +624,7 @@ struct GamePlayView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                 }
 
                 GameCircleButton(icon: "arrow.uturn.backward", palette: .snow, tint: AppTheme.inkPrimary, size: 44, playTapSound: false) {
@@ -675,7 +715,7 @@ struct GamePlayView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3, playTapSound: false))
                     .accessibilityIdentifier("GameResumePausedMatchButton")
                 }
             }
@@ -731,7 +771,7 @@ struct GamePlayView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 }
 
                 soundToggleButton
@@ -751,12 +791,7 @@ struct GamePlayView: View {
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
                         .background(
-                            ZStack {
-                                Circle().fill(GlossyPalette.snow.rim).overlay(Circle().strokeBorder(.white, lineWidth: 3)).offset(y: 5)
-                                Circle()
-                                    .fill(LinearGradient(colors: [GlossyPalette.snow.top, GlossyPalette.snow.bottom], startPoint: .top, endPoint: .bottom))
-                                    .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                            }
+                            SnowCapsuleSurface(rimHeight: 5)
                         )
                         .padding(.bottom, 5)
                 }
@@ -883,7 +918,6 @@ struct GamePlayView: View {
 
     private var soundToggleButton: some View {
         let isOn = appState.settings.soundEnabled
-        let palette: GlossyPalette = .snow
 
         return Button {
             let nextValue = !appState.settings.soundEnabled
@@ -902,15 +936,7 @@ struct GamePlayView: View {
                 .foregroundColor(isOn ? AppTheme.inkPrimary : AppTheme.inkSecondary.opacity(0.65))
                 .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
                 .background(
-                    ZStack {
-                        Circle()
-                            .fill(palette.rim)
-                            .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                            .offset(y: 5)
-                        Circle()
-                            .fill(LinearGradient(colors: [palette.top, palette.bottom], startPoint: .top, endPoint: .bottom))
-                            .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                    }
+                    SnowCapsuleSurface(rimHeight: 5)
                 )
                 .padding(.bottom, 5)
         }
@@ -925,7 +951,6 @@ struct GamePlayView: View {
 
     private var voiceToggleButton: some View {
         let isOn = appState.settings.voiceEnabled
-        let palette: GlossyPalette = .snow
 
         return Button {
             SoundAndHapticsManager.shared.playUITap(weight: .light)
@@ -954,15 +979,7 @@ struct GamePlayView: View {
             }
             .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
             .background(
-                ZStack {
-                    Circle()
-                        .fill(palette.rim)
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                        .offset(y: 5)
-                    Circle()
-                        .fill(LinearGradient(colors: [palette.top, palette.bottom], startPoint: .top, endPoint: .bottom))
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                }
+                SnowCapsuleSurface(rimHeight: 5)
             )
             .padding(.bottom, 5)
         }
@@ -1046,12 +1063,7 @@ struct GamePlayView: View {
             }
             .frame(width: AppTheme.buttonFaceHeight, height: AppTheme.buttonFaceHeight)
             .background(
-                ZStack {
-                    Circle().fill(GlossyPalette.snow.rim).overlay(Circle().strokeBorder(.white, lineWidth: 3)).offset(y: 5)
-                    Circle()
-                        .fill(LinearGradient(colors: [GlossyPalette.snow.top, GlossyPalette.snow.bottom], startPoint: .top, endPoint: .bottom))
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
-                }
+                SnowCapsuleSurface(rimHeight: 5)
             )
             .padding(.bottom, 5)
         }
@@ -1370,8 +1382,24 @@ struct GamePlayView: View {
             if isChoosingFocus {
                 Text(l10n.localized(zh: "点选要放大的位置", en: "Tap the area to zoom", ja: "拡大する場所をタップ", ko: "확대할 위치를 탭하세요", zhHant: "點選要放大的位置"))
                     .font(.caption.bold())
-                    .padding(8)
-                    .background(.regularMaterial, in: Capsule())
+                    .foregroundColor(AppTheme.inkPrimary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Group {
+                            if reduceTransparency {
+                                Capsule().fill(AppTheme.cardBackground)
+                            } else {
+                                Capsule().fill(.regularMaterial)
+                            }
+                        }
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(
+                            AppTheme.subtleBorder(for: colorSchemeContrast),
+                            lineWidth: colorSchemeContrast == .increased ? 1.5 : 1
+                        )
+                    )
                     .allowsHitTesting(false)
             }
         }
@@ -1407,11 +1435,13 @@ struct GamePlayView: View {
         VStack(spacing: 12) {
             if let diff = viewModel.aiDifficulty, !appState.settings.zenDojoMode {
                 companionCard(difficulty: diff)
+                    .modifier(arenaEntrance(0.12, y: 44, scale: 0.94))
             }
 
             // Capture Race Trophy Bar (when playing 吃子棋!)
             if let target = viewModel.ruleSet.captureTarget {
                 captureRaceBanner(target: target)
+                    .modifier(arenaEntrance(0.16, y: 44, scale: 0.94))
             }
 
             // Players & Bowls Card
@@ -1421,6 +1451,7 @@ struct GamePlayView: View {
                 playerBowlRow(color: .white)
             }
             .warmCard(cornerRadius: 24, padding: 14)
+            .modifier(arenaEntrance(0.19, y: 48, scale: 0.94))
 
             // Fixed-height Status & Territory Card
             VStack(alignment: .leading, spacing: 8) {
@@ -1482,6 +1513,7 @@ struct GamePlayView: View {
             .modifier(LockedShakeEffect(shakes: aiThinkingNudgeShake, amplitude: 6))
             .animation(.easeInOut(duration: 0.18), value: viewModel.showTerritoryOverlay)
             .animation(.easeInOut(duration: 0.22), value: viewModel.isAIThinking)
+            .modifier(arenaEntrance(0.25, y: 52, scale: 0.94))
 
             Spacer(minLength: 2)
 
@@ -1561,12 +1593,13 @@ struct GamePlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5))
                         .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
                         .disabled(viewModel.isGameOver || viewModel.moves.count < 2)
                         .opacity(viewModel.isGameOver || viewModel.moves.count < 2 ? 0.42 : 1)
                     }
                 }
+                .modifier(arenaEntrance(0.31, y: 60, scale: 0.94))
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.78), value: viewModel.isMarkingDeadStones)
@@ -1716,7 +1749,7 @@ struct GamePlayView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
 
                 Button {
                     viewModel.confirmDeadStoneScore()
@@ -1727,7 +1760,7 @@ struct GamePlayView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
             }
         }
         .padding(14)
@@ -1877,7 +1910,7 @@ struct GamePlayView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3, playTapSound: false))
         .accessibilityIdentifier("GameConfirmPlaceButton")
     }
 
@@ -1906,7 +1939,7 @@ struct GamePlayView: View {
             GlossyCapsuleButtonStyle(
                 palette: palette,
                 cornerRadius: 999,
-                rimHeight: 5,
+                rimHeight: 3,
                 whiteBorderWidth: 3,
                 playTapSound: playSound
             )
@@ -2030,7 +2063,7 @@ private struct GameResultOverlayCard: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3, playTapSound: false))
                     }
                 }
                 .padding(14)
@@ -2045,7 +2078,7 @@ private struct GameResultOverlayCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
 
                 Button(action: onReview) {
                     Text(l10n.t("result.reviewGame"))
@@ -2054,7 +2087,7 @@ private struct GameResultOverlayCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
 
                 Button(action: onPlayAgain) {
                     Text(l10n.t("result.playAgain"))
@@ -2063,7 +2096,7 @@ private struct GameResultOverlayCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
             }
         }
         .padding(26)

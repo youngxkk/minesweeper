@@ -10,7 +10,12 @@ struct GameArchiveView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.zoomTransitionNamespace) private var zoomNamespace
 
-    @State private var selectedHall: AcademyHall = .masterpieces
+    private enum ArchiveTab: Equatable {
+        case hall(AcademyHall)
+        case codex
+    }
+
+    @State private var selectedTab: ArchiveTab = .hall(.masterpieces)
     @State private var selectedLevel: AcademyLevel = .all
 
     private var l10n: L10n { appState.l10n }
@@ -19,13 +24,28 @@ struct GameArchiveView: View {
         GoAcademyLibrary.allEntries.filter { appState.profile.studiedAcademyIds.contains($0.id) }.count
     }
 
+    private var codexMasteredCount: Int {
+        GoTermCodex.allEntries.filter { appState.profile.unlockedCodexIds.contains($0.id) }.count
+    }
+
+    private var selectedHall: AcademyHall {
+        if case .hall(let hall) = selectedTab {
+            return hall
+        }
+        return .masterpieces
+    }
+
     private var filteredEntries: [AcademyEntry] {
         GoAcademyLibrary.entries(in: selectedHall, level: selectedLevel)
     }
 
     var body: some View {
         ZStack {
-            SceneBackdrop.recordDesk
+            if selectedTab == .codex {
+                SceneBackdrop.termAlbum
+            } else {
+                SceneBackdrop.recordDesk
+            }
 
             VStack(spacing: 14) {
                 // Top Bar: Back + Academy Crest + Star Coins
@@ -38,13 +58,15 @@ struct GameArchiveView: View {
 
                     GameTitleCrest(
                         title: l10n.t("archive.title"),
-                        subtitle: l10n.localized(
-                            zh: "已赏析 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) 篇 ★",
-                            en: "Studied \(studiedCount) / \(GoAcademyLibrary.allEntries.count) ★",
-                            ja: "鑑賞済 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) ★",
-                            ko: "감상 완료 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) ★",
-                            zhHant: "已賞析 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) 篇 ★"
-                        )
+                        subtitle: selectedTab == .codex
+                            ? l10n.t("codex.collectedCount", codexMasteredCount, GoTermCodex.allEntries.count)
+                            : l10n.localized(
+                                zh: "已赏析 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) 篇 ★",
+                                en: "Studied \(studiedCount) / \(GoAcademyLibrary.allEntries.count) ★",
+                                ja: "鑑賞済 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) ★",
+                                ko: "감상 완료 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) ★",
+                                zhHant: "已賞析 \(studiedCount) / \(GoAcademyLibrary.allEntries.count) 篇 ★"
+                            )
                     )
 
                     Spacer()
@@ -63,7 +85,7 @@ struct GameArchiveView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 14)
 
-                // Row 1: 4 Pure Academy Hall Pills
+                // Row 1: 4 Academy Hall Pills + Go Codex Pill
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(AcademyHall.allCases) { hall in
@@ -71,69 +93,74 @@ struct GameArchiveView: View {
                             let doneInHall = allInHall.filter { appState.profile.studiedAcademyIds.contains($0.id) }.count
                             hallPill(hall: hall, done: doneInHall, total: allInHall.count)
                         }
+                        codexTabPill
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 2)
                 }
 
-                // Row 2: Level Filter Pills (全部 / 启蒙 / 进阶 / 高阶 / 段位)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(AcademyLevel.allCases) { level in
-                            levelPill(level: level)
+                if selectedTab == .codex {
+                    GoCodexView(embeddedInArchive: true)
+                } else {
+                    // Row 2: Level Filter Pills (全部 / 启蒙 / 进阶 / 高阶 / 段位)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(AcademyLevel.allCases) { level in
+                                levelPill(level: level)
+                            }
                         }
+                        .padding(.horizontal, 24)
                     }
-                    .padding(.horizontal, 24)
-                }
 
-                // Hall Content Grid
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        hallHeaderBanner(selectedHall)
+                    // Hall Content Grid
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            hallHeaderBanner(selectedHall)
 
-                        if filteredEntries.isEmpty {
-                            VStack(spacing: 12) {
-                                Text("✨").font(AppFont.rounded(size: 46, weight: .regular))
-                                Text(l10n.localized(
-                                    zh: "该棋力分级下暂无展品，切换「全部」浏览本馆全部名篇！",
-                                    en: "No entries in this rank band — tap 'All' to browse this entire hall!",
-                                    ja: "この棋力帯にはまだありません。「すべて」で全作品を見られます！",
-                                    ko: "이 기력대에는 아직 항목이 없어요. '전체'를 눌러 둘러보세요!",
-                                    zhHant: "該棋力分級下暫無展品，切換「全部」瀏覽本館全部名篇！"
-                                ))
-                                .font(AppFont.rounded(size: 14.5, weight: .bold))
-                                .foregroundColor(AppTheme.inkSecondary)
-                                .multilineTextAlignment(.center)
+                            if filteredEntries.isEmpty {
+                                VStack(spacing: 12) {
+                                    Text("✨").font(AppFont.rounded(size: 46, weight: .regular))
+                                    Text(l10n.localized(
+                                        zh: "该棋力分级下暂无展品，切换「全部」浏览本馆全部名篇！",
+                                        en: "No entries in this rank band — tap 'All' to browse this entire hall!",
+                                        ja: "この棋力帯にはまだありません。「すべて」で全作品を見られます！",
+                                        ko: "이 기력대에는 아직 항목이 없어요. '전체'를 눌러 둘러보세요!",
+                                        zhHant: "該棋力分級下暫無展品，切換「全部」瀏覽本館全部名篇！"
+                                    ))
+                                    .font(AppFont.rounded(size: 14.5, weight: .bold))
+                                    .foregroundColor(AppTheme.inkSecondary)
+                                    .multilineTextAlignment(.center)
 
-                                Button {
-                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
-                                        selectedLevel = .all
+                                    Button {
+                                        withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
+                                            selectedLevel = .all
+                                        }
+                                    } label: {
+                                        Text(l10n.localized(zh: "查看本馆全部", en: "Show All", ja: "すべて見る", ko: "전체 보기", zhHant: "查看本館全部"))
+                                            .font(AppFont.rounded(size: 14, weight: .black))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 20)
+                                            .padding(.vertical, 10)
                                     }
-                                } label: {
-                                    Text(l10n.localized(zh: "查看本馆全部", en: "Show All", ja: "すべて見る", ko: "전체 보기", zhHant: "查看本館全部"))
-                                        .font(AppFont.rounded(size: 14, weight: .black))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 20)
-                                        .padding(.vertical, 10)
+                                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                                 }
-                                .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 48)
-                        } else {
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 310, maximum: 440), spacing: 16)],
-                                spacing: 16
-                            ) {
-                                ForEach(filteredEntries) { entry in
-                                    academyCard(entry)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 48)
+                            } else {
+                                LazyVGrid(
+                                    columns: [GridItem(.adaptive(minimum: 310, maximum: 440), spacing: 16)],
+                                    spacing: 16
+                                ) {
+                                    ForEach(filteredEntries) { entry in
+                                        academyCard(entry)
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 2)
+                        .padding(.bottom, 32)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 2)
-                    .padding(.bottom, 32)
                 }
             }
         }
@@ -143,11 +170,11 @@ struct GameArchiveView: View {
     // MARK: - Hall & Level Pills
 
     private func hallPill(hall: AcademyHall, done: Int, total: Int) -> some View {
-        let active = selectedHall == hall
+        let active = selectedTab == .hall(hall)
         let accent = Color(hex: hall.accentHex)
         return Button {
             withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
-                selectedHall = hall
+                selectedTab = .hall(hall)
             }
             SoundAndHapticsManager.shared.playUITap()
         } label: {
@@ -170,6 +197,36 @@ struct GameArchiveView: View {
         }
         .tactileButton(scale: 0.95, sound: false)
         .accessibilityIdentifier("AcademyHall_\(hall.rawValue)")
+    }
+
+    private var codexTabPill: some View {
+        let active = selectedTab == .codex
+        let accent = AppTheme.skyBottom
+        return Button {
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
+                selectedTab = .codex
+            }
+            SoundAndHapticsManager.shared.playUITap()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "book.closed.fill")
+                    .font(.system(size: 13.5, weight: .black, design: .rounded))
+                Text("\(l10n.t("codex.title")) \(codexMasteredCount)/\(GoTermCodex.allEntries.count)")
+                    .font(AppFont.rounded(size: 13.5, weight: .black))
+            }
+            .foregroundColor(active ? .white : AppTheme.inkPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .frame(minHeight: AppTheme.buttonFaceHeight)
+            .background(
+                Capsule()
+                    .fill(active ? accent : Color.white.opacity(0.92))
+                    .shadow(color: active ? accent.opacity(0.28) : Color.black.opacity(0.06), radius: 6, y: 2)
+            )
+            .overlay(Capsule().strokeBorder(.white, lineWidth: active ? 2 : 1.5))
+        }
+        .tactileButton(scale: 0.95, sound: false)
+        .accessibilityIdentifier("AcademyHall_codex")
     }
 
     private func levelPill(level: AcademyLevel) -> some View {
@@ -319,7 +376,7 @@ struct GameArchiveView: View {
             .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, minHeight: 224, maxHeight: 224)
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 26, rimHeight: 3, whiteBorderWidth: 3, pressStyle: .card))
         .accessibilityIdentifier("AcademyEntry_\(entry.id)")
         .modifier(OptionalZoomSourceModifier(id: entry.recordId, namespace: zoomNamespace))
     }

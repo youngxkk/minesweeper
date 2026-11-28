@@ -128,7 +128,7 @@ struct RankExamHallView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: writtenOK ? .snow : .grape, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: writtenOK ? .snow : .grape, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
 
                 Button {
                     appState.startRankExamMatch(spec: spec)
@@ -139,7 +139,7 @@ struct RankExamHallView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
             }
         }
         .padding(16)
@@ -286,7 +286,7 @@ struct RankExamWrittenTestView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: passed ? .mint : .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: passed ? .mint : .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
         }
         .warmCard(cornerRadius: 28, padding: 22)
     }

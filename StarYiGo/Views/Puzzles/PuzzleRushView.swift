@@ -223,26 +223,7 @@ struct PuzzleRushView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true))
-
-            /* [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-            Button {
-                SoundAndHapticsManager.shared.playUITap()
-                GameCenterService.shared.presentLeaderboards()
-            } label: {
-                Label(
-                    l10n.localized(zh: "全球排行榜 (Game Center)", en: "Global Leaderboards (Game Center)", ja: "世界ランキング (Game Center)", ko: "글로벌 랭킹 (Game Center)", zhHant: "全球排行榜 (Game Center)"),
-                    systemImage: "trophy.fill"
-                )
-                .font(AppFont.rounded(size: 13.5, weight: .black))
-                .foregroundColor(AppTheme.skyBottom)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
-                .frame(minHeight: AppTheme.buttonFaceHeight)
-                .background(Capsule().fill(AppTheme.skyTop.opacity(0.12)))
-            }
-            .tactileButton(scale: 0.95, sound: false)
-            */
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true))
         }
         .padding(24)
         .warmCard(cornerRadius: 30, padding: 0)
@@ -268,7 +249,7 @@ struct PuzzleRushView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 22, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false, pressStyle: .card))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 22, rimHeight: 3, whiteBorderWidth: 3, playTapSound: false, pressStyle: .card))
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: selected)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -414,7 +395,7 @@ struct PuzzleRushView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
 
                 Button {
                     appState.popRoute()
@@ -425,7 +406,7 @@ struct PuzzleRushView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
             }
         }
         .padding(24)
@@ -449,7 +430,7 @@ struct PuzzleRushView: View {
         if rushMode == .blitz3m {
             rushTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
                 Task { @MainActor in
-                    guard scenePhase == .active, phase == .running else { return }
+                    guard scenePhase == .active, phase == .running, !appState.isPortraitGuidanceActive else { return }
                     if secondsRemaining > 1 {
                         secondsRemaining -= 1
                     } else {

@@ -676,6 +676,7 @@ final class StorageService {
         static let archive = "starpoint.savedGames.v1"
         static let pausedAIMatch = "starpoint.pausedAIMatch.v1"
         static let photoJudgeHistory = "starpoint.photoJudgeHistory.v1"
+        static let hasTappedPhotoJudge = "starpoint.hasTappedPhotoJudge.v1"
         static let settings = "starpoint.appSettings.v1"
     }
 
@@ -796,6 +797,18 @@ final class StorageService {
 
     func savePhotoJudgeHistory(_ records: [PhotoJudgeRecord]) {
         saveHeavy(records, forKey: Keys.photoJudgeHistory)
+    }
+
+    func loadHasTappedPhotoJudge() -> Bool {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        return defaults.bool(forKey: Keys.hasTappedPhotoJudge)
+    }
+
+    func saveHasTappedPhotoJudge(_ tapped: Bool) {
+        ioLock.lock()
+        defer { ioLock.unlock() }
+        defaults.set(tapped, forKey: Keys.hasTappedPhotoJudge)
     }
 
     func savePhotoJudgeImage(_ image: UIImage, for recordId: UUID) -> String? {

@@ -313,3 +313,8 @@
 "settings.eyecare.keepPlaying" = "휴식 완료, 계속하기";
 "settings.about.offlineNote" = "정통 바둑 규칙과 글로벌 표준 용어를 채택했으며, 오프라인 단계별 AI 엔진을 내장했습니다.";
 "common.close" = "닫기";
+
+/* Orientation Guidance */
+"orientation.portrait.title" = "가로로 돌리면 바둑판이 더 커져요";
+"orientation.portrait.subtitle" = "iPad를 가로로 놓으면 대국과 문제 풀이를 더욱 편안하게 즐길 수 있어요.";
+"orientation.portrait.continueAnyway" = "세로 화면으로 계속하기";

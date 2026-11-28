@@ -220,7 +220,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                     } else if let nodeId = campaignNodeId, let nextNode = StarYiCampaign.nextNode(after: nodeId) {
                         Button {
                             appState.navigateToCampaignNode(nextNode, replaceTopRoute: true)
@@ -237,7 +237,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                     } else if let nodeId = campaignNodeId, let island = StarYiCampaign.island(containingNodeId: nodeId) {
                         Button {
                             if !appState.navigationPath.isEmpty {
@@ -257,7 +257,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -292,7 +292,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
 
                         Button { answerLadder(guessWorks: false) } label: {
                             Label(l10n.localized(zh: "征子失败 ❌", en: "Fails ❌", ja: "シチョウ不成立 ❌", ko: "축 실패 ❌", zhHant: "征子失敗 ❌"), systemImage: "xmark.circle.fill")
@@ -301,7 +301,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                     }
                 }
 
@@ -326,7 +326,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
 
                         Button { answerCounting(guessWinner: .white) } label: {
                             Text(l10n.localized(zh: "⚪️ 白棋领先", en: "⚪️ White Ahead", ja: "⚪️ 白優勢", ko: "⚪️ 백 우세", zhHant: "⚪️ 白棋領先"))
@@ -335,7 +335,7 @@ struct GoMiniDrillPlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                     }
                 }
 
@@ -360,7 +360,7 @@ struct GoMiniDrillPlayView: View {
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 18, rimHeight: 4, whiteBorderWidth: 2.5))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 18, rimHeight: 2.5, whiteBorderWidth: 2.5))
                         .disabled(answered)
                     }
                 }
@@ -428,7 +428,7 @@ struct GoMiniDrillPlayView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 }
                 .warmCard(cornerRadius: 22, padding: 14)
             }
@@ -654,6 +654,7 @@ struct GoMiniDrillPlayView: View {
         secondsLeft = 60
         drillTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             Task { @MainActor in
+                guard !appState.isPortraitGuidanceActive else { return }
                 if secondsLeft > 0 {
                     secondsLeft -= 1
                 } else {

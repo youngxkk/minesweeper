@@ -24,6 +24,17 @@ enum DojoRankBand: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    func title(_ l10n: L10n) -> String {
+        switch self {
+        case .all:
+            return l10n.localized(zh: "全部级位", en: "All Ranks", ja: "すべての段級位", ko: "전체 급·단", zhHant: "全部級位")
+        case .beginner: return "25K–18K"
+        case .intermediate: return "17K–10K"
+        case .advanced: return "9K–1K"
+        case .dan: return "1D–3D"
+        }
+    }
+
     func matches(_ puzzle: GoPuzzle) -> Bool {
         let v = puzzle.rankOrderValue
         switch self {
@@ -32,6 +43,97 @@ enum DojoRankBand: String, CaseIterable, Identifiable, Sendable {
         case .intermediate: return v >= 10 && v <= 17
         case .advanced: return v >= 1 && v <= 9
         case .dan: return v <= 0
+        }
+    }
+
+    /// Pedagogically ordered categories appropriate for this rank band.
+    /// Higher bands (17K–10K, 9K–1K, 1D–3D) exclude beginner Capture basics.
+    var preferredCategoryOrder: [PuzzleCategory] {
+        switch self {
+        case .all:
+            return [.capture, .tactics, .lifeAndDeath, .capturingRace, .opening, .endgame]
+        case .beginner:
+            return [.capture, .lifeAndDeath, .tactics, .opening, .capturingRace, .endgame]
+        case .intermediate:
+            return [.tactics, .lifeAndDeath, .capturingRace, .opening, .endgame]
+        case .advanced:
+            return [.lifeAndDeath, .tactics, .capturingRace, .endgame, .opening]
+        case .dan:
+            return [.lifeAndDeath, .tactics, .capturingRace, .endgame, .opening]
+        }
+    }
+
+    /// Returns only categories that are both pedagogically appropriate and have at least one puzzle in this rank band.
+    func availableCategories(includeExpandedPack: Bool = true) -> [PuzzleCategory] {
+        let counts = DojoPuzzleBank.categoryCounts(for: self, includeExpandedPack: includeExpandedPack)
+        return preferredCategoryOrder.filter { (counts[$0] ?? 0) > 0 }
+    }
+
+    /// Rank-tailored topic label so each skill band displays curriculum-appropriate terminology.
+    func categoryTitle(for category: PuzzleCategory, l10n: L10n) -> String {
+        switch self {
+        case .all:
+            return category.localizedTitle(l10n)
+        case .beginner:
+            switch category {
+            case .capture:
+                return l10n.localized(zh: "吃子启蒙", en: "Capture Basics", ja: "石取り入門", ko: "따내기 기초", zhHant: "吃子啟蒙")
+            case .lifeAndDeath:
+                return l10n.localized(zh: "做眼入门", en: "Basic Eyes", ja: "眼作り入門", ko: "집 만들기 기초", zhHant: "做眼入門")
+            case .tactics:
+                return l10n.localized(zh: "启蒙手筋", en: "Starter Tesuji", ja: "入門手筋", ko: "입문 맥점", zhHant: "啟蒙手筋")
+            case .opening:
+                return l10n.localized(zh: "金角银边", en: "Corner Basics", ja: "金角銀辺", ko: "귀·변 기초", zhHant: "金角銀邊")
+            case .capturingRace:
+                return l10n.localized(zh: "数气对杀", en: "Liberty Counting", ja: "ダメ詰め入門", ko: "활로 수상전", zhHant: "數氣對殺")
+            case .endgame:
+                return l10n.localized(zh: "基础连结", en: "Basic Connections", ja: "基本の連絡", ko: "기본 연결", zhHant: "基礎連結")
+            }
+        case .intermediate:
+            switch category {
+            case .capture:
+                return category.localizedTitle(l10n)
+            case .tactics:
+                return l10n.localized(zh: "经典手筋", en: "Core Tesuji", ja: "基本手筋", ko: "핵심 맥점", zhHant: "經典手筋")
+            case .lifeAndDeath:
+                return l10n.localized(zh: "基本死活", en: "Basic Life & Death", ja: "基本詰碁", ko: "기본 사활", zhHant: "基本死活")
+            case .capturingRace:
+                return l10n.localized(zh: "对杀紧气", en: "Capturing Race", ja: "攻め合い", ko: "수상전", zhHant: "對殺緊氣")
+            case .opening:
+                return l10n.localized(zh: "布局拆边", en: "Opening Bases", ja: "布石・ヒラキ", ko: "포석·벌림", zhHant: "布局拆邊")
+            case .endgame:
+                return l10n.localized(zh: "基础收官", en: "Basic Endgame", ja: "基本ヨセ", ko: "기본 끝내기", zhHant: "基礎收官")
+            }
+        case .advanced:
+            switch category {
+            case .capture:
+                return category.localizedTitle(l10n)
+            case .lifeAndDeath:
+                return l10n.localized(zh: "中级死活", en: "Intermediate L&D", ja: "中級詰碁", ko: "중급 사활", zhHant: "中級死活")
+            case .tactics:
+                return l10n.localized(zh: "中盘手筋", en: "Middlegame Tesuji", ja: "中盤の手筋", ko: "중반 맥점", zhHant: "中盤手筋")
+            case .capturingRace:
+                return l10n.localized(zh: "复杂对杀", en: "Complex Semeai", ja: "複雑な攻め合い", ko: "고급 수상전", zhHant: "複雜對殺")
+            case .endgame:
+                return l10n.localized(zh: "官子手筋", en: "Endgame Tesuji", ja: "ヨセの手筋", ko: "끝내기 맥점", zhHant: "官子手筋")
+            case .opening:
+                return l10n.localized(zh: "挂角与布局", en: "Approaches & Opening", ja: "カカリと布石", ko: "걸침과 포석", zhHant: "掛角與布局")
+            }
+        case .dan:
+            switch category {
+            case .capture:
+                return category.localizedTitle(l10n)
+            case .lifeAndDeath:
+                return l10n.localized(zh: "段位死活", en: "Dan Life & Death", ja: "有段詰碁", ko: "유단자 사활", zhHant: "段位死活")
+            case .tactics:
+                return l10n.localized(zh: "高阶手筋", en: "Dan Tesuji", ja: "上級手筋", ko: "고급 맥점", zhHant: "高階手筋")
+            case .capturingRace:
+                return l10n.localized(zh: "精密对杀", en: "Dan Semeai", ja: "精密攻め合い", ko: "정밀 수상전", zhHant: "精密對殺")
+            case .endgame:
+                return l10n.localized(zh: "逆收与官子", en: "Dan Endgame", ja: "逆ヨセ・終盤", ko: "역끝내기·종반", zhHant: "逆收與官子")
+            case .opening:
+                return l10n.localized(zh: "高段布局", en: "Dan Opening", ja: "有段布石", ko: "유단자 포석", zhHant: "高段布局")
+            }
         }
     }
 }
@@ -589,6 +691,15 @@ enum DojoPuzzleBank {
             if let category, p.category != category { return false }
             return rankBand.matches(p)
         }
+    }
+
+    static func categoryCounts(for rankBand: DojoRankBand, includeExpandedPack: Bool = true) -> [PuzzleCategory: Int] {
+        let source = includeExpandedPack ? fullCatalog : allDojoPuzzles
+        var counts: [PuzzleCategory: Int] = [:]
+        for p in source where rankBand.matches(p) {
+            counts[p.category, default: 0] += 1
+        }
+        return counts
     }
 
     /// Produces a standalone SGF-transformed variant puzzle so every puzzle in the catalog

@@ -63,6 +63,7 @@ struct HomeView: View {
                         .scaledToFill()
                         .frame(width: fullGeo.size.width, height: fullGeo.size.height)
                         .clipped()
+                        .accessibilityIgnoresInvertColors()
                         .id(activeBackdropName)
                         .transition(.opacity)
                 }
@@ -127,7 +128,7 @@ struct HomeView: View {
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.17, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
                                         dailyChallengeModuleCard
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.23, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
-                                        codexModuleCard
+                                        trainingDojoModuleCard
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.29, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
                                         sgfDojoModuleCard
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.35, reduceMotion: reduceMotion, offsetY: 66, initialScale: 0.94, animation: MotionToken.homePortalEntrance))
@@ -149,7 +150,7 @@ struct HomeView: View {
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.17, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
                                         dailyChallengeModuleCard
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.23, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
-                                        codexModuleCard
+                                        trainingDojoModuleCard
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.29, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
                                         sgfDojoModuleCard
                                             .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.35, reduceMotion: reduceMotion, offsetY: 68, initialScale: 0.93, animation: MotionToken.homePortalEntrance))
@@ -295,7 +296,7 @@ struct HomeView: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 14.5)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 4, whiteBorderWidth: 2.5, pressStyle: .card))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 2.5, whiteBorderWidth: 2.5, pressStyle: .card))
                         }
                     }
                 }
@@ -378,6 +379,7 @@ struct HomeView: View {
             .interpolation(.high)
             .scaledToFit()
             .frame(height: height)
+            .accessibilityIgnoresInvertColors()
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(
@@ -433,8 +435,12 @@ struct HomeView: View {
     // MARK: - Top Edge Peripheral Controls (Glossy Candy Capsules)
 
     private func edgeTopBar(isCompact: Bool) -> some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 10) {
+        let done = min(appState.dailyDojoStationsDoneCount, 3)
+        let target = 3
+        let progress = Double(done) / Double(target)
+
+        return HStack(spacing: 10) {
+            HStack(spacing: isCompact ? 8 : 10) {
                 Button {
                     appState.navigationPath.append(.passport)
                 } label: {
@@ -465,26 +471,16 @@ struct HomeView: View {
                     .padding(.trailing, isCompact ? 12 : 16)
                     .padding(.vertical, 5)
                     .background(
-                        Capsule()
-                            .fill(LinearGradient(colors: [.white, Color(red: 0.94, green: 0.97, blue: 1.0)], startPoint: .top, endPoint: .bottom))
+                        SnowCapsuleSurface(rimHeight: 3)
                             .shadow(color: AppTheme.skyBottom.opacity(0.18), radius: 12, y: 5)
                     )
-                    .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
                 }
                 .tactileButton(scale: 0.95)
                 .accessibilityLabel("\(appState.profile.nickname), \(l10n.t("rank.label", appState.profile.rankString)), Level \(appState.profile.adventureLevel)")
                 .accessibilityHint(l10n.localized(zh: "打开围棋航海护照", en: "Open Go Sailor Passport", ja: "航海パスポートを開く", ko: "바둑 항해 여권 열기", zhHant: "開啟圍棋航海護照"))
                 .accessibilityIdentifier("HomePassportButton")
-            }
-            .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.04, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
+                .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.04, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
-            Spacer()
-
-            let done = min(appState.dailyDojoStationsDoneCount, 3)
-            let target = 3
-            let progress = Double(done) / Double(target)
-
-            HStack(spacing: isCompact ? 8 : 10) {
                 Button {
                     showStatusGuide = true
                 } label: {
@@ -558,11 +554,9 @@ struct HomeView: View {
                     .padding(.horizontal, isCompact ? 12 : 16)
                     .padding(.vertical, 9)
                     .background(
-                        Capsule()
-                            .fill(LinearGradient(colors: [.white, Color(red: 0.94, green: 0.97, blue: 1.0)], startPoint: .top, endPoint: .bottom))
+                        SnowCapsuleSurface(rimHeight: 3)
                             .shadow(color: AppTheme.skyBottom.opacity(0.18), radius: 12, y: 5)
                     )
-                    .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
                     .fixedSize(horizontal: true, vertical: false)
                 }
                 .tactileButton(scale: 0.95)
@@ -589,14 +583,20 @@ struct HomeView: View {
                         .presentationDragIndicator(.visible)
                 }
                 .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.10, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
+            }
 
-                if isCompact {
+            Spacer()
+
+            HStack(spacing: isCompact ? 8 : 10) {
+
+                if isCompact || appState.hasTappedPhotoJudge {
                     GameCircleButton(
                         icon: "camera.viewfinder",
                         palette: .grape,
                         tint: .white,
-                        size: 40
+                        size: isCompact ? 40 : 44
                     ) {
+                        appState.markPhotoJudgeTapped()
                         appState.navigationPath.append(.photoJudge)
                     }
                     .accessibilityLabel(l10n.localized(zh: "拍照判胜负", en: "Photo Judge", ja: "写真判定", ko: "사진 판정", zhHant: "拍照判勝負"))
@@ -604,6 +604,7 @@ struct HomeView: View {
                     .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.92, animation: MotionToken.homeTopBarEntrance))
                 } else {
                     Button {
+                        appState.markPhotoJudgeTapped()
                         appState.navigationPath.append(.photoJudge)
                     } label: {
                         HStack(spacing: 6) {
@@ -623,7 +624,7 @@ struct HomeView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.2))
                     .accessibilityIdentifier("HomePhotoJudgeButton")
                     .modifier(StaggeredEntranceModifier(appeared: hasAppeared, delay: 0.16, reduceMotion: reduceMotion, offsetY: -72, initialScale: 0.94, animation: MotionToken.homeTopBarEntrance))
                 }
@@ -1240,7 +1241,7 @@ struct HomeView: View {
 
             HStack(spacing: isCompact ? 5 : 8) {
                 Button {
-                    appState.navigationPath.append(.puzzleHub(initialMistakesOnly: true))
+                    appState.navigationPath.append(.mistakeBook)
                 } label: {
                     compactGlossChip(
                         title: l10n.t("home.puzzleCard.mistakes", mistakes),
@@ -1267,11 +1268,11 @@ struct HomeView: View {
         let doneStations = appState.dailyDojoStationsDoneCount
         let readyToStamp = appState.isDailyDojoReadyToStamp
         let cleared = appState.isDailyChallengeClearedToday
-        let teal = GlossyPalette(
-            top: Color(red: 0.02, green: 0.48, blue: 0.53),
-            bottom: Color(red: 0.01, green: 0.35, blue: 0.40),
-            rim: Color(red: 0.01, green: 0.25, blue: 0.29),
-            glow: Color(red: 0.02, green: 0.48, blue: 0.53)
+        let dojoPalette = GlossyPalette(
+            top: Color(red: 0.99, green: 0.62, blue: 0.72),
+            bottom: Color(red: 0.94, green: 0.44, blue: 0.59),
+            rim: Color(red: 0.76, green: 0.28, blue: 0.44),
+            glow: Color(red: 0.96, green: 0.50, blue: 0.64)
         )
         let subtitleText: String = {
             if cleared {
@@ -1306,8 +1307,8 @@ struct HomeView: View {
         } label: {
             moduleCapsuleContent(
                 icon: cleared ? "crown.fill" : (readyToStamp ? "seal.fill" : "sun.max.fill"),
-                iconColors: (cleared || readyToStamp) ? [AppTheme.sunBottom, AppTheme.sunRim] : [teal.top, teal.bottom],
-                rimColor: teal.rim,
+                iconColors: (cleared || readyToStamp) ? [AppTheme.sunBottom, AppTheme.sunRim] : [dojoPalette.top, dojoPalette.bottom],
+                rimColor: dojoPalette.rim,
                 title: l10n.localized(
                     zh: "每日道场",
                     en: "Daily Dojo",
@@ -1318,25 +1319,38 @@ struct HomeView: View {
                 subtitle: subtitleText
             )
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: teal, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: dojoPalette, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5, pressStyle: .card))
         .accessibilityIdentifier("HomeDailyDojoButton")
     }
 
-    private var codexModuleCard: some View {
-        let unlocked = GoTermCodex.allEntries.filter { appState.profile.unlockedCodexIds.contains($0.id) }.count
+    private var trainingDojoModuleCard: some View {
+        let totalPuzzles = DojoPuzzleBank.fullCatalog.count
 
         return Button {
-            appState.navigationPath.append(.codex)
+            appState.navigationPath.append(.trainingDojo)
         } label: {
             moduleCapsuleContent(
-                icon: "book.closed.fill",
+                icon: "rosette",
                 iconColors: [AppTheme.skyTop, AppTheme.skyBottom],
                 rimColor: AppTheme.skyRim,
-                title: l10n.t("codex.title"),
-                subtitle: l10n.t("codex.collectedCount", unlocked, GoTermCodex.allEntries.count)
+                title: l10n.localized(
+                    zh: "题库考级",
+                    en: "Drills & Exams",
+                    ja: "問題集・段級位",
+                    ko: "문제집·승급시험",
+                    zhHant: "題庫考級"
+                ),
+                subtitle: l10n.localized(
+                    zh: "\(totalPuzzles)+ 题库 · 定式 · 考级",
+                    en: "\(totalPuzzles)+ Puzzles · Joseki · Exams",
+                    ja: "\(totalPuzzles)+ 詰碁 · 定石 · 段級位試験",
+                    ko: "\(totalPuzzles)+ 문제집 · 정석 · 승급시험",
+                    zhHant: "\(totalPuzzles)+ 題庫 · 定石 · 考級"
+                )
             )
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5, pressStyle: .card))
+        .accessibilityIdentifier("HomeTrainingDojoButton")
     }
 
     private var tabletopTwoPlayerModuleCard: some View {
@@ -1385,7 +1399,7 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 78)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, playTapSound: false, pressStyle: .card))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5, playTapSound: false, pressStyle: .card))
 
             // Standalone circular dropdown button on the right: ONLY tapping this circle opens the mode menu!
             Menu {
@@ -1435,7 +1449,7 @@ struct HomeView: View {
             }
             .accessibilityLabel(l10n.t("home.aiCard.ruleMode"))
             .padding(.trailing, 10)
-            .padding(.bottom, 6)
+            .padding(.bottom, 4)
         }
     }
 
@@ -1451,7 +1465,7 @@ struct HomeView: View {
                 subtitle: l10n.t("home.archiveCard.subtitle")
             )
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5, pressStyle: .card))
         .accessibilityIdentifier("HomeArchiveButton")
     }
 
@@ -1517,11 +1531,9 @@ struct HomeView: View {
         .padding(.horizontal, isCompact ? 10 : 13)
         .padding(.vertical, 9)
         .background(
-            Capsule()
-                .fill(LinearGradient(colors: [.white, Color(red: 0.94, green: 0.97, blue: 1.0)], startPoint: .top, endPoint: .bottom))
+            SnowCapsuleSurface(rimHeight: 3)
                 .shadow(color: Color.black.opacity(0.10), radius: 6, y: 3)
         )
-        .overlay(Capsule().strokeBorder(.white, lineWidth: 2.5))
         .contentShape(Capsule())
     }
 }

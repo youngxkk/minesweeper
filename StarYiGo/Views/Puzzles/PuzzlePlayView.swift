@@ -434,7 +434,7 @@ struct PuzzlePlayView: View {
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 7)
                                 }
-                                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
 
                                 if viewModel.wrongCount >= 5 {
                                     Button {
@@ -461,7 +461,7 @@ struct PuzzlePlayView: View {
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 7)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -520,7 +520,7 @@ struct PuzzlePlayView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3, playTapSound: false))
                 .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
 
                 ZStack {
@@ -540,7 +540,7 @@ struct PuzzlePlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 15)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5))
                             .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
                             .transition(.scale(scale: 0.90).combined(with: .opacity))
                         } else if viewModel.isDailyChallenge {
@@ -564,7 +564,7 @@ struct PuzzlePlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 15)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5))
                             .transition(.scale(scale: 0.90).combined(with: .opacity))
                         } else {
                             Button {
@@ -587,7 +587,7 @@ struct PuzzlePlayView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 15)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5))
                             .environment(\.minimumButtonFaceHeight, AppTheme.boardActionFaceHeight)
                             .transition(.scale(scale: 0.90).combined(with: .opacity))
                         }

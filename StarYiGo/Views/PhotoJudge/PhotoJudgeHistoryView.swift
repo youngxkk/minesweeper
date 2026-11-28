@@ -115,7 +115,7 @@ struct PhotoJudgeHistoryView: View {
                 .padding(.horizontal, 24)
                 .padding(.vertical, 12)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
         }
         .padding(28)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -450,6 +450,7 @@ private struct PhotoJudgeAsyncThumbnail: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+                    .accessibilityIgnoresInvertColors()
             } else {
                 MiniGoBoardPreview(boardSize: record.boardSize, grid: record.grid)
             }

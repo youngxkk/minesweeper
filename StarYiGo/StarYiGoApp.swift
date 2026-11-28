@@ -4,9 +4,20 @@
 //
 
 import SwiftUI
+import UIKit
+
+final class StarYiAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?
+    ) -> UIInterfaceOrientationMask {
+        .landscape
+    }
+}
 
 @main
 struct StarYiGoApp: App {
+    @UIApplicationDelegateAdaptor(StarYiAppDelegate.self) private var appDelegate
     @StateObject private var appState: AppState
 
     init() {
@@ -47,9 +58,15 @@ struct RootNavigationView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.legibilityWeight) private var legibilityWeight
     @Namespace private var zoomTransitionNamespace
 
     @State private var splashMorphToHome: Bool = false
+    @State private var isWindowPortrait: Bool = false
+    @State private var showPortraitOverlay: Bool = false
+    @State private var dismissedPortraitForCurrentSession: Bool = false
+    @State private var portraitDebounceTask: Task<Void, Never>?
 
     private var l10n: L10n { appState.l10n }
 
@@ -67,13 +84,21 @@ struct RootNavigationView: View {
                                 HomeView()
                             }
                         case .puzzleHub(let initialMistakesOnly):
-                            PuzzleHubView(initialMistakesOnly: initialMistakesOnly)
+                            if initialMistakesOnly {
+                                MistakeBookView()
+                            } else {
+                                PuzzleHubView(initialMistakesOnly: false)
+                            }
+                        case .mistakeBook:
+                            MistakeBookView()
                         case .islandDetail(let islandId):
                             if let campaignIsland = StarYiCampaign.island(withId: islandId) {
                                 IslandDetailView(campaignIsland: campaignIsland)
+                                    .id(route)
                             } else if let legacy = StarYiIslands.island(withId: islandId),
                                       let fallback = StarYiCampaign.allIslands.first {
                                 IslandDetailView(campaignIsland: StarYiCampaign.island(withId: legacy.id) ?? fallback)
+                                    .id(route)
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
@@ -87,6 +112,7 @@ struct RootNavigationView: View {
                                     forceRandomTransform: forceRandomTransform,
                                     dailyDojoQueueIds: dailyDojoQueueIds
                                 )
+                                .id(route)
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
@@ -107,6 +133,7 @@ struct RootNavigationView: View {
                                     sectionIndex: resolvedSection,
                                     totalSections: node.sectionCount
                                 )
+                                .id("\(node.id)#\(effectiveTier.rawValue)#\(resolvedSection)")
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
@@ -115,6 +142,7 @@ struct RootNavigationView: View {
                         case .seaSkipGate(let seaId):
                             if let sea = StarYiCampaign.sea(withId: seaId) {
                                 SeaSkipGateView(sea: sea)
+                                    .id(route)
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
@@ -130,6 +158,7 @@ struct RootNavigationView: View {
                                     masteryTier: .transformed,
                                     isGhostBuster: true
                                 )
+                                .id(route)
                             } else {
                                 PuzzleHubView(initialMistakesOnly: false)
                             }
@@ -153,6 +182,7 @@ struct RootNavigationView: View {
                         case .josekiTrainer(let courseId, let campaignNodeId):
                             if let course = JosekiLibrary.course(withId: courseId) {
                                 JosekiTrainerView(course: course, campaignNodeId: campaignNodeId)
+                                    .id(route)
                             } else {
                                 TrainingDojoView()
                             }
@@ -164,11 +194,13 @@ struct RootNavigationView: View {
                                 targetQuestionCount: targetCount,
                                 isDailyDojoWarmup: isDailyDojoWarmup
                             )
+                            .id(route)
                         case .rankExamHall:
                             RankExamHallView()
                         case .rankExamTest(let tier):
                             if let spec = RankExamSystem.spec(for: tier) {
                                 RankExamWrittenTestView(spec: spec)
+                                    .id(route)
                             } else {
                                 RankExamHallView()
                             }
@@ -230,6 +262,7 @@ struct RootNavigationView: View {
                                 .scaledToFill()
                                 .frame(width: geo.size.width, height: geo.size.height)
                                 .clipped()
+                                .accessibilityIgnoresInvertColors()
                                 .opacity(splashMorphToHome ? 0 : 1)
                         } else {
                             Color("LaunchBackground")
@@ -242,6 +275,7 @@ struct RootNavigationView: View {
                                 .interpolation(.high)
                                 .scaledToFit()
                                 .frame(width: 300, height: 300)
+                                .accessibilityIgnoresInvertColors()
                                 .scaleEffect(splashMorphToHome && !reduceMotion ? 1.08 : 1.0)
                                 .opacity(splashMorphToHome ? 0 : 1)
                         }
@@ -253,8 +287,46 @@ struct RootNavigationView: View {
                 .allowsHitTesting(false)
                 .zIndex(200)
             }
+
+            if showPortraitOverlay {
+                LandscapeGuidanceOverlay(l10n: l10n) {
+                    dismissPortraitOverlayForCurrentSession()
+                }
+                .transition(.opacity)
+                .zIndex(180)
+            }
+
+            if appState.showEyeCareAlert {
+                ParentalGateOverlay(
+                    l10n: l10n,
+                    title: l10n.t("settings.eyecare.alertTitle"),
+                    message: "\(l10n.t("settings.eyecare.alertMessage", appState.settings.eyeCareMinutes))\n\(l10n.localized(zh: "如需继续对弈，请家长答对下方算术题解锁：", en: "To keep playing, please ask a parent to solve this math check:", ja: "続けて遊ぶには、保護者の方が下の計算に答えてください：", ko: "계속하려면 보호자께서 아래 계산의 답을 입력해 주세요:", zhHant: "如需繼續對弈，請家長答對下方算術題解鎖："))",
+                    iconName: "eye.fill",
+                    accentPalette: .mint,
+                    confirmButtonTitle: l10n.t("settings.eyecare.keepPlaying"),
+                    allowsDismiss: false,
+                    onSuccess: {
+                        appState.acknowledgeEyeCareBreak()
+                    }
+                )
+                .accessibilityIdentifier("EyeCareParentalGateOverlay")
+            }
         }
         .coordinateSpace(name: "RootLaunchSpace")
+        .onGeometryChange(for: Bool.self) { proxy in
+            proxy.size.width > 0 && proxy.size.height > proxy.size.width * 1.05
+        } action: { newIsPortrait in
+            handlePortraitStateChange(newIsPortrait)
+        }
+        .onChange(of: appState.isLaunchSplashActive) { _, _ in
+            syncPortraitOverlayVisibility(debounced: false)
+        }
+        .onChange(of: appState.navigationPath) { _, _ in
+            syncPortraitOverlayVisibility(debounced: false)
+        }
+        .onChange(of: appState.showSettingsSheet) { _, _ in
+            syncPortraitOverlayVisibility(debounced: false)
+        }
         .task {
             guard appState.isLaunchSplashActive else {
                 appState.isLaunchSplashRevealing = true
@@ -278,6 +350,12 @@ struct RootNavigationView: View {
             appState.isLaunchSplashActive = false
         }
         .tint(AppTheme.jadeAccent)
+        .onChange(of: dynamicTypeSize) { _, _ in
+            AppFont.clearFontCache()
+        }
+        .onChange(of: legibilityWeight) { _, _ in
+            AppFont.clearFontCache()
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             appState.setAppActive(phase == .active)
             if phase == .active {
@@ -291,16 +369,7 @@ struct RootNavigationView: View {
                 .font(AppFont.rounded(size: 16, weight: .semibold, languageCode: appState.settings.language.resolvedCode))
                 .preferredColorScheme(.light)
         }
-        .gameDialog(
-            isPresented: $appState.showEyeCareAlert,
-            title: l10n.t("settings.eyecare.alertTitle"),
-            message: l10n.t("settings.eyecare.alertMessage", appState.settings.eyeCareMinutes),
-            icon: "eye.fill",
-            accentPalette: .mint,
-            actions: [
-                .primary(l10n.t("settings.eyecare.keepPlaying"), palette: .mint)
-            ]
-        )
+        .animation(.spring(response: 0.26, dampingFraction: 0.78), value: appState.showEyeCareAlert)
     }
 
     /// Prevents iPadOS 26+ Freeform Windowing from shrinking the Go board into an unplayable vertical strip
@@ -309,6 +378,70 @@ struct RootNavigationView: View {
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene else { continue }
             windowScene.sizeRestrictions?.minimumSize = CGSize(width: 1024, height: 700)
+        }
+    }
+
+    private func handlePortraitStateChange(_ newIsPortrait: Bool) {
+        isWindowPortrait = newIsPortrait
+        if !newIsPortrait {
+            dismissedPortraitForCurrentSession = false
+            portraitDebounceTask?.cancel()
+            portraitDebounceTask = nil
+            setPortraitOverlayVisible(false)
+        } else {
+            syncPortraitOverlayVisibility(debounced: true)
+        }
+    }
+
+    private func syncPortraitOverlayVisibility(debounced: Bool) {
+        let shouldShow = isWindowPortrait
+            && !dismissedPortraitForCurrentSession
+            && !appState.isLaunchSplashActive
+            && !appState.isPortraitGuidanceExemptRoute
+            && !appState.showSettingsSheet
+
+        portraitDebounceTask?.cancel()
+        portraitDebounceTask = nil
+
+        guard shouldShow else {
+            setPortraitOverlayVisible(false)
+            return
+        }
+
+        if showPortraitOverlay || !debounced {
+            setPortraitOverlayVisible(true)
+            return
+        }
+
+        portraitDebounceTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            let stillShouldShow = isWindowPortrait
+                && !dismissedPortraitForCurrentSession
+                && !appState.isLaunchSplashActive
+                && !appState.isPortraitGuidanceExemptRoute
+                && !appState.showSettingsSheet
+            if stillShouldShow {
+                setPortraitOverlayVisible(true)
+            }
+        }
+    }
+
+    private func dismissPortraitOverlayForCurrentSession() {
+        dismissedPortraitForCurrentSession = true
+        portraitDebounceTask?.cancel()
+        portraitDebounceTask = nil
+        setPortraitOverlayVisible(false)
+    }
+
+    private func setPortraitOverlayVisible(_ visible: Bool) {
+        if showPortraitOverlay != visible {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                showPortraitOverlay = visible
+            }
+        }
+        if appState.isPortraitGuidanceActive != visible {
+            appState.isPortraitGuidanceActive = visible
         }
     }
 }

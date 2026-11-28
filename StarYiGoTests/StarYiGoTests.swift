@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftUI
 import Testing
 import UIKit
 @testable import StarYiGo
@@ -1592,6 +1593,130 @@ struct StarYiGoEngineTests {
         // Arbitrary unsupported voice codes normalize cleanly to English
         #expect(AppLanguage.voiceLanguageCode(forResolvedCode: "es") == "en")
         #expect(AppLanguage.voiceLanguageCode(forResolvedCode: "fr-CA") == "en")
+    }
+
+    @Test func appFontRespectsDynamicTypeCategoriesAndBoldText() throws {
+        AppFont.clearFontCache()
+        let baseTraits = UITraitCollection(preferredContentSizeCategory: .large)
+        let axTraits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraLarge)
+
+        let normalFont = try #require(
+            AppFont.uiFont(size: 16, weight: .medium, languageCode: "zh-Hans", maxScale: 1.40, traitCollection: baseTraits, boldTextEnabled: false)
+        )
+        let scaledFont = try #require(
+            AppFont.uiFont(size: 16, weight: .medium, languageCode: "zh-Hans", maxScale: 1.40, traitCollection: axTraits, boldTextEnabled: false)
+        )
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            #expect(scaledFont.pointSize >= normalFont.pointSize)
+        } else {
+            #expect(scaledFont.pointSize > normalFont.pointSize)
+        }
+        #expect(scaledFont.pointSize <= 16 * 1.40 + 0.01)
+
+        // Bold Text accessibility setting must promote non-bold weights to the Bold PostScript face
+        let regularPS = AppFont.postScriptName(for: .medium, languageCode: "zh-Hans", boldTextEnabled: false)
+        let boldPS = AppFont.postScriptName(for: .medium, languageCode: "zh-Hans", boldTextEnabled: true)
+        #expect(regularPS == AppFont.mediumPostScriptName)
+        #expect(boldPS == AppFont.boldPostScriptName)
+    }
+
+    @Test func goBoardAccessibilityLabelsAreLocalizedAcrossLanguages() throws {
+        var state = GoBoardState(size: 9)
+        let center = BoardPoint(row: 4, col: 4)
+        guard case .success(let outcome) = state.applying(action: .place(center)) else {
+            Issue.record("Expected legal move at center")
+            return
+        }
+        state = outcome.nextState
+
+        let zhL10n = L10n(language: .zhHans)
+        let enL10n = L10n(language: .en)
+        let jaL10n = L10n(language: .ja)
+
+        let zhSummary = GoBoardView.accessibilitySummary(for: state, l10n: zhL10n)
+        let enSummary = GoBoardView.accessibilitySummary(for: state, l10n: enL10n)
+        let jaSummary = GoBoardView.accessibilitySummary(for: state, l10n: jaL10n)
+        #expect(zhSummary.contains("9路围棋棋盘"))
+        #expect(enSummary.contains("9 by 9 Go board"))
+        #expect(jaSummary.contains("9路碁盤"))
+
+        let zhStone = GoBoardView.accessibilityPointLabel(for: center, boardState: state, isAtari: true, l10n: zhL10n)
+        #expect(zhStone.contains("叫吃"))
+        #expect(zhStone.contains("最后一手"))
+
+        let emptyPt = BoardPoint(row: 0, col: 0)
+        let zhPending = GoBoardView.accessibilityPointLabel(for: emptyPt, boardState: state, isPending: true, l10n: zhL10n)
+        let enEmpty = GoBoardView.accessibilityPointLabel(for: emptyPt, boardState: state, isPending: false, l10n: enL10n)
+        #expect(zhPending.contains("待确认落子点"))
+        #expect(enEmpty.contains("empty"))
+    }
+
+    @Test func parentalGateChallengeUsesSingleDigitTimesTeenPlusAddendWithin50() throws {
+        let fixed = ParentalGateChallenge(lhs: 7, rhs: 16, addend: 38)
+        #expect(fixed.expectedAnswer == 7 * 16 + 38)
+        #expect(fixed.expressionText == "7 × 16 + 38 = ?")
+        #expect(fixed.matches("150"))
+        #expect(fixed.matches("  150 \n"))
+        #expect(!fixed.matches("112"))
+        #expect(!fixed.matches(""))
+        #expect(!fixed.matches("abc"))
+
+        for _ in 0..<50 {
+            let c = ParentalGateChallenge.random()
+            #expect((2...9).contains(c.lhs))
+            #expect((11...19).contains(c.rhs))
+            #expect((10...50).contains(c.addend))
+            #expect(c.expectedAnswer == c.lhs * c.rhs + c.addend)
+        }
+    }
+
+    @MainActor
+    @Test func goBoardViewInstantiatesAndLayoutsWithoutCrashing() throws {
+        var state = GoBoardState(size: 19)
+        if case .success(let out) = state.applying(action: .place(BoardPoint(row: 3, col: 3))) {
+            state = out.nextState
+        }
+        let board = GoBoardView(boardState: state, theme: .midnightStar, isInteractive: true)
+        let host = UIHostingController(rootView: board)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 600, height: 600))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        #expect(host.view.bounds.width == 600)
+        window.isHidden = true
+    }
+
+    @Test func dojoRankBandCategoriesAreTailoredPerSkillLevel() {
+        let allLangs: [AppLanguage] = [.zhHans, .zhHant, .en, .ja, .ko]
+
+        // Beginner and All bands include Capture basics; Intermediate, Advanced, and Dan exclude Capture.
+        #expect(DojoRankBand.all.availableCategories().contains(.capture))
+        #expect(DojoRankBand.beginner.availableCategories().contains(.capture))
+        #expect(!DojoRankBand.intermediate.availableCategories().contains(.capture))
+        #expect(!DojoRankBand.advanced.availableCategories().contains(.capture))
+        #expect(!DojoRankBand.dan.availableCategories().contains(.capture))
+
+        // Every returned category for every band must have at least 1 puzzle and non-empty 5-language labels.
+        for band in DojoRankBand.allCases {
+            let categories = band.availableCategories()
+            #expect(!categories.isEmpty)
+            let counts = DojoPuzzleBank.categoryCounts(for: band)
+            for cat in categories {
+                #expect((counts[cat] ?? 0) > 0, "Expected >0 puzzles for \(band) / \(cat)")
+                for lang in allLangs {
+                    let l10n = L10n(language: lang)
+                    #expect(!band.title(l10n).isEmpty)
+                    #expect(!band.categoryTitle(for: cat, l10n: l10n).isEmpty)
+                }
+            }
+        }
+
+        // Dan and Beginner should present distinct Chinese topic names for shared categories (e.g. lifeAndDeath).
+        let zh = L10n(language: .zhHans)
+        #expect(DojoRankBand.beginner.categoryTitle(for: .lifeAndDeath, l10n: zh) != DojoRankBand.dan.categoryTitle(for: .lifeAndDeath, l10n: zh))
+        #expect(DojoRankBand.beginner.categoryTitle(for: .tactics, l10n: zh) != DojoRankBand.dan.categoryTitle(for: .tactics, l10n: zh))
     }
 }
 

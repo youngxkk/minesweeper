@@ -256,7 +256,7 @@ struct GameReviewView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                         .disabled(isAnalyzingGame)
                     }
                 }
@@ -338,7 +338,7 @@ struct GameReviewView: View {
                     GlossyCapsuleButtonStyle(
                         palette: isVariationMode ? .coral : .snow,
                         cornerRadius: 999,
-                        rimHeight: 4,
+                        rimHeight: 2.5,
                         whiteBorderWidth: 2.5
                     )
                 )
@@ -353,7 +353,7 @@ struct GameReviewView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: showTerritory ? .sky : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: showTerritory ? .sky : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
 
                     Button {
                         UIPasteboard.general.string = record.sgf
@@ -371,7 +371,7 @@ struct GameReviewView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: copiedFeedback ? .mint : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: copiedFeedback ? .mint : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                 }
             }
 
@@ -425,7 +425,7 @@ struct GameReviewView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 9)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: isAutoPlaying ? .coral : .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: isAutoPlaying ? .coral : .mint, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                         .keyboardShortcut(.space, modifiers: [])
                         .accessibilityLabel(isAutoPlaying
                             ? l10n.localized(zh: "暂停播放", en: "Pause", ja: "一時停止", ko: "일시정지", zhHant: "暫停播放")
@@ -626,7 +626,7 @@ struct GameReviewView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: alreadySaved ? .mint : .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: alreadySaved ? .mint : .coral, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                 .disabled(alreadySaved)
             }
         }
@@ -734,7 +734,7 @@ struct GameReviewView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
     }
 
     private func toggleAutoPlay() {
@@ -803,7 +803,7 @@ struct GameReviewView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                 }
 
                 Spacer()
@@ -836,7 +836,7 @@ struct GameReviewView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: isQuizMode ? .coral : .grape, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: isQuizMode ? .coral : .grape, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                 }
             }
 

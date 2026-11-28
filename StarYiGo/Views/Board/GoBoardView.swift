@@ -46,7 +46,7 @@ struct GoBoardView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     @GestureState private var isTouchActive: Bool = false
     @State private var dragHoverPoint: BoardPoint? = nil
@@ -261,17 +261,47 @@ struct GoBoardView: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .accessibilityIgnoresInvertColors()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("GoBoardCanvas")
+            .accessibilityLabel(Self.accessibilitySummary(for: boardState, l10n: boardL10n))
+            .accessibilityHint(boardAccessibilityHint)
+            .accessibilityChildren {
+                GoBoardAccessibilityGrid(
+                    boardState: boardState,
+                    region: region,
+                    side: side,
+                    atariSet: atariSet,
+                    pendingPoint: pendingPoint,
+                    isInteractive: isInteractive,
+                    isDeadStoneReviewMode: isDeadStoneReviewMode,
+                    l10n: boardL10n,
+                    metrics: computeMetrics(side: side, region: region),
+                    onSelectPoint: onSelectPoint
+                )
+            }
+            .accessibilityRotor(
+                Text(boardL10n.localized(zh: "最后一手", en: "Last Move", ja: "最後の一手", ko: "마지막 수", zhHant: "最後一手")),
+                entries: lastMoveRotorEntries(in: region, atariSet: atariSet),
+                entryLabel: \.label
+            )
+            .accessibilityRotor(
+                Text(boardL10n.localized(zh: "叫吃棋子", en: "Atari", ja: "アタリ", ko: "단수", zhHant: "叫吃棋子")),
+                entries: atariRotorEntries(in: region, atariSet: atariSet),
+                entryLabel: \.label
+            )
+            .accessibilityRotor(
+                Text(boardL10n.localized(zh: "黑子", en: "Black Stones", ja: "黒石", ko: "흑돌", zhHant: "黑子")),
+                entries: stoneRotorEntries(color: .black, in: region, atariSet: atariSet),
+                entryLabel: \.label
+            )
+            .accessibilityRotor(
+                Text(boardL10n.localized(zh: "白子", en: "White Stones", ja: "白石", ko: "백돌", zhHant: "白子")),
+                entries: stoneRotorEntries(color: .white, in: region, atariSet: atariSet),
+                entryLabel: \.label
+            )
         }
         .aspectRatio(1, contentMode: .fit)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("GoBoardCanvas")
-        .accessibilityLabel(boardAccessibilitySummary)
-        .accessibilityHint(isInteractive ? "Double-tap or use board intersections to place a stone." : "")
-        .overlay {
-            if voiceOverEnabled && isInteractive {
-                voiceOverGridOverlay
-            }
-        }
         .onChange(of: isTouchActive) { _, active in
             if !active {
                 dragHoverPoint = nil
@@ -325,7 +355,7 @@ struct GoBoardView: View {
 
     // MARK: - Geometry Layout Math
 
-    private struct BoardMetrics {
+    fileprivate struct BoardMetrics {
         static let stoneRadiusPerCell: CGFloat = 0.465
 
         // A lifted preview has the largest stone-and-shadow footprint.
@@ -477,8 +507,10 @@ struct GoBoardView: View {
             gridPath.move(to: CGPoint(x: x, y: gridMinY))
             gridPath.addLine(to: CGPoint(x: x, y: gridMaxY))
         }
-        let lineWidth: CGFloat = boardState.size >= 19 ? 1.0 : 1.35
-        context.stroke(gridPath, with: .color(palette.gridLine), lineWidth: lineWidth)
+        let isIncreasedContrast = (colorSchemeContrast == .increased)
+        let lineWidth: CGFloat = (boardState.size >= 19 ? 1.0 : 1.35) + (isIncreasedContrast ? 0.45 : 0)
+        let gridStrokeColor: Color = isIncreasedContrast ? palette.starPoint : palette.gridLine
+        context.stroke(gridPath, with: .color(gridStrokeColor), lineWidth: lineWidth)
 
         var borderPath = Path()
         if region.minRow == 0 {
@@ -501,7 +533,7 @@ struct GoBoardView: View {
             borderPath.move(to: CGPoint(x: x, y: m.originY))
             borderPath.addLine(to: CGPoint(x: x, y: m.originY + CGFloat(region.rowCount - 1) * m.cellStep))
         }
-        context.stroke(borderPath, with: .color(palette.gridLine), lineWidth: lineWidth + 0.85)
+        context.stroke(borderPath, with: .color(gridStrokeColor), lineWidth: lineWidth + 0.85)
 
         // 4. Star Points (Hoshi) + Tengen golden glow
         let stars = BoardSize(rawValue: boardState.size)?.starPoints ?? []
@@ -528,17 +560,19 @@ struct GoBoardView: View {
         // 5. Coordinates
         if showCoordinates {
             let fontSize = max(9.5, min(13, m.cellStep * 0.29))
+            let coordColor: Color = isIncreasedContrast ? palette.starPoint : palette.coordText
+            let coordWeight: Font.Weight = isIncreasedContrast ? .bold : .semibold
             for c in region.minCol...region.maxCol {
                 let letter = c < BoardPoint.columnLetters.count ? String(BoardPoint.columnLetters[c]) : ""
                 let x = m.originX + CGFloat(c - region.minCol) * m.cellStep
-                let label = Text(letter).font(AppFont.rounded(size: fontSize, weight: .semibold)).foregroundColor(palette.coordText)
+                let label = Text(letter).font(AppFont.rounded(size: fontSize, weight: coordWeight)).foregroundColor(coordColor)
                 context.draw(label, at: CGPoint(x: x, y: m.padding * 0.44))
                 context.draw(label, at: CGPoint(x: x, y: canvasSize.height - m.padding * 0.44))
             }
             for r in region.minRow...region.maxRow {
                 let num = "\(boardState.size - r)"
                 let y = m.originY + CGFloat(r - region.minRow) * m.cellStep
-                let label = Text(num).font(AppFont.rounded(size: fontSize, weight: .semibold)).foregroundColor(palette.coordText)
+                let label = Text(num).font(AppFont.rounded(size: fontSize, weight: coordWeight)).foregroundColor(coordColor)
                 context.draw(label, at: CGPoint(x: m.padding * 0.44, y: y))
                 context.draw(label, at: CGPoint(x: canvasSize.width - m.padding * 0.44, y: y))
             }
@@ -1267,61 +1301,240 @@ struct GoBoardView: View {
         }
     }
 
-    // MARK: - VoiceOver Full Board Accessibility
+    // MARK: - Full Board Accessibility (VoiceOver, Switch Control, Voice Control, Rotors)
 
-    private var boardAccessibilitySummary: String {
-        let turnLabel = boardState.currentTurn == .black ? "Black" : "White"
+    private var boardL10n: L10n {
+        L10n(language: AppLanguage(rawValue: AppFont.activeLanguageCode) ?? .system)
+    }
+
+    static func accessibilitySummary(for boardState: GoBoardState, l10n: L10n) -> String {
+        let turnLabel = boardState.currentTurn == .black ? l10n.t("stone.black") : l10n.t("stone.white")
         let lastLabel: String
         if case .place(let pt) = boardState.lastMove {
             lastLabel = pt.humanLabel(boardSize: boardState.size)
         } else if case .pass = boardState.lastMove {
-            lastLabel = "Pass"
+            lastLabel = l10n.localized(zh: "停着", en: "Pass", ja: "パス", ko: "패스", zhHant: "停著")
         } else {
-            lastLabel = "None"
+            lastLabel = l10n.localized(zh: "无", en: "None", ja: "なし", ko: "없음", zhHant: "無")
         }
-        return "\(boardState.size) by \(boardState.size) Go board. \(turnLabel) to play. Move \(boardState.moveCount). Last move \(lastLabel). Captures: Black \(boardState.blackCaptures), White \(boardState.whiteCaptures)."
+        let size = boardState.size
+        return l10n.localized(
+            zh: "\(size)路围棋棋盘，轮到\(turnLabel)落子，第\(boardState.moveCount)手，最后一手\(lastLabel)，提子黑\(boardState.blackCaptures)子、白\(boardState.whiteCaptures)子。",
+            en: "\(size) by \(size) Go board. \(turnLabel) to play. Move \(boardState.moveCount). Last move \(lastLabel). Captures: Black \(boardState.blackCaptures), White \(boardState.whiteCaptures).",
+            ja: "\(size)路碁盤。\(turnLabel)の手番、\(boardState.moveCount)手目、最後の一手\(lastLabel)。アゲハマ黒\(boardState.blackCaptures)、白\(boardState.whiteCaptures)。",
+            ko: "\(size)줄 바둑판. \(turnLabel) 차례, \(boardState.moveCount)수, 마지막 수 \(lastLabel). 따낸 돌 흑 \(boardState.blackCaptures), 백 \(boardState.whiteCaptures).",
+            zhHant: "\(size)路圍棋棋盤，輪到\(turnLabel)落子，第\(boardState.moveCount)手，最後一手\(lastLabel)，提子黑\(boardState.blackCaptures)子、白\(boardState.whiteCaptures)子。"
+        )
     }
 
-    private var voiceOverGridOverlay: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            let region = effectiveRegion
-            let m = computeMetrics(side: side, region: region)
-            let hitSize = max(18, m.cellStep)
-
-            ZStack {
-                ForEach(region.minRow...region.maxRow, id: \.self) { r in
-                    ForEach(region.minCol...region.maxCol, id: \.self) { c in
-                        let pt = BoardPoint(row: r, col: c)
-                        let center = m.center(for: pt)
-                        Button {
-                            onSelectPoint?(pt)
-                        } label: {
-                            Color.clear
-                                .frame(width: hitSize, height: hitSize)
-                        }
-                        .position(x: center.x, y: center.y)
-                        .accessibilityLabel(accessibilityLabel(for: pt))
-                    }
-                }
-            }
-            .frame(width: side, height: side)
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
-        }
-    }
-
-    private func accessibilityLabel(for pt: BoardPoint) -> String {
+    static func accessibilityPointLabel(
+        for pt: BoardPoint,
+        boardState: GoBoardState,
+        isPending: Bool = false,
+        isAtari: Bool = false,
+        l10n: L10n
+    ) -> String {
         let coord = pt.humanLabel(boardSize: boardState.size)
         if let stone = boardState.stone(at: pt) {
-            let colorName = stone == .black ? "Black" : "White"
+            let colorName = stone == .black ? l10n.t("stone.black") : l10n.t("stone.white")
             let idx = boardState.index(row: pt.row, col: pt.col)
             let libs = boardState.groupAndLiberties(at: idx)?.liberties.count ?? 0
-            let isLast = (boardState.lastMove == .place(pt)) ? ", last move" : ""
-            return "\(coord), \(colorName) stone, \(libs) liberties\(isLast)"
+            var parts: [String] = [
+                coord,
+                l10n.localized(
+                    zh: "\(colorName)子，\(libs)气",
+                    en: "\(colorName) stone, \(libs) liberties",
+                    ja: "\(colorName)石、\(libs)呼吸点",
+                    ko: "\(colorName)돌, 활로 \(libs)개",
+                    zhHant: "\(colorName)子，\(libs)氣"
+                )
+            ]
+            if isAtari {
+                parts.append(l10n.localized(zh: "叫吃", en: "Atari", ja: "アタリ", ko: "단수", zhHant: "叫吃"))
+            }
+            if boardState.lastMove == .place(pt) {
+                parts.append(l10n.localized(zh: "最后一手", en: "last move", ja: "最後の一手", ko: "마지막 수", zhHant: "最後一手"))
+            }
+            return parts.joined(separator: ", ")
         }
         if boardState.koPoint == pt {
-            return "\(coord), Ko forbidden"
+            return l10n.localized(
+                zh: "\(coord)，打劫禁着点",
+                en: "\(coord), Ko forbidden",
+                ja: "\(coord)、コウ禁止点",
+                ko: "\(coord), 패 금지점",
+                zhHant: "\(coord)，打劫禁著點"
+            )
         }
-        return "\(coord), empty"
+        if isPending {
+            return l10n.localized(
+                zh: "\(coord)，待确认落子点",
+                en: "\(coord), pending placement",
+                ja: "\(coord)、着手確認待ち",
+                ko: "\(coord), 착수 확인 대기",
+                zhHant: "\(coord)，待確認落子點"
+            )
+        }
+        return l10n.localized(
+            zh: "\(coord)，空点",
+            en: "\(coord), empty",
+            ja: "\(coord)、空点",
+            ko: "\(coord), 빈 점",
+            zhHant: "\(coord)，空點"
+        )
+    }
+    private var boardAccessibilityHint: String {
+        guard isInteractive else {
+            return boardL10n.localized(
+                zh: "可逐点浏览当前盘面，或使用转子快速跳到最后一手、叫吃和黑白棋子。",
+                en: "Explore board intersections or use the rotor to jump to the last move, atari, or stones.",
+                ja: "各交点を確認するか、ローターで最後の一手やアタリ、黒石・白石へ移動できます。",
+                ko: "교차점을 탐색하거나 로터로 마지막 수, 단수, 흑돌·백돌로 바로 이동할 수 있습니다.",
+                zhHant: "可逐點瀏覽目前盤面，或使用轉輪快速跳到最後一手、叫吃與黑白棋子。"
+            )
+        }
+        return boardL10n.localized(
+            zh: "选择交叉点落子，或使用转子快速跳到最后一手、叫吃和黑白棋子。",
+            en: "Activate an intersection to place a stone, or use the rotor to jump to the last move, atari, or stones.",
+            ja: "交点を選択して着手するか、ローターで最後の一手やアタリへ移動できます。",
+            ko: "교차점을 선택해 착수하거나 로터로 마지막 수와 단수 지점으로 이동할 수 있습니다.",
+            zhHant: "選擇交叉點落子，或使用轉輪快速跳到最後一手、叫吃與黑白棋子。"
+        )
+    }
+
+    private func rotorEntry(for pt: BoardPoint, atariSet: Set<BoardPoint>) -> GoBoardRotorEntry {
+        GoBoardRotorEntry(
+            id: pt,
+            label: Self.accessibilityPointLabel(
+                for: pt,
+                boardState: boardState,
+                isPending: pendingPoint == pt,
+                isAtari: atariSet.contains(pt),
+                l10n: boardL10n
+            )
+        )
+    }
+
+    private func lastMoveRotorEntries(in region: BoardCropRegion, atariSet: Set<BoardPoint>) -> [GoBoardRotorEntry] {
+        guard case .place(let pt) = boardState.lastMove, region.contains(pt) else { return [] }
+        return [rotorEntry(for: pt, atariSet: atariSet)]
+    }
+
+    private func atariRotorEntries(in region: BoardCropRegion, atariSet: Set<BoardPoint>) -> [GoBoardRotorEntry] {
+        guard !atariSet.isEmpty else { return [] }
+        var entries: [GoBoardRotorEntry] = []
+        for r in region.minRow...region.maxRow {
+            for c in region.minCol...region.maxCol {
+                let pt = BoardPoint(row: r, col: c)
+                if atariSet.contains(pt) {
+                    entries.append(rotorEntry(for: pt, atariSet: atariSet))
+                }
+            }
+        }
+        return entries
+    }
+
+    private func stoneRotorEntries(color: StoneColor, in region: BoardCropRegion, atariSet: Set<BoardPoint>) -> [GoBoardRotorEntry] {
+        var entries: [GoBoardRotorEntry] = []
+        for r in region.minRow...region.maxRow {
+            for c in region.minCol...region.maxCol {
+                let pt = BoardPoint(row: r, col: c)
+                if boardState.stone(at: pt) == color {
+                    entries.append(rotorEntry(for: pt, atariSet: atariSet))
+                }
+            }
+        }
+        return entries
+    }
+}
+
+private struct GoBoardRotorEntry: Identifiable, Hashable {
+    let id: BoardPoint
+    let label: String
+}
+
+private struct GoBoardAccessibilityGrid: View {
+    let boardState: GoBoardState
+    let region: BoardCropRegion
+    let side: CGFloat
+    let atariSet: Set<BoardPoint>
+    let pendingPoint: BoardPoint?
+    let isInteractive: Bool
+    let isDeadStoneReviewMode: Bool
+    let l10n: L10n
+    let metrics: GoBoardView.BoardMetrics
+    let onSelectPoint: ((BoardPoint) -> Void)?
+
+    private var allPoints: [BoardPoint] {
+        var points: [BoardPoint] = []
+        points.reserveCapacity(region.rowCount * region.colCount)
+        for r in region.minRow...region.maxRow {
+            for c in region.minCol...region.maxCol {
+                points.append(BoardPoint(row: r, col: c))
+            }
+        }
+        return points
+    }
+
+    private func pointLabel(_ pt: BoardPoint) -> String {
+        GoBoardView.accessibilityPointLabel(
+            for: pt,
+            boardState: boardState,
+            isPending: pendingPoint == pt,
+            isAtari: atariSet.contains(pt),
+            l10n: l10n
+        )
+    }
+
+    private func pointHint(_ pt: BoardPoint) -> String {
+        guard isInteractive else { return "" }
+        if isDeadStoneReviewMode {
+            return boardState.stone(at: pt) != nil
+                ? l10n.localized(zh: "切换此子死活标记", en: "Toggle dead stone mark", ja: "死石マークを切り替え", ko: "사석 표시 전환", zhHant: "切換此子死活標記")
+                : ""
+        }
+        if boardState.stone(at: pt) == nil && boardState.koPoint != pt {
+            return l10n.localized(zh: "落子", en: "Place a stone", ja: "ここに打つ", ko: "착수", zhHant: "落子")
+        }
+        return ""
+    }
+
+    @ViewBuilder
+    private func intersectionNode(for pt: BoardPoint, hitSize: CGFloat) -> some View {
+        let center = metrics.center(for: pt)
+        let coord = pt.humanLabel(boardSize: boardState.size)
+        let label = pointLabel(pt)
+        let hint = pointHint(pt)
+        let traits: AccessibilityTraits = ((pendingPoint == pt) || (boardState.lastMove == .place(pt))) ? .isSelected : []
+
+        Group {
+            if isInteractive {
+                Button {
+                    onSelectPoint?(pt)
+                } label: {
+                    Color.clear.frame(width: hitSize, height: hitSize)
+                }
+                .accessibilityHint(hint)
+            } else {
+                Color.clear
+                    .frame(width: hitSize, height: hitSize)
+                    .accessibilityElement()
+            }
+        }
+        .id(pt)
+        .position(x: center.x, y: center.y)
+        .accessibilityLabel(label)
+        .accessibilityInputLabels([coord])
+        .accessibilityAddTraits(traits)
+    }
+
+    var body: some View {
+        let hitSize = max(18, metrics.cellStep)
+        ZStack {
+            ForEach(allPoints, id: \.self) { pt in
+                intersectionNode(for: pt, hitSize: hitSize)
+            }
+        }
+        .frame(width: side, height: side)
     }
 }

@@ -35,8 +35,6 @@ enum GoRadarCalculator {
 
 struct GoPassportView: View {
     @EnvironmentObject var appState: AppState
-    // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-    // @ObservedObject private var gameCenter = GameCenterService.shared
     @State private var stoneFeedbackMessage: String? = nil
     @State private var renderedShareImage: UIImage? = nil
     @State private var showShareParentalGate = false
@@ -65,8 +63,6 @@ struct GoPassportView: View {
                         radarChartCard
                         stoneCabinetCard
                         islandStampBookCard
-                        // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-                        // leaderboardsButton
                     }
                     .frame(maxWidth: 820)
                     .padding(.horizontal, 20)
@@ -178,7 +174,7 @@ struct GoPassportView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
         }
     }
 
@@ -332,7 +328,7 @@ struct GoPassportView: View {
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(AppTheme.canvasBackground))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(appState.savedGames.prefix(5)) { record in
+                    ForEach(appState.savedGames.prefix(3)) { record in
                         SavedGameRecordRow(
                             record: record,
                             l10n: l10n,
@@ -590,104 +586,6 @@ struct GoPassportView: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-    /* [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-    private var leaderboardsButton: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 16, weight: .black, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(LinearGradient(colors: [AppTheme.skyTop, AppTheme.skyBottom], startPoint: .top, endPoint: .bottom)))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Game Center")
-                            .font(AppFont.rounded(size: 15, weight: .black))
-                            .foregroundColor(AppTheme.inkPrimary)
-                        Text(
-                            gameCenter.isAuthenticated
-                            ? (gameCenter.playerDisplayName ?? l10n.localized(zh: "已连接 Apple Game Center", en: "Connected to Apple Game Center", ja: "Game Center 接続済み", ko: "Game Center 연결됨", zhHant: "已連接 Apple Game Center"))
-                            : l10n.localized(zh: "登录同步全球排行、成就与好友回合对战", en: "Sign in for Leaderboards, Achievements & Friend Matches", ja: "サインインしてランキング・実績・フレンド対局を利用", ko: "로그인하여 글로벌 랭킹·업적·친구 대국 이용", zhHant: "登入同步全球排行、成就與好友回合對戰")
-                        )
-                        .font(AppFont.rounded(size: 11.5, weight: .semibold))
-                        .foregroundColor(AppTheme.inkSecondary)
-                    }
-                }
-                Spacer()
-                if !gameCenter.isAuthenticated {
-                    Button {
-                        SoundAndHapticsManager.shared.playUITap()
-                        gameCenter.authenticateIfNeeded(presentLoginIfNeeded: true)
-                    } label: {
-                        Text(l10n.localized(zh: "登录", en: "Sign In", ja: "サインイン", ko: "로그인", zhHant: "登入"))
-                            .font(AppFont.rounded(size: 12.5, weight: .black))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
-                } else {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 20, design: .rounded))
-                        .foregroundColor(AppTheme.mintBottom)
-                        .accessibilityLabel(l10n.localized(zh: "已登录 Game Center", en: "Signed in to Game Center", ja: "Game Center サインイン済み", ko: "Game Center 로그인됨", zhHant: "已登入 Game Center"))
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button {
-                    SoundAndHapticsManager.shared.playUITap()
-                    gameCenter.presentLeaderboards()
-                } label: {
-                    Label(
-                        l10n.localized(zh: "全球排行", en: "Leaderboards", ja: "ランキング", ko: "랭킹", zhHant: "全球排行"),
-                        systemImage: "trophy.fill"
-                    )
-                    .font(AppFont.rounded(size: 13, weight: .black))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-
-                Button {
-                    SoundAndHapticsManager.shared.playUITap()
-                    gameCenter.presentAchievements()
-                } label: {
-                    Label(
-                        l10n.localized(zh: "成就勋章", en: "Achievements", ja: "実績バッジ", ko: "업적 배지", zhHant: "成就勳章"),
-                        systemImage: "rosette"
-                    )
-                    .font(AppFont.rounded(size: 13, weight: .black))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-
-                if !gameCenter.isMultiplayerRestricted {
-                    Button {
-                        SoundAndHapticsManager.shared.playUITap()
-                        gameCenter.presentTurnBasedFriendMatch()
-                    } label: {
-                        Label(
-                            l10n.localized(zh: "好友对战", en: "Friends", ja: "フレンド", ko: "친구 대국", zhHant: "好友對戰"),
-                            systemImage: "person.2.fill"
-                        )
-                        .font(AppFont.rounded(size: 13, weight: .black))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                }
-            }
-        }
-        .warmCard(cornerRadius: 24, padding: 16)
-    }
-    */
 
     @MainActor
     private func renderShareableSnapshot() {

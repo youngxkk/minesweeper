@@ -10,10 +10,8 @@ struct TrainingDojoView: View {
 
     enum DojoSection: String, CaseIterable, Identifiable {
         case tsumego
-        case srsMistakes
         case joseki
         case drills
-        case exams
 
         var id: String { rawValue }
     }
@@ -21,71 +19,61 @@ struct TrainingDojoView: View {
     @State private var selectedSection: DojoSection = .tsumego
     @State private var selectedRankBand: DojoRankBand = .all
     @State private var selectedCategory: PuzzleCategory? = nil
+    @State private var showExamPortalModal: Bool = false
 
-    private let selectionTint = Color(red: 0.24, green: 0.36, blue: 0.29)
-    private let badgeFill = Color(red: 0.94, green: 0.92, blue: 0.87)
-    private let paperPalette = GlossyPalette(
-        top: .white,
-        bottom: Color(red: 0.99, green: 0.98, blue: 0.96),
-        rim: Color(red: 0.85, green: 0.82, blue: 0.75),
-        glow: Color(red: 0.41, green: 0.33, blue: 0.22)
-    )
+    private let selectionTint = AppTheme.skyBottom
+    private let badgeFill = AppTheme.skyTop.opacity(0.14)
 
     private var l10n: L10n { appState.l10n }
 
+    private var availableCategories: [PuzzleCategory] {
+        selectedRankBand.availableCategories(includeExpandedPack: true)
+    }
+
+    private var categoryCounts: [PuzzleCategory: Int] {
+        DojoPuzzleBank.categoryCounts(for: selectedRankBand, includeExpandedPack: true)
+    }
+
     private var filteredDojoPuzzles: [GoPuzzle] {
-        DojoPuzzleBank.puzzles(category: selectedCategory, rankBand: selectedRankBand, includeExpandedPack: true)
+        let effectiveCategory = selectedCategory.flatMap { availableCategories.contains($0) ? $0 : nil }
+        return DojoPuzzleBank.puzzles(category: effectiveCategory, rankBand: selectedRankBand, includeExpandedPack: true)
     }
 
     var body: some View {
         ZStack {
-            SceneBackdrop.morningDojo
+            SceneBackdrop.termAlbum
 
             VStack(spacing: 14) {
-                // Header
-                HStack {
-                    Button {
-                        appState.popRoute()
-                    } label: {
-                        Label(l10n.t("common.back"), systemImage: "arrow.uturn.backward")
-                            .font(AppFont.rounded(size: 14, weight: .heavy))
-                            .foregroundColor(AppTheme.inkPrimary)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: AppTheme.buttonFaceHeight)
-                    }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: paperPalette, rimHeight: 3))
+                // Header with independent Rank Exam Hall entry in the top-right corner
+                ZStack {
+                    GameTitleCrest(
+                        title: l10n.localized(zh: "题库考级", en: "Drills & Exams", ja: "問題集・段級位", ko: "문제집·승급시험", zhHant: "題庫考級"),
+                        subtitle: l10n.localized(
+                            zh: "\(DojoPuzzleBank.fullCatalog.count)+ 题库 · 定式破招 · 专项训练",
+                            en: "\(DojoPuzzleBank.fullCatalog.count)+ Puzzles · Joseki · Drills",
+                            ja: "\(DojoPuzzleBank.fullCatalog.count)+ 詰碁 · 定石対策 · 特訓",
+                            ko: "\(DojoPuzzleBank.fullCatalog.count)+ 사활 문제 · 정석 · 특훈",
+                            zhHant: "\(DojoPuzzleBank.fullCatalog.count)+ 題庫 · 定石破招 · 專項訓練"
+                        )
+                    )
 
-                    VStack(spacing: 3) {
-                        Text(l10n.localized(zh: "围棋道场", en: "Go Training Dojo", ja: "囲碁道場", ko: "바둑 도장", zhHant: "圍棋道場"))
-                            .font(AppFont.rounded(size: 20, weight: .black))
-                            .foregroundColor(AppTheme.inkPrimary)
-                        Text(l10n.localized(
-                            zh: "\(DojoPuzzleBank.fullCatalog.count)+ 题库 · 定式破招 · 专项训练 · 考级室",
-                            en: "\(DojoPuzzleBank.fullCatalog.count)+ Puzzles · Joseki · Drills · Rank Exams",
-                            ja: "\(DojoPuzzleBank.fullCatalog.count)+ 詰碁 · 定石対策 · 特訓 · 段級位試験",
-                            ko: "\(DojoPuzzleBank.fullCatalog.count)+ 사활 문제 · 정석 · 특훈 · 급·단 승급 시험",
-                            zhHant: "\(DojoPuzzleBank.fullCatalog.count)+ 題庫 · 定石破招 · 專項訓練 · 考級室"
-                        ))
-                            .font(AppFont.rounded(size: 11, weight: .semibold))
-                            .foregroundColor(AppTheme.inkSecondary)
+                    HStack {
+                        GameBackButton(title: l10n.t("common.back")) {
+                            appState.popRoute()
+                        }
+                        Spacer()
+                        examHallTopRightButton
                     }
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-
-                    Color.clear
-                        .frame(width: 72, height: 1)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 14)
 
-                // Top 5 Section Tabs
+                // Top 3 Training Section Tabs
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         sectionTab(.tsumego, title: l10n.localized(zh: "分级题库 (\(DojoPuzzleBank.fullCatalog.count))", en: "Tsumego (\(DojoPuzzleBank.fullCatalog.count))", ja: "詰碁問題集 (\(DojoPuzzleBank.fullCatalog.count))", ko: "등급별 문제집 (\(DojoPuzzleBank.fullCatalog.count))", zhHant: "分級題庫 (\(DojoPuzzleBank.fullCatalog.count))"), icon: "square.grid.2x2.fill")
-                        sectionTab(.srsMistakes, title: l10n.localized(zh: "SRS 错题 (\(appState.puzzleProgress.srsMistakeItems.count))", en: "SRS Review (\(appState.puzzleProgress.srsMistakeItems.count))", ja: "SRS 復習 (\(appState.puzzleProgress.srsMistakeItems.count))", ko: "SRS 오답 복습 (\(appState.puzzleProgress.srsMistakeItems.count))", zhHant: "SRS 錯題 (\(appState.puzzleProgress.srsMistakeItems.count))"), icon: "bookmark.fill")
                         sectionTab(.joseki, title: l10n.localized(zh: "定式与破招", en: "Joseki Tree", ja: "定石と対策", ko: "정석과 파훼", zhHant: "定石與破招"), icon: "arrow.triangle.branch")
                         sectionTab(.drills, title: l10n.localized(zh: "五大专项小练", en: "5 Mini-Drills", ja: "5大ミニ特訓", ko: "5대 미니 특훈", zhHant: "五大專項小練"), icon: "bolt.circle.fill")
-                        sectionTab(.exams, title: l10n.localized(zh: "星弈考级室", en: "Rank Exams", ja: "段級位試験室", ko: "급·단 승급 시험실", zhHant: "星弈考級室"), icon: "rosette")
                     }
                     .padding(.horizontal, 24)
                 }
@@ -96,22 +84,44 @@ struct TrainingDojoView: View {
                         switch selectedSection {
                         case .tsumego:
                             tsumegoSection
-                        case .srsMistakes:
-                            srsMistakesSection
                         case .joseki:
                             josekiSection
                         case .drills:
                             drillsSection
-                        case .exams:
-                            examsPreviewSection
                         }
                     }
                     .padding(.horizontal, 24)
                     .padding(.bottom, 30)
                 }
             }
+
+            if showExamPortalModal {
+                examPortalModalOverlay
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                    .zIndex(50)
+            }
         }
+        .animation(.spring(response: 0.28, dampingFraction: 0.82), value: showExamPortalModal)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var examHallTopRightButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                showExamPortalModal = true
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "rosette")
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                Text(l10n.localized(zh: "星弈考级室", en: "Exam Hall", ja: "段級位試験室", ko: "승급 시험실", zhHant: "星弈考級室"))
+                    .font(AppFont.rounded(size: 13.5, weight: .black))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+        }
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
     }
 
     private func sectionTab(_ section: DojoSection, title: String, icon: String) -> some View {
@@ -127,7 +137,12 @@ struct TrainingDojoView: View {
                 .foregroundColor(active ? .white : AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
                 .frame(minHeight: AppTheme.buttonFaceHeight)
-                .background(Capsule().fill(active ? selectionTint : .white))
+                .background(
+                    Capsule()
+                        .fill(active ? selectionTint : Color.white.opacity(0.94))
+                        .shadow(color: active ? selectionTint.opacity(0.26) : Color.black.opacity(0.05), radius: 6, y: 2)
+                )
+                .overlay(Capsule().strokeBorder(.white, lineWidth: active ? 2 : 1.5))
         }
         .tactileButton(scale: 0.97, sound: false)
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -136,7 +151,9 @@ struct TrainingDojoView: View {
     // MARK: - 1. 320+ Graded Tsumego Bank
 
     private var tsumegoSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let bandCategories = availableCategories
+        let counts = categoryCounts
+        return VStack(alignment: .leading, spacing: 14) {
             // Rank Band Filter
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -144,9 +161,13 @@ struct TrainingDojoView: View {
                         let selected = selectedRankBand == band
                         Button {
                             selectedRankBand = band
+                            if let currentCat = selectedCategory,
+                               !band.availableCategories(includeExpandedPack: true).contains(currentCat) {
+                                selectedCategory = nil
+                            }
                             SoundAndHapticsManager.shared.playUITap()
                         } label: {
-                            Text(band.title(isChinese: l10n.language.isChinese))
+                            Text(band.title(l10n))
                                 .font(AppFont.rounded(size: 12, weight: .black))
                                 .foregroundColor(selected ? .white : AppTheme.inkPrimary)
                                 .padding(.horizontal, 12)
@@ -160,12 +181,18 @@ struct TrainingDojoView: View {
                 }
             }
 
-            // 6-Category Filter
+            // Rank-Tailored Topic Filter (adapts categories & labels per selected rank band)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    categoryChip(nil, title: l10n.localized(zh: "全部题型", en: "All Topics", ja: "すべての分野", ko: "전체 유형", zhHant: "全部題型"), icon: "sparkles")
-                    ForEach(PuzzleCategory.allCases) { cat in
-                        categoryChip(cat, title: cat.displayTitle(isChinese: l10n.language.isChinese), icon: cat.symbolName)
+                    categoryChip(
+                        nil,
+                        title: l10n.localized(zh: "全部题型", en: "All Topics", ja: "すべての分野", ko: "전체 유형", zhHant: "全部題型"),
+                        icon: "sparkles"
+                    )
+                    ForEach(bandCategories) { cat in
+                        let count = counts[cat] ?? 0
+                        let title = selectedRankBand.categoryTitle(for: cat, l10n: l10n)
+                        categoryChip(cat, title: "\(title) (\(count))", icon: cat.symbolName)
                     }
                 }
             }
@@ -215,11 +242,11 @@ struct TrainingDojoView: View {
                 HStack {
                     Text(puzzle.rankBadge)
                         .font(AppFont.rounded(size: 12, weight: .black))
-                        .foregroundColor(AppTheme.inkPrimary)
+                        .foregroundColor(AppTheme.skyBottom)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(badgeFill))
-                    Text(puzzle.category.displayTitle(isChinese: l10n.language.isChinese))
+                    Text(selectedRankBand.categoryTitle(for: puzzle.category, l10n: l10n))
                         .font(AppFont.rounded(size: 12, weight: .bold))
                         .foregroundColor(AppTheme.inkSecondary)
                     Spacer()
@@ -239,106 +266,17 @@ struct TrainingDojoView: View {
                     ForEach(1...3, id: \.self) { i in
                         Image(systemName: i <= stars ? "star.fill" : "star")
                             .font(.system(size: 12, design: .rounded))
-                            .foregroundColor(i <= stars ? AppTheme.sunBottom : AppTheme.inkSecondary.opacity(0.55))
+                            .foregroundColor(i <= stars ? AppTheme.sunBottom : AppTheme.inkSecondary.opacity(0.45))
                     }
                 }
             }
             .padding(18)
             .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: paperPalette, cornerRadius: 22, rimHeight: 3, whiteBorderWidth: 2, pressStyle: .card))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 2.5, whiteBorderWidth: 2.5, pressStyle: .card))
     }
 
-    // MARK: - 2. SRS Spaced-Repetition Mistake Book + Personal Game Blunders
-
-    private var srsMistakesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: "brain.head.profile")
-                    .font(.system(size: 26, weight: .black, design: .rounded))
-                    .foregroundColor(AppTheme.coralBottom)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(l10n.localized(
-                        zh: "艾宾浩斯间隔重复错题本（1天 → 3天 → 7天巩固）",
-                        en: "Spaced-Repetition Mistake Book (1d -> 3d -> 7d)",
-                        ja: "忘却曲線・間隔反復ミスノート（1日後 → 3日後 → 7日後）",
-                        ko: "에빙하우스 간격 반복 오답노트 (1일 → 3일 → 7일 복습)",
-                        zhHant: "艾賓浩斯間隔重複錯題本（1天 → 3天 → 7天鞏固）"
-                    ))
-                        .font(AppFont.rounded(size: 15, weight: .black))
-                        .foregroundColor(AppTheme.inkPrimary)
-                    Text(l10n.localized(
-                        zh: "包含刷题错题 + AI 复盘一键转化的「我的实战恶手题」，连续答对 3 轮彻底毕业！",
-                        en: "Combines tsumego mistakes & your own game blunders. Pass 3 review intervals to master!",
-                        ja: "詰碁のミスとAI検討から変換した実戦の悪手を収録。3回連続正解でマスター！",
-                        ko: "사활 오답과 AI 복기에서 변환한 실전 악수 문제를 수록. 3회 연속 정답 시 마스터!",
-                        zhHant: "包含刷題錯題 + AI 復盤一鍵轉化的「我的實戰惡手題」，連續答對 3 輪徹底畢業！"
-                    ))
-                        .font(AppFont.rounded(size: 12, weight: .bold))
-                        .foregroundColor(AppTheme.inkSecondary)
-                }
-            }
-            .warmCard(cornerRadius: 22, padding: 14)
-
-            if appState.puzzleProgress.srsMistakeItems.isEmpty {
-                VStack(spacing: 10) {
-                    Text("🏆").font(AppFont.rounded(size: 46, weight: .regular))
-                    Text(l10n.localized(
-                        zh: "目前没有待复习的错题！去刷题或用 AI 复盘收集实战恶手吧。",
-                        en: "No mistakes due! Solve puzzles or convert game blunders in AI Review.",
-                        ja: "復習待ちのミスはありません！問題を解くかAI検討で実戦の悪手を登録しましょう。",
-                        ko: "복습할 오답이 없습니다! 문제를 풀거나 AI 복기에서 실전 악수를 수집해 보세요.",
-                        zhHant: "目前沒有待複習的錯題！去刷題或用 AI 復盤收集實戰惡手吧。"
-                    ))
-                        .font(AppFont.rounded(size: 14, weight: .bold))
-                        .foregroundColor(AppTheme.inkSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 36)
-                .warmCard(cornerRadius: 24, padding: 16)
-            } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 250, maximum: 340), spacing: 14)], spacing: 14) {
-                    ForEach(appState.puzzleProgress.srsMistakeItems) { item in
-                        if let puzzle = appState.findAnyPuzzle(withId: item.puzzleId) {
-                            Button {
-                                appState.navigationPath.append(.puzzlePlay(puzzleId: puzzle.id, isDailyChallenge: false, isStarterBootcamp: false))
-                            } label: {
-                                VStack(alignment: .leading, spacing: 7) {
-                                    HStack {
-                                        Text(item.isDueNow
-                                             ? l10n.localized(zh: "今日待复习", en: "Due Now", ja: "本日復習", ko: "오늘 복습", zhHant: "今日待複習")
-                                             : l10n.localized(zh: "\(item.intervalDays)天后复习", en: "In \(item.intervalDays)d", ja: "\(item.intervalDays)日後に復習", ko: "\(item.intervalDays)일 후 복습", zhHant: "\(item.intervalDays)天後複習"))
-                                            .font(AppFont.rounded(size: 11, weight: .black))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 9)
-                                            .padding(.vertical, 3)
-                                            .background(Capsule().fill(item.isDueNow ? AppTheme.coralBottom : AppTheme.mintBottom))
-                                        Spacer()
-                                        Text(l10n.localized(zh: "巩固进度 \(item.correctStreak)/3", en: "Mastery \(item.correctStreak)/3", ja: "定着度 \(item.correctStreak)/3", ko: "숙달도 \(item.correctStreak)/3", zhHant: "鞏固進度 \(item.correctStreak)/3"))
-                                            .font(AppFont.rounded(size: 11, weight: .heavy))
-                                            .foregroundColor(AppTheme.skyBottom)
-                                    }
-                                    Text(puzzle.title(l10n))
-                                        .font(AppFont.rounded(size: 15, weight: .black))
-                                        .foregroundColor(AppTheme.inkPrimary)
-                                        .lineLimit(1)
-                                    Text(puzzle.prompt(l10n))
-                                        .font(AppFont.rounded(size: 12, weight: .semibold))
-                                        .foregroundColor(AppTheme.inkSecondary)
-                                        .lineLimit(2)
-                                }
-                                .padding(14)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 4, whiteBorderWidth: 2.5, pressStyle: .card))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - 3. Interactive Joseki Courses
+    // MARK: - 2. Interactive Joseki Courses
 
     private var josekiSection: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 420), spacing: 16)], spacing: 16) {
@@ -373,7 +311,7 @@ struct TrainingDojoView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 3, whiteBorderWidth: 3, pressStyle: .card))
             }
         }
     }
@@ -416,50 +354,162 @@ struct TrainingDojoView: View {
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 28, rimHeight: 6, whiteBorderWidth: 3.5, pressStyle: .card))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 28, rimHeight: 4, whiteBorderWidth: 3.5, pressStyle: .card))
             }
         }
     }
 
-    // MARK: - 5. Rank Exam Hall Portal
+    // MARK: - 4. Rank Exam Hall Centered Modal Portal
 
-    private var examsPreviewSection: some View {
-        VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(l10n.localized(zh: "星弈正规段级位认证体系", en: "StarYi Official Rank Certification", ja: "StarYi 公式段級位認定システム", ko: "StarYi 공식 급·단 인증 시스템", zhHant: "星弈正規段級位認證體系"))
-                        .font(AppFont.rounded(size: 18, weight: .black))
-                        .foregroundColor(AppTheme.inkPrimary)
-                    Spacer()
-                    Text(l10n.localized(zh: "当前认证：\(appState.profile.rankString)", en: "Current: \(appState.profile.rankString)", ja: "現在の段級位：\(appState.profile.rankString)", ko: "현재 인증: \(appState.profile.rankString)", zhHant: "當前認證：\(appState.profile.rankString)"))
-                        .font(AppFont.rounded(size: 13, weight: .black))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(AppTheme.mintBottom))
+    private var examPortalModalOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.42)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.85)) {
+                        showExamPortalModal = false
+                    }
                 }
-                Text(l10n.localized(
-                    zh: "每个段级位都需要同时通过【考场无辅助笔试 5 题（对 4 题）】+【定时无悔棋晋级实战赛】，真正检验棋力！",
-                    en: "Each certified rank requires BOTH an Exam-Mode 5-puzzle test (4/5+) AND a timed no-undo promotion match series!",
-                    ja: "各段級位の認定には【補助なし筆記試験 5問中4問正解】と【時間制限・待ったなし昇級昇段対局】の両方の合格が必要です！",
-                    ko: "각 급·단 인증을 받으려면 [무보조 필기시험 5문제 중 4문제 정답]과 [시간제한·무르기 금지 승급 대국]을 모두 통과해야 합니다!",
-                    zhHant: "每個段級位都需要同時通過【考場無輔助筆試 5 題（對 4 題）】+【定時無悔棋晉級實戰賽】，真正檢驗棋力！"
-                ))
-                    .font(AppFont.rounded(size: 13, weight: .bold))
-                    .foregroundColor(AppTheme.inkSecondary)
 
+            VStack(spacing: 18) {
+                // Top-right close button
+                HStack {
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.24, dampingFraction: 0.85)) {
+                            showExamPortalModal = false
+                        }
+                        SoundAndHapticsManager.shared.playUITap()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundColor(AppTheme.inkSecondary)
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(AppTheme.skyTop.opacity(0.14)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(l10n.localized(zh: "关闭", en: "Close", ja: "閉じる", ko: "닫기", zhHant: "關閉"))
+                }
+                .padding(.bottom, -10)
+
+                // Emblem Medallion
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.mintTop, AppTheme.mintBottom],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 68, height: 68)
+                        .overlay(Circle().strokeBorder(.white, lineWidth: 3))
+                        .shadow(color: AppTheme.mintBottom.opacity(0.32), radius: 10, y: 4)
+
+                    Image(systemName: "rosette")
+                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .foregroundColor(.white)
+                }
+
+                // Title & Current Certified Rank Badge
+                VStack(spacing: 8) {
+                    Text(l10n.localized(zh: "星弈考级室", en: "StarYi Rank Exam Hall", ja: "StarYi 段級位試験室", ko: "StarYi 승급 시험실", zhHant: "星弈考級室"))
+                        .font(AppFont.rounded(size: 22, weight: .black))
+                        .foregroundColor(AppTheme.inkPrimary)
+
+                    Text(l10n.localized(
+                        zh: "当前官方认证：\(appState.profile.rankString)",
+                        en: "Certified Rank: \(appState.profile.rankString)",
+                        ja: "現在の認定段級位：\(appState.profile.rankString)",
+                        ko: "현재 공식 인증: \(appState.profile.rankString)",
+                        zhHant: "當前官方認證：\(appState.profile.rankString)"
+                    ))
+                    .font(AppFont.rounded(size: 12.5, weight: .black))
+                    .foregroundColor(AppTheme.mintBottom)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(AppTheme.mintTop.opacity(0.16)))
+                }
+
+                // Brief Introduction
+                Text(l10n.localized(
+                    zh: "正规段级位双轨认证，全面检验真实棋力：",
+                    en: "Official dual-track certification to verify your true Go strength:",
+                    ja: "公式の2段階認定で、確かな実力を証明しましょう：",
+                    ko: "공식 2단계 인증으로 진짜 바둑 실력을 검증하세요:",
+                    zhHant: "正規段級位雙軌認證，全面檢驗真實棋力："
+                ))
+                .font(AppFont.rounded(size: 13.5, weight: .bold))
+                .foregroundColor(AppTheme.inkSecondary)
+                .multilineTextAlignment(.center)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    examRuleRow(
+                        icon: "pencil.and.list.clipboard",
+                        tint: AppTheme.grapeBottom,
+                        text: l10n.localized(
+                            zh: "无辅助死活笔试：每级 5 题，答对 4 题即通过",
+                            en: "Written Test: 5 no-hint puzzles (4/5 to pass)",
+                            ja: "補助なし筆記試験：5問中4問正解で合格",
+                            ko: "무보조 필기시험: 5문제 중 4문제 정답 시 합격",
+                            zhHant: "無輔助死活筆試：每級 5 題，答對 4 題即通過"
+                        )
+                    )
+                    examRuleRow(
+                        icon: "flag.checkered",
+                        tint: AppTheme.skyBottom,
+                        text: l10n.localized(
+                            zh: "定时无悔棋实战：赢得定级晋级赛，领取官方认证",
+                            en: "Timed Promotion Matches: No undo, earn official rank",
+                            ja: "時間制限・待ったなし昇級対局で公式認定を獲得",
+                            ko: "시간제한·무르기 금지 승급 대국으로 공식 인증 획득",
+                            zhHant: "定時無悔棋實戰：贏得定級晉級賽，領取官方認證"
+                        )
+                    )
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(AppTheme.skyTop.opacity(0.08))
+                )
+
+                // Centered Action Button (compact & balanced, not full-screen-wide)
                 Button {
+                    showExamPortalModal = false
                     appState.navigationPath.append(.rankExamHall)
                 } label: {
-                    Label(l10n.localized(zh: "进入星弈考级室 →", en: "Enter Rank Exam Hall →", ja: "段級位試験室へ →", ko: "승급 시험실 입장 →", zhHant: "進入星弈考級室 →"), systemImage: "rosette")
-                        .font(AppFont.rounded(size: 16, weight: .black))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                    Label(
+                        l10n.localized(zh: "进入星弈考级室", en: "Enter Exam Hall", ja: "段級位試験室へ", ko: "승급 시험실 입장", zhHant: "進入星弈考級室"),
+                        systemImage: "arrow.right.circle.fill"
+                    )
+                    .font(AppFont.rounded(size: 16, weight: .black))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 13)
+                    .frame(minWidth: 220)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
+                .padding(.top, 2)
             }
-            .warmCard(cornerRadius: 26, padding: 18)
+            .frame(maxWidth: 420)
+            .warmCard(cornerRadius: 30, padding: 24)
+            .padding(.horizontal, 24)
+            .shadow(color: Color.black.opacity(0.22), radius: 24, y: 12)
+        }
+    }
+
+    private func examRuleRow(icon: String, tint: Color, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .black, design: .rounded))
+                .foregroundColor(tint)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(tint.opacity(0.14)))
+            Text(text)
+                .font(AppFont.rounded(size: 13, weight: .bold))
+                .foregroundColor(AppTheme.inkPrimary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

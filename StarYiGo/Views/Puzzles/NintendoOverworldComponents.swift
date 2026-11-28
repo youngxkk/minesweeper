@@ -140,7 +140,7 @@ struct GoStonePedestalPin: View {
                     .blur(radius: 4)
                     .offset(y: 12)
 
-                // Breathing selection / frontier aura ring
+                // Breathing selection / frontier aura ring (or subtle dashed arcane seal ring when locked)
                 if unlockState == .active || isSelected {
                     Ellipse()
                         .stroke(
@@ -151,6 +151,14 @@ struct GoStonePedestalPin: View {
                             width: (isSelected ? 86 : 76) + (activePulse ? 8 : 0),
                             height: (isSelected ? 40 : 34) + (activePulse ? 4 : 0)
                         )
+                        .offset(y: 4)
+                } else if unlockState == .locked {
+                    Ellipse()
+                        .stroke(
+                            Color.white.opacity(0.55),
+                            style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 5])
+                        )
+                        .frame(width: 72, height: 36)
                         .offset(y: 4)
                 }
 
@@ -164,7 +172,12 @@ struct GoStonePedestalPin: View {
 
                     // White Nintendo candy outline
                     Ellipse()
-                        .strokeBorder(Color.white.opacity(unlockState == .locked ? 0.72 : 0.96), lineWidth: isSelected ? 3.2 : 2.4)
+                        .strokeBorder(
+                            unlockState == .locked
+                                ? Color(red: 0.86, green: 0.91, blue: 1.0).opacity(0.88)
+                                : Color.white.opacity(0.96),
+                            lineWidth: isSelected ? 3.2 : 2.4
+                        )
                         .background(
                             Ellipse().fill(
                                 LinearGradient(
@@ -180,7 +193,7 @@ struct GoStonePedestalPin: View {
                     Ellipse()
                         .fill(
                             LinearGradient(
-                                colors: [Color.white.opacity(unlockState == .locked ? 0.18 : 0.42), .clear],
+                                colors: [Color.white.opacity(unlockState == .locked ? 0.26 : 0.42), .clear],
                                 startPoint: .top,
                                 endPoint: .center
                             )
@@ -197,6 +210,9 @@ struct GoStonePedestalPin: View {
                 if unlockState == .cleared {
                     clearedBannerBadge
                         .offset(x: 24, y: -20)
+                } else if unlockState == .locked {
+                    lockedSealMedallion
+                        .offset(x: 23, y: -15)
                 }
 
                 // 3-Star arc pips on the front rim for cleared / in-progress stages
@@ -248,7 +264,7 @@ struct GoStonePedestalPin: View {
 
     private var rimColor: Color {
         switch unlockState {
-        case .locked: return Color(red: 0.34, green: 0.39, blue: 0.46)
+        case .locked: return Color(red: 0.21, green: 0.27, blue: 0.40)
         case .active: return palette.rim
         case .cleared: return isBossDefeated ? AppTheme.sunRim : AppTheme.mintRim
         }
@@ -257,7 +273,7 @@ struct GoStonePedestalPin: View {
     private var topGradientColors: [Color] {
         switch unlockState {
         case .locked:
-            return [Color(red: 0.62, green: 0.67, blue: 0.74), Color(red: 0.46, green: 0.51, blue: 0.58)]
+            return [Color(red: 0.48, green: 0.56, blue: 0.72), Color(red: 0.30, green: 0.38, blue: 0.54)]
         case .active:
             return [palette.top, palette.bottom]
         case .cleared:
@@ -271,9 +287,10 @@ struct GoStonePedestalPin: View {
     private var pedestalCenterMark: some View {
         switch unlockState {
         case .locked:
-            Image(systemName: "lock.fill")
-                .font(.system(size: 12, weight: .black, design: .rounded))
-                .foregroundColor(.white.opacity(0.92))
+            Text(stageCode)
+                .font(AppFont.rounded(size: 11, weight: .black))
+                .foregroundColor(Color.white.opacity(0.84))
+                .shadow(color: Color.black.opacity(0.32), radius: 1.5, y: 1)
         case .active:
             Text(stageCode)
                 .font(AppFont.rounded(size: 12.5, weight: .black))
@@ -284,6 +301,25 @@ struct GoStonePedestalPin: View {
                 .font(.system(size: 13, weight: .black, design: .rounded))
                 .foregroundColor(.white)
                 .shadow(color: Color.black.opacity(0.28), radius: 1.5, y: 1)
+        }
+    }
+
+    private var lockedSealMedallion: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.99, green: 0.82, blue: 0.38), Color(red: 0.86, green: 0.56, blue: 0.16)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 22, height: 22)
+                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                .shadow(color: Color.black.opacity(0.28), radius: 4, y: 2)
+            Image(systemName: "lock.fill")
+                .font(.system(size: 9.5, weight: .black, design: .rounded))
+                .foregroundColor(.white)
         }
     }
 
@@ -309,7 +345,7 @@ struct GoStonePedestalPin: View {
     private var stageLabelPill: some View {
         Text(displayName)
             .font(AppFont.rounded(size: isSelected ? 12 : 10.5, weight: .black))
-            .foregroundColor(unlockState == .locked ? Color.white.opacity(0.86) : (isSelected ? .white : AppTheme.inkPrimary))
+            .foregroundColor(unlockState == .locked ? Color(red: 0.93, green: 0.96, blue: 1.0) : (isSelected ? .white : AppTheme.inkPrimary))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, isSelected ? 10 : 8)
@@ -318,14 +354,14 @@ struct GoStonePedestalPin: View {
                 Capsule()
                     .fill(
                         unlockState == .locked
-                            ? AnyShapeStyle(Color.black.opacity(0.42))
+                            ? AnyShapeStyle(Color(red: 0.16, green: 0.22, blue: 0.35).opacity(0.76))
                             : (isSelected
                                 ? AnyShapeStyle(LinearGradient(colors: [palette.top, palette.bottom], startPoint: .top, endPoint: .bottom))
                                 : AnyShapeStyle(Color.white.opacity(0.92)))
                     )
-                    .overlay(Capsule().strokeBorder(.white.opacity(unlockState == .locked ? 0.45 : 0.95), lineWidth: isSelected ? 2 : 1.2))
+                    .overlay(Capsule().strokeBorder(.white.opacity(unlockState == .locked ? 0.62 : 0.95), lineWidth: isSelected ? 2 : 1.2))
             )
-            .shadow(color: Color.black.opacity(0.20), radius: 4, y: 2)
+            .shadow(color: Color.black.opacity(0.22), radius: 4, y: 2)
     }
 }
 

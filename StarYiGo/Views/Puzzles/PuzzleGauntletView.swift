@@ -167,22 +167,22 @@ struct MistakeReviewRecoverySheet: View {
                     } else {
                         let sideW = min(360, max(270, geo.size.width * 0.42))
                         let side = max(220, min(geo.size.width - sideW - pad * 3, geo.size.height - 92))
-                        HStack(alignment: .top, spacing: pad) {
+                        HStack(alignment: .center, spacing: pad) {
                             reviewBoard
                                 .frame(width: side, height: side)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                             VStack(spacing: 10) {
                                 ScrollView(showsIndicators: false) {
                                     reviewInfoContent
                                         .padding(.horizontal, 2)
-                                        .padding(.vertical, 2)
+                                        .padding(.bottom, 2)
                                 }
                                 .frame(maxHeight: .infinity)
                                 reviewActionButtons
-                                    .padding(.bottom, 6)
+                                    .padding(.bottom, 5)
                             }
-                            .frame(width: sideW)
+                            .frame(width: sideW, height: side)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 .padding(.horizontal, pad)
@@ -357,7 +357,7 @@ struct MistakeReviewRecoverySheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
 
                 Button {
                     startVerifyPhase()
@@ -382,7 +382,7 @@ struct MistakeReviewRecoverySheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: studyCooldown > 0 ? .locked : .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: studyCooldown > 0 ? .locked : .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 .disabled(studyCooldown > 0)
             } else {
                 Button {
@@ -397,7 +397,7 @@ struct MistakeReviewRecoverySheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
             }
         }
     }
@@ -436,7 +436,7 @@ struct MistakeReviewRecoverySheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
         }
         .padding(24)
         .warmCard(cornerRadius: 28, padding: 0)
@@ -1059,7 +1059,7 @@ struct PuzzleGauntletView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
         }
     }
 
@@ -1126,7 +1126,9 @@ struct PuzzleGauntletView: View {
                 if let nodeId = campaignNodeId, sectionIndex + 1 < totalSections {
                     let nextSec = sectionIndex + 1
                     Button {
-                        appState.navigationPath.removeLast()
+                        if !appState.navigationPath.isEmpty {
+                            appState.navigationPath.removeLast()
+                        }
                         appState.navigationPath.append(.puzzleGauntlet(nodeId: nodeId, masteryTier: masteryTier, sectionIndex: nextSec))
                     } label: {
                         Text(l10n.localized(
@@ -1141,7 +1143,7 @@ struct PuzzleGauntletView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 } else if let nodeId = campaignNodeId, let nextNode = StarYiCampaign.nextNode(after: nodeId) {
                     Button {
                         appState.navigateToCampaignNode(nextNode, replaceTopRoute: true, masteryTier: masteryTier)
@@ -1158,7 +1160,7 @@ struct PuzzleGauntletView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 } else if let nodeId = campaignNodeId, let island = StarYiCampaign.island(containingNodeId: nodeId) {
                     Button {
                         if !appState.navigationPath.isEmpty {
@@ -1178,7 +1180,7 @@ struct PuzzleGauntletView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 } else {
                     Button {
                         appState.popRoute()
@@ -1189,7 +1191,7 @@ struct PuzzleGauntletView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 15)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 }
             } else {
                 outOfHeartsContent
@@ -1266,7 +1268,7 @@ struct PuzzleGauntletView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                         .accessibilityIdentifier("GauntletMistakeReviewRecoverButton")
                     } else {
                         Button {
@@ -1283,7 +1285,7 @@ struct PuzzleGauntletView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                     }
                 }
             }

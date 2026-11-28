@@ -313,3 +313,8 @@
 "settings.eyecare.keepPlaying" = "休息好了，繼續";
 "settings.about.offlineNote" = "採用正規圍棋規則與全球標準術語，內建純離線分級 AI 陪練引擎。";
 "common.close" = "關閉";
+
+/* Orientation Guidance */
+"orientation.portrait.title" = "橫過來，棋盤更大喔";
+"orientation.portrait.subtitle" = "將 iPad 橫向擺放，下棋、闖關和看棋譜都會更舒服";
+"orientation.portrait.continueAnyway" = "先以直向繼續";

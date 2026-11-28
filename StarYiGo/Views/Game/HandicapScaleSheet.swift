@@ -77,7 +77,7 @@ struct HandicapScaleSheet: View {
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5, playTapSound: false))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5, playTapSound: false))
                         }
                     }
 
@@ -117,7 +117,7 @@ struct HandicapScaleSheet: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 15)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true))
                 }
                 .padding(20)
             }

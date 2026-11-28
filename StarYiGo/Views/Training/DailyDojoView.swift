@@ -254,7 +254,7 @@ struct DailyDojoView: View {
                     LinearGradient(
                         colors: isStampedToday
                             ? [AppTheme.sunTop, AppTheme.sunBottom]
-                            : [Color(red: 0.03, green: 0.52, blue: 0.57), Color(red: 0.01, green: 0.35, blue: 0.42)],
+                            : [Color(red: 0.99, green: 0.62, blue: 0.72), Color(red: 0.94, green: 0.44, blue: 0.59)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -314,7 +314,7 @@ struct DailyDojoView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 24, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 24, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true))
         .accessibilityIdentifier("DailyDojoClaimStampButton")
     }
 
@@ -564,7 +564,7 @@ struct DailyDojoView: View {
         .buttonStyle(GlossyCapsuleButtonStyle(
             palette: done ? .snow : activePalette,
             cornerRadius: 999,
-            rimHeight: 4,
+            rimHeight: 2.5,
             whiteBorderWidth: 2.5
         ))
         .fixedSize(horizontal: true, vertical: false)
@@ -804,7 +804,7 @@ struct DailyDojoView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 13)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
             }
             .padding(24)
             .frame(maxWidth: 380)
@@ -1006,7 +1006,7 @@ struct DailyKnowledgeQuizView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: showingCounterExample ? .mint : .coral, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: showingCounterExample ? .mint : .coral, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
 
                     if showingCounterExample, let c = counterComments[min(counterStep, max(0, counterComments.count - 1))], !c.isEmpty {
                         Text(c)
@@ -1069,7 +1069,7 @@ struct DailyKnowledgeQuizView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
                 .accessibilityIdentifier("DailyKnowledgeCompleteButton")
             }
         }

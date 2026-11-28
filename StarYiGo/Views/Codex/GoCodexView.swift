@@ -7,6 +7,7 @@ import SwiftUI
 
 struct GoCodexView: View {
     @EnvironmentObject var appState: AppState
+    var embeddedInArchive: Bool = false
 
     @State private var selectedTier: CodexTier = .starter
     @State private var selectedEntry: GoCodexEntry? = nil
@@ -19,33 +20,37 @@ struct GoCodexView: View {
 
     var body: some View {
         ZStack {
-            SceneBackdrop.termAlbum
+            if !embeddedInArchive {
+                SceneBackdrop.termAlbum
+            }
 
             VStack(spacing: 14) {
-                // Clean Top Bar
-                HStack {
-                    GameBackButton(title: l10n.t("common.back")) {
-                        appState.popRoute()
+                if !embeddedInArchive {
+                    // Clean Top Bar
+                    HStack {
+                        GameBackButton(title: l10n.t("common.back")) {
+                            appState.popRoute()
+                        }
+                        Spacer()
+                        GameTitleCrest(
+                            title: l10n.t("codex.title"),
+                            subtitle: l10n.t("codex.collectedCount", masteredCount, GoTermCodex.allEntries.count)
+                        )
+                        Spacer()
+                        HStack(spacing: 5) {
+                            StarCoinBadgeView(size: 17)
+                            Text("\(appState.profile.starCoins)")
+                                .font(AppFont.rounded(size: 14.5, weight: .black))
+                                .foregroundColor(AppTheme.inkPrimary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(Color.white.opacity(0.95)).shadow(color: AppTheme.sunBottom.opacity(0.14), radius: 8, y: 3))
+                        .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
                     }
-                    Spacer()
-                    GameTitleCrest(
-                        title: l10n.t("codex.title"),
-                        subtitle: l10n.t("codex.collectedCount", masteredCount, GoTermCodex.allEntries.count)
-                    )
-                    Spacer()
-                    HStack(spacing: 5) {
-                        StarCoinBadgeView(size: 17)
-                        Text("\(appState.profile.starCoins)")
-                            .font(AppFont.rounded(size: 14.5, weight: .black))
-                            .foregroundColor(AppTheme.inkPrimary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.white.opacity(0.95)).shadow(color: AppTheme.sunBottom.opacity(0.14), radius: 8, y: 3))
-                    .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
+                    .padding(.horizontal, 24)
+                    .padding(.top, 14)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 14)
 
                 // Crisp Single-Line Tier Filter Pills
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -265,7 +270,7 @@ struct GoCodexView: View {
             GlossyCapsuleButtonStyle(
                 palette: .snow,
                 cornerRadius: 24,
-                rimHeight: 4,
+                rimHeight: 2.5,
                 whiteBorderWidth: 2.5,
                 pressStyle: .card
             )
@@ -493,7 +498,7 @@ private struct CodexDetailModal: View {
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
             }
 
             Button(action: onPractice) {
@@ -503,7 +508,7 @@ private struct CodexDetailModal: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
         }
     }
 

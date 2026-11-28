@@ -123,7 +123,7 @@ struct JosekiTrainerView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: active ? .grape : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2, playTapSound: false))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: active ? .grape : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2, playTapSound: false))
     }
 
     private var josekiBoard: some View {
@@ -189,7 +189,7 @@ struct JosekiTrainerView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                     } else if let nodeId = campaignNodeId, let island = StarYiCampaign.island(containingNodeId: nodeId) {
                         Button {
                             if !appState.navigationPath.isEmpty {
@@ -209,7 +209,7 @@ struct JosekiTrainerView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -241,7 +241,7 @@ struct JosekiTrainerView: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 16, rimHeight: 3, whiteBorderWidth: 2))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 16, rimHeight: 2, whiteBorderWidth: 2))
                         }
                     }
                 }
@@ -258,7 +258,7 @@ struct JosekiTrainerView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                 .disabled(moveHistory.count <= 1)
 
                 Button {
@@ -270,7 +270,7 @@ struct JosekiTrainerView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .sky, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
             }
         }
     }

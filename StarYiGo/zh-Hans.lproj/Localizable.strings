@@ -334,3 +334,8 @@
 "common.ok" = "好的";
 "common.close" = "关闭";
 "common.back" = "返回";
+
+/* Orientation Guidance */
+"orientation.portrait.title" = "横过来，棋盘更大哦";
+"orientation.portrait.subtitle" = "将 iPad 横向摆放，下棋、闯关和看棋谱都会更舒服";
+"orientation.portrait.continueAnyway" = "先以竖屏继续";

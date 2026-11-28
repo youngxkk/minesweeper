@@ -18,7 +18,6 @@ struct PuzzleHubView: View {
     @State private var programmaticScrollNonce: Int = 0
     @State private var programmaticScrollAnimated: Bool = true
     @State private var hasInitializedScroll: Bool = false
-    @State private var showMistakesDrawer: Bool = false
     @State private var showPlacementSheet: Bool = false
     @State private var activePulse: Bool = false
     @State private var flightBob: Bool = false
@@ -26,6 +25,35 @@ struct PuzzleHubView: View {
     @State private var shakeCounters: [String: CGFloat] = [:]
     @State private var lockedToastMessage: String?
     @State private var toastDismissTask: Task<Void, Never>?
+    @State private var hasEnteredMap: Bool = false
+
+    /// Home-style staggered entrance choreography for map elements on first push.
+    private func mapEntrance(
+        _ delay: Double,
+        x: CGFloat = 0,
+        y: CGFloat = 0,
+        scale: CGFloat = 1,
+        animation: Animation = MotionToken.homePortalEntrance,
+        fades: Bool = true
+    ) -> StaggeredEntranceModifier {
+        StaggeredEntranceModifier(
+            appeared: hasEnteredMap,
+            delay: MotionToken.screenEntranceBaseDelay + delay,
+            reduceMotion: reduceMotion,
+            offsetY: y,
+            initialScale: scale,
+            animation: animation,
+            offsetX: x,
+            fades: fades
+        )
+    }
+
+    /// Islands pop onto the map one after another within each sea.
+    private func islandEntranceDelay(_ island: CampaignIsland) -> Double {
+        let siblings = StarYiCampaign.allIslands.filter { $0.seaId == island.seaId }
+        let order = siblings.firstIndex(where: { $0.id == island.id }) ?? 0
+        return 0.16 + Double(min(order, 8)) * MotionToken.itemStagger
+    }
 
     private var l10n: L10n { appState.l10n }
     private var seas: [CampaignSea] { StarYiCampaign.allSeas }
@@ -60,10 +88,6 @@ struct PuzzleHubView: View {
         return activeSea.islands.last(where: {
             StarYiCampaign.unlockState(for: $0, progress: appState.puzzleProgress).isUnlocked
         })
-    }
-
-    private var mistakePuzzles: [GoPuzzle] {
-        appState.puzzleProgress.mistakeBookIds.compactMap { appState.findAnyPuzzle(withId: $0) }
     }
 
     var body: some View {
@@ -216,6 +240,7 @@ struct PuzzleHubView: View {
                                         } animation: { _ in
                                             .spring(response: 0.29, dampingFraction: 0.72)
                                         }
+                                        .modifier(mapEntrance(islandEntranceDelay(island), y: -18, scale: 0.55))
                                         .position(worldPoint(for: island, pageW: pageW, pageH: pageH))
                                 }
 
@@ -223,6 +248,7 @@ struct PuzzleHubView: View {
                                 if let focused = focusedIslandInActiveSea {
                                     let heroPos = worldPoint(for: focused, pageW: pageW, pageH: pageH)
                                     OverworldHeroPawn(bobbing: activePulse, reduceMotion: reduceMotion)
+                                        .modifier(mapEntrance(0.42, y: -56, scale: 0.7))
                                         .position(x: heroPos.x, y: heroPos.y - 34)
                                         .animation(
                                             reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.72),
@@ -243,6 +269,7 @@ struct PuzzleHubView: View {
                         )
                     )
                     .frame(width: pageW, height: pageH)
+                    .modifier(mapEntrance(0, scale: 1.06, animation: MotionToken.screenBackdropSettle, fades: false))
                 }
                 .ignoresSafeArea()
 
@@ -251,11 +278,13 @@ struct PuzzleHubView: View {
                     if activeSeaIndex > 0 {
                         edgeFlyButton(targetSea: seas[activeSeaIndex - 1], direction: .previous, scrollProxy: scrollProxy)
                             .padding(.leading, 12)
+                            .modifier(mapEntrance(0.30, x: -64, scale: 0.9))
                     }
                     Spacer()
                     if activeSeaIndex + 1 < seas.count {
                         edgeFlyButton(targetSea: seas[activeSeaIndex + 1], direction: .next, scrollProxy: scrollProxy)
                             .padding(.trailing, 12)
+                            .modifier(mapEntrance(0.30, x: 64, scale: 0.9))
                     }
                 }
                 .allowsHitTesting(true)
@@ -265,18 +294,15 @@ struct PuzzleHubView: View {
                     topBar
                         .padding(.horizontal, 20)
                         .padding(.top, verticalSizeClass == .compact ? 8 : 12)
+                        .modifier(mapEntrance(0.02, y: -72, scale: 0.94, animation: MotionToken.homeTopBarEntrance))
 
                     seaCompassStrip(scrollProxy: scrollProxy)
                         .padding(.horizontal, 20)
+                        .modifier(mapEntrance(0.09, y: -60, scale: 0.92, animation: MotionToken.homeTopBarEntrance))
 
                     Spacer()
 
-                    if showMistakesDrawer {
-                        mistakesDock
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 16)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else if let toast = lockedToastMessage {
+                    if let toast = lockedToastMessage {
                         lockedToastPill(toast)
                             .padding(.bottom, 24)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -284,10 +310,12 @@ struct PuzzleHubView: View {
                         lockedSeaSkipGateDock
                             .padding(.horizontal, 20)
                             .padding(.bottom, 16)
+                            .modifier(mapEntrance(0.20, y: 80, scale: 0.94))
                     } else {
                         bottomAdventureDock
                             .padding(.horizontal, 20)
                             .padding(.bottom, 16)
+                            .modifier(mapEntrance(0.20, y: 80, scale: 0.94))
                     }
                 }
             }
@@ -296,8 +324,8 @@ struct PuzzleHubView: View {
                 placementSelectionSheet(scrollProxy: scrollProxy)
             }
             .onAppear {
-                if initialMistakesOnly {
-                    showMistakesDrawer = true
+                if !hasEnteredMap {
+                    hasEnteredMap = true
                 }
                 let freshUnlocks = appState.consumeIslandUnlocks()
                 newlyUnlockedIslandIDs.formUnion(freshUnlocks)
@@ -353,7 +381,6 @@ struct PuzzleHubView: View {
             if #unavailable(iOS 18.0) {
                 scrollProxy.scrollTo(sea.id, anchor: .leading)
             }
-            showMistakesDrawer = false
             lockedToastMessage = nil
         }
     }
@@ -406,6 +433,7 @@ struct PuzzleHubView: View {
         }
         .frame(width: totalW, height: pageH)
         .clipped()
+        .accessibilityIgnoresInvertColors()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -522,7 +550,7 @@ struct PuzzleHubView: View {
             .padding(.horizontal, 11)
             .padding(.vertical, 10)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 22, rimHeight: 5, whiteBorderWidth: 3, playTapSound: false))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 22, rimHeight: 3, whiteBorderWidth: 3, playTapSound: false))
         .accessibilityIdentifier(isNext ? "FlyNextSeaButton" : "FlyPrevSeaButton")
     }
 
@@ -532,15 +560,7 @@ struct PuzzleHubView: View {
         let clearedNodes = StarYiCampaign.totalClearedNodes(progress: appState.puzzleProgress)
         let totalNodes = StarYiCampaign.allNodes.count
 
-        return HStack(spacing: 10) {
-            // Reserve the same width on both sides so button labels cannot move the title.
-            ZStack(alignment: .leading) {
-                topBarActions.hidden().accessibilityHidden(true)
-                topBarBackButton
-            }
-
-            Spacer(minLength: 0)
-
+        return ZStack {
             GameTitleCrest(
                 title: activeSea.localizedName(l10n),
                 subtitle: l10n.localized(
@@ -554,56 +574,18 @@ struct PuzzleHubView: View {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("CampaignMapTitle")
 
-            Spacer(minLength: 0)
-
-            ZStack(alignment: .trailing) {
-                topBarBackButton.hidden().accessibilityHidden(true)
-                topBarActions
+            HStack {
+                topBarBackButton
+                Spacer()
+                puzzleRushButton
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var topBarBackButton: some View {
         GameBackButton(title: l10n.t("common.back")) {
             appState.popRoute()
-        }
-    }
-
-    private var topBarActions: some View {
-        HStack(spacing: 10) {
-            Button {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
-                    showMistakesDrawer.toggle()
-                }
-            } label: {
-                topBarLabel(
-                    l10n.t("home.puzzleCard.mistakes", appState.puzzleProgress.mistakeBookIds.count),
-                    systemImage: "bookmark.fill"
-                )
-                .font(AppFont.rounded(size: 13.5, weight: .black))
-                .foregroundColor(showMistakesDrawer ? .white : AppTheme.coralBottom)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 10)
-            }
-            .buttonStyle(
-                GlossyCapsuleButtonStyle(
-                    palette: showMistakesDrawer ? .coral : .snow,
-                    cornerRadius: 999,
-                    rimHeight: 5,
-                    whiteBorderWidth: 3
-                )
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func topBarLabel(_ title: String, systemImage: String) -> some View {
-        if verticalSizeClass == .compact {
-            Label(title, systemImage: systemImage)
-                .labelStyle(.iconOnly)
-                .accessibilityLabel(title)
-        } else {
-            Label(title, systemImage: systemImage)
         }
     }
 
@@ -761,7 +743,6 @@ struct PuzzleHubView: View {
         let unlockState = StarYiCampaign.unlockState(for: island, progress: appState.puzzleProgress)
         switch unlockState {
         case .active, .cleared:
-            showMistakesDrawer = false
             lockedToastMessage = nil
             if selectedIslandId == island.id {
                 SoundAndHapticsManager.shared.playUITap()
@@ -907,12 +888,10 @@ struct PuzzleHubView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, compact ? 8 : 14)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 30, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: .sun, cornerRadius: 30, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true))
             .accessibilityIdentifier("CampaignSkipGateButton")
-
-            puzzleRushButton
         }
-        .frame(maxWidth: 980)
+        .frame(maxWidth: 780)
     }
 
     private var bottomAdventureDock: some View {
@@ -925,8 +904,6 @@ struct PuzzleHubView: View {
             if let focused = focusedIslandInActiveSea {
                 focusedStageExpeditionCard(focused)
             }
-
-            puzzleRushButton
 
             if activeSeaIndex == 0 {
                 Button {
@@ -950,28 +927,8 @@ struct PuzzleHubView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 3))
             }
-
-            Button {
-                appState.navigationPath.append(.trainingDojo)
-            } label: {
-                Label(
-                    l10n.localized(
-                        zh: "\(DojoPuzzleBank.fullCatalog.count)+道场/定式/考级",
-                        en: "\(DojoPuzzleBank.fullCatalog.count)+ Dojo & Exams",
-                        ja: "\(DojoPuzzleBank.fullCatalog.count)+ 道場・定石・級位認定",
-                        ko: "\(DojoPuzzleBank.fullCatalog.count)+ 도장·정석·급수시험",
-                        zhHant: "\(DojoPuzzleBank.fullCatalog.count)+道場/定式/考級"
-                    ),
-                    systemImage: "rosette"
-                )
-                .font(AppFont.rounded(size: 12.5, weight: .black))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: .grape, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3))
         }
     }
 
@@ -1035,7 +992,7 @@ struct PuzzleHubView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
             }
-            .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5, playTapSound: false))
+            .buttonStyle(GlossyCapsuleButtonStyle(palette: pal, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5, playTapSound: false))
             .accessibilityIdentifier("EnterFocusedStageButton")
         }
         .padding(.leading, 12)
@@ -1054,10 +1011,20 @@ struct PuzzleHubView: View {
         return Button {
             appState.navigationPath.append(.puzzleRush)
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 Image(systemName: "flame.fill")
-                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .font(.system(size: 13.5, weight: .black, design: .rounded))
                     .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle().fill(
+                            LinearGradient(
+                                colors: [AppTheme.sunTop, AppTheme.sunBottom],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                    )
                 VStack(alignment: .leading, spacing: 1) {
                     Text(l10n.localized(
                         zh: "无尽冲关 · 30K→5D",
@@ -1066,8 +1033,8 @@ struct PuzzleHubView: View {
                         ko: "연속 도전 · 30K→5D",
                         zhHant: "無盡衝關 · 30K→5D"
                     ))
-                        .font(AppFont.rounded(size: 13.5, weight: .black))
-                        .foregroundColor(.white)
+                        .font(AppFont.rounded(size: 13, weight: .black))
+                        .foregroundColor(AppTheme.inkPrimary)
                     Text(best > 0
                          ? l10n.localized(
                              zh: "纪录：\(best)题 (\(appState.puzzleProgress.bestPuzzleRushRank))",
@@ -1084,13 +1051,14 @@ struct PuzzleHubView: View {
                              zhHant: "3顆心測真實上限！"
                          ))
                         .font(AppFont.rounded(size: 10.5, weight: .bold))
-                        .foregroundColor(.white.opacity(0.94))
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
+            .padding(.leading, 10)
+            .padding(.trailing, 15)
+            .padding(.vertical, 7)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 5, whiteBorderWidth: 3, showStripeSheen: true))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
     }
 
     // MARK: - Placement Level Picker Sheet
@@ -1157,7 +1125,7 @@ struct PuzzleHubView: View {
                             }
                             .padding(16)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 4, whiteBorderWidth: 2.5, pressStyle: .card))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 24, rimHeight: 2.5, whiteBorderWidth: 2.5, pressStyle: .card))
                     }
                 }
                 .padding(20)
@@ -1218,7 +1186,6 @@ struct PuzzleHubView: View {
             }
         }
         withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
-            showMistakesDrawer = false
             lockedToastMessage = message
         }
         toastDismissTask?.cancel()
@@ -1249,79 +1216,6 @@ struct PuzzleHubView: View {
         .padding(.vertical, 10)
         .background(Capsule().fill(Color.white.opacity(0.96)).shadow(color: Color.black.opacity(0.20), radius: 14, y: 6))
         .overlay(Capsule().strokeBorder(.white, lineWidth: 3))
-    }
-
-    private var mistakesDock: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(l10n.t("puzzle.category.mistakes"), systemImage: "bookmark.fill")
-                    .font(AppFont.rounded(size: 18, weight: .black))
-                    .foregroundColor(AppTheme.coralBottom)
-                Spacer()
-                GameCircleButton(icon: "xmark", palette: .snow, tint: AppTheme.inkSecondary, size: 36) {
-                    withAnimation { showMistakesDrawer = false }
-                }
-            }
-
-            if mistakePuzzles.isEmpty {
-                HStack(spacing: 10) {
-                    Text("🌟").font(AppFont.rounded(size: 28, weight: .regular))
-                    Text(l10n.t("puzzle.mistakes.empty"))
-                        .font(AppFont.rounded(size: 16, weight: .heavy))
-                        .foregroundColor(AppTheme.inkSecondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 72)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(Array(mistakePuzzles.enumerated()), id: \.element.id) { idx, puzzle in
-                            mistakePuzzleTile(number: idx + 1, puzzle: puzzle)
-                                .frame(width: 196)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(18)
-        .warmCard(cornerRadius: 30, padding: 0)
-    }
-
-    private func mistakePuzzleTile(number: Int, puzzle: GoPuzzle) -> some View {
-        let stars = appState.puzzleProgress.starsByPuzzleId[puzzle.id] ?? 0
-        let solved = stars > 0
-
-        return Button {
-            appState.navigationPath.append(.puzzlePlay(puzzleId: puzzle.id, isDailyChallenge: false, isStarterBootcamp: false))
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("\(number)")
-                        .font(AppFont.rounded(size: 13, weight: .black))
-                        .foregroundColor(.white)
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(solved ? AppTheme.mintBottom : AppTheme.coralBottom))
-                    Text(puzzle.rankBadge)
-                        .font(AppFont.rounded(size: 11, weight: .black))
-                        .foregroundColor(AppTheme.skyBottom)
-                    Spacer()
-                }
-                Text(puzzle.title(l10n))
-                    .font(AppFont.rounded(size: 15, weight: .heavy))
-                    .foregroundColor(AppTheme.inkPrimary)
-                    .lineLimit(1)
-                HStack(spacing: 3) {
-                    ForEach(1...3, id: \.self) { idx in
-                        Image(systemName: idx <= stars ? "star.fill" : "star")
-                            .font(.system(size: 14, design: .rounded))
-                            .foregroundColor(idx <= stars ? AppTheme.sunBottom : AppTheme.subtleBorder)
-                    }
-                    Spacer()
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 22, rimHeight: 5, whiteBorderWidth: 3, pressStyle: .card))
     }
 }
 

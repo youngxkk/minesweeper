@@ -313,3 +313,8 @@
 "settings.eyecare.keepPlaying" = "休憩OK、続ける";
 "settings.about.offlineNote" = "正規の囲碁ルールと世界標準用語を採用。完全オフラインの段階別AIエンジンを内蔵。";
 "common.close" = "閉じる";
+
+/* Orientation Guidance */
+"orientation.portrait.title" = "横向きにすると盤面がもっと広く！";
+"orientation.portrait.subtitle" = "iPad を横向きにすると、対局や詰碁をより快適に楽しめます。";
+"orientation.portrait.continueAnyway" = "このまま縦向きで続ける";

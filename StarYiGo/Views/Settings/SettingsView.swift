@@ -292,7 +292,7 @@ struct SettingsView: View {
                         GlossyCapsuleButtonStyle(
                             palette: .snow,
                             cornerRadius: 999,
-                            rimHeight: 5,
+                            rimHeight: 3,
                             whiteBorderWidth: 3,
                             playTapSound: false
                         )
@@ -316,7 +316,7 @@ struct SettingsView: View {
                         GlossyCapsuleButtonStyle(
                             palette: .mint,
                             cornerRadius: 999,
-                            rimHeight: 5,
+                            rimHeight: 3,
                             whiteBorderWidth: 3,
                             playTapSound: false
                         )
@@ -578,7 +578,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
     }
 
     private var boardThemeCard: some View {
@@ -696,7 +696,7 @@ struct SettingsView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 16, rimHeight: 3, whiteBorderWidth: 2))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 16, rimHeight: 2, whiteBorderWidth: 2))
     }
 
     private var scoringRuleCard: some View {
@@ -729,7 +729,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2))
                 }
             }
         }
@@ -843,7 +843,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                     .accessibilityIdentifier("SettingsAIModel_\(preset.rawValue)")
                 }
             }
@@ -943,7 +943,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                     .accessibilityIdentifier("SettingsAIPace_\(pace.rawValue)")
                 }
             }
@@ -968,7 +968,7 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .mint : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .mint : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
     }
 
     private var audioAndEyeCareCard: some View {
@@ -1015,7 +1015,7 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .sky : .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
                 }
             }
         }
@@ -1154,6 +1154,20 @@ struct SettingsView: View {
                 )
                 .accessibilityIdentifier("SettingsDebugBypassProModelODRToggle")
 
+                gameToggleRow(
+                    "首页「拍照判胜负」显示文字",
+                    isOn: Binding(
+                        get: { !appState.hasTappedPhotoJudge },
+                        set: { showLabel in
+                            appState.debugSetPhotoJudgeLabelVisible(showLabel)
+                            debugStatusMessage = showLabel
+                                ? "首页「拍照判胜负」已恢复显示文字"
+                                : "首页「拍照判胜负」已切换为仅图标"
+                        }
+                    )
+                )
+                .accessibilityIdentifier("SettingsDebugShowPhotoJudgeLabelToggle")
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("段位 \(appState.profile.rankString) · 金币 \(appState.profile.starCoins) · 体力 \(appState.currentGauntletHearts)/\(PuzzleProgressStore.maxGauntletHearts) · 已解锁海域 \(appState.puzzleProgress.unlockedSeaIds.count)/\(StarYiCampaign.allSeas.count)")
                         .font(AppFont.rounded(size: 11.5, weight: .bold))
@@ -1213,7 +1227,7 @@ struct SettingsView: View {
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 7)
                             }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+                            .buttonStyle(GlossyCapsuleButtonStyle(palette: selected ? .grape : .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
                         }
                     }
                 }
@@ -1228,7 +1242,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
                 }
-                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2))
+                .buttonStyle(GlossyCapsuleButtonStyle(palette: .coral, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1252,7 +1266,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
         }
-        .buttonStyle(GlossyCapsuleButtonStyle(palette: palette, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2))
+        .buttonStyle(GlossyCapsuleButtonStyle(palette: palette, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2))
     }
     #endif
 }

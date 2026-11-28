@@ -11,6 +11,7 @@ import UIKit
 enum AppRoute: Hashable {
     case playGame
     case puzzleHub(initialMistakesOnly: Bool)
+    case mistakeBook
     case islandDetail(islandId: String)
     case puzzlePlay(puzzleId: String, isDailyChallenge: Bool = false, isStarterBootcamp: Bool = false, forceRandomTransform: Bool = false, dailyDojoQueueIds: [String] = [])
     case puzzleGauntlet(nodeId: String, masteryTier: StageMasteryTier = .normal, sectionIndex: Int? = nil)
@@ -41,6 +42,7 @@ final class AppState: ObservableObject {
     @Published var puzzleProgress: PuzzleProgressStore
     @Published var savedGames: [SavedGameRecord]
     @Published var photoJudgeHistory: [PhotoJudgeRecord]
+    @Published var hasTappedPhotoJudge: Bool
     @Published var navigationPath: [AppRoute] = [] {
         didSet { syncMusicMood() }
     }
@@ -49,6 +51,16 @@ final class AppState: ObservableObject {
     @Published var newlyUnlockedCodexToast: GoCodexEntry? = nil
     @Published var isLaunchSplashActive: Bool = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"] == nil
     @Published var isLaunchSplashRevealing: Bool = ProcessInfo.processInfo.environment["STARYIGO_UI_TEST_SUITE"] != nil
+    /// True while the portrait-to-landscape guidance overlay is visible; timed drills pause automatically.
+    @Published var isPortraitGuidanceActive: Bool = false
+
+    /// Routes where portrait orientation is natural (e.g. photographing a physical Go board) and should not show the overlay.
+    var isPortraitGuidanceExemptRoute: Bool {
+        if case .photoJudge = navigationPath.last {
+            return true
+        }
+        return false
+    }
 
     /// Keeps an ongoing game alive so kids can return home and resume seamlessly.
     @Published var activeGameViewModel: GameViewModel?
@@ -191,6 +203,7 @@ final class AppState: ObservableObject {
         self.puzzleProgress = loadedPuzzles
         self.savedGames = loadedGames
         self.photoJudgeHistory = loadedPhotoHistory
+        self.hasTappedPhotoJudge = storage.loadHasTappedPhotoJudge()
         self.pausedAIMatch = loadedPausedMatch
         #if DEBUG
         self.isDebugModeEnabled = storage.loadDebugModeEnabled()
@@ -416,7 +429,7 @@ final class AppState: ObservableObject {
             }
         case .puzzlePlay, .puzzleGauntlet, .puzzleRush, .seaSkipGate, .srsGhostBuster, .reviewGame, .josekiTrainer, .miniDrill, .rankExamTest, .dailyKnowledge:
             SoundAndHapticsManager.shared.setMusicMood(.match)
-        case .puzzleHub, .islandDetail, .codex, .archive, .trainingDojo, .dailyDojo, .rankExamHall, .passport, .savedGames, .photoJudge:
+        case .puzzleHub, .mistakeBook, .islandDetail, .codex, .archive, .trainingDojo, .dailyDojo, .rankExamHall, .passport, .savedGames, .photoJudge:
             SoundAndHapticsManager.shared.setMusicMood(.island)
         }
     }
@@ -447,12 +460,18 @@ final class AppState: ObservableObject {
         scheduleEyeCareTimerIfNeeded()
     }
 
+    func acknowledgeEyeCareBreak() {
+        showEyeCareAlert = false
+        activeSessionMinutes = 0
+        scheduleEyeCareTimerIfNeeded()
+    }
+
     private func scheduleEyeCareTimerIfNeeded() {
         guard isAppActive, settings.eyeCareMinutes > 0, eyeCareTimer == nil else { return }
 
         eyeCareTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.isAppActive else { return }
+                guard let self, self.isAppActive, !self.showEyeCareAlert else { return }
                 self.activeSessionMinutes += 1
                 if self.settings.eyeCareMinutes > 0 && self.activeSessionMinutes >= self.settings.eyeCareMinutes {
                     self.activeSessionMinutes = 0
@@ -866,9 +885,6 @@ final class AppState: ObservableObject {
             p.starCoins += coinReward
             advanceDailyStreak(&p)
         }
-
-        // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-        // GameCenterService.shared.reportCampaignStars(puzzleProgress.totalCampaignStars)
     }
 
     func unlockSeaViaSkipGate(seaId: String) {
@@ -941,9 +957,6 @@ final class AppState: ObservableObject {
             p.starCoins += max(5, score * 3) + (isNewRecord && score >= 5 ? 20 : 0)
             advanceDailyStreak(&p)
         }
-
-        // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-        // GameCenterService.shared.reportPuzzleRushScore(score)
     }
 
     func adaptiveDailyPuzzle(for date: Date = Date()) -> GoPuzzle {
@@ -1113,16 +1126,6 @@ final class AppState: ObservableObject {
             if let reward = StoneStyle.allCases.first(where: { $0.bossUnlockIslandId == bossId }) {
                 bossRewardStyle = reward
             }
-            // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-            // if bossId == "s1-lighthouse" {
-            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea1Cleared, percentComplete: 100)
-            // } else if bossId == "s2-summit" {
-            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea2Cleared, percentComplete: 100)
-            // } else if bossId == "s3-sanctum" {
-            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea3Cleared, percentComplete: 100)
-            // } else if bossId == "s4-zenith" {
-            //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.sea4Cleared, percentComplete: 100)
-            // }
         }
 
         let isEarlyResignation = !didHumanWin && record.moveCount < 10 && record.resultString.hasSuffix("+R")
@@ -1139,10 +1142,6 @@ final class AppState: ObservableObject {
                     if let diff = opponentDifficulty, diff.certifiedRankTier > p.certifiedRankTier {
                         p.certifiedRankTier = diff.certifiedRankTier
                     }
-                    // [v1.0 暂不启用 Game Center，保留供后续版本恢复]
-                    // if p.certifiedRankTier >= 6 {
-                    //     GameCenterService.shared.reportAchievement(id: GameCenterService.AchievementID.certifiedShodan, percentComplete: 100)
-                    // }
                 }
                 p.totalCaptures += capturesByHuman
                 advanceDailyStreak(&p)
@@ -1210,6 +1209,12 @@ final class AppState: ObservableObject {
         storage.loadPhotoJudgeImage(filename: record.imageFilename)
     }
 
+    func markPhotoJudgeTapped() {
+        guard !hasTappedPhotoJudge else { return }
+        hasTappedPhotoJudge = true
+        storage.saveHasTappedPhotoJudge(true)
+    }
+
     /// Marks an Academy entry as "已赏析 ★" and awards Star Coins + XP the first time!
     @discardableResult
     func markAcademyStudied(_ entryId: String) -> Bool {
@@ -1241,6 +1246,12 @@ final class AppState: ObservableObject {
     func setDebugModeEnabled(_ enabled: Bool) {
         isDebugModeEnabled = enabled
         storage.saveDebugModeEnabled(enabled)
+    }
+
+    func debugSetPhotoJudgeLabelVisible(_ visible: Bool) {
+        hasTappedPhotoJudge = !visible
+        storage.saveHasTappedPhotoJudge(!visible)
+        SoundAndHapticsManager.shared.playUITap()
     }
 
     func debugGrantCoinsAndXP(coins: Int = 500, xp: Int = 200) {

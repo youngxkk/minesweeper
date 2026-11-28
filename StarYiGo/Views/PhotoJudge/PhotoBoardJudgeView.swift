@@ -13,6 +13,8 @@ struct PhotoBoardJudgeView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
 
     enum Stage {
         case capture
@@ -295,98 +297,41 @@ struct PhotoBoardJudgeView: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        Group {
-            if stage == .judge {
-                HStack(spacing: 16) {
-                    HStack(spacing: 12) {
-                        topBarBackButton
-                        topBarTitleCrest
-                        Spacer(minLength: 8)
-                        if activeWarpedImage != nil {
-                            Button {
-                                SoundAndHapticsManager.shared.playUITap()
-                                showOriginalPhotoOverlay.toggle()
-                            } label: {
-                                Label(
-                                    showOriginalPhotoOverlay
-                                        ? l10n.localized(zh: "看棋盘", en: "Board", ja: "盤面", ko: "바둑판", zhHant: "看棋盤")
-                                        : l10n.localized(zh: "看原图", en: "Photo", ja: "元写真", ko: "원본", zhHant: "看原圖"),
-                                    systemImage: showOriginalPhotoOverlay ? "square.grid.3x3" : "photo"
-                                )
-                                .font(AppFont.rounded(size: 12.5, weight: .black))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                            }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: showOriginalPhotoOverlay ? .sun : .sky, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.5))
-                            .accessibilityIdentifier("PhotoJudgeComparePhotoButton")
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
+        ZStack {
+            topBarTitleCrest
 
-                    HStack {
-                        Spacer()
-                        if activeRecordId != nil {
-                            Button(role: .destructive) {
-                                SoundAndHapticsManager.shared.playUITap()
-                                showDeleteRecordAlert = true
-                            } label: {
-                                Label(
-                                    l10n.localized(zh: "删除", en: "Delete", ja: "削除", ko: "삭제", zhHant: "刪除"),
-                                    systemImage: "trash"
-                                )
-                                .font(AppFont.rounded(size: 13, weight: .black))
-                                .foregroundColor(AppTheme.coralBottom)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                            }
-                            .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                            .accessibilityLabel(l10n.localized(zh: "删除此记录", en: "Delete Record", ja: "この履歴を削除", ko: "이 기록 삭제", zhHant: "刪除此記錄"))
-                            .accessibilityIdentifier("PhotoJudgeTopDeleteButton")
-                        }
-                    }
-                    .frame(width: 372)
-                }
-            } else {
-                HStack(spacing: 12) {
-                    topBarBackButton
-                    topBarTitleCrest
-                    Spacer()
+            HStack(spacing: 12) {
+                topBarBackButton
+                Spacer(minLength: 12)
 
-                    if stage == .calibrate {
+                if stage == .judge {
+                    if activeWarpedImage != nil {
                         Button {
                             SoundAndHapticsManager.shared.playUITap()
-                            stage = .history
+                            showOriginalPhotoOverlay.toggle()
                         } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 13, weight: .black, design: .rounded))
-                                Text(
-                                    appState.photoJudgeHistory.isEmpty
-                                        ? l10n.localized(zh: "历史", en: "History", ja: "履歴", ko: "기록", zhHant: "歷史")
-                                        : l10n.localized(
-                                            zh: "历史 (\(appState.photoJudgeHistory.count))",
-                                            en: "History (\(appState.photoJudgeHistory.count))",
-                                            ja: "履歴 (\(appState.photoJudgeHistory.count))",
-                                            ko: "기록 (\(appState.photoJudgeHistory.count))",
-                                            zhHant: "歷史 (\(appState.photoJudgeHistory.count))"
-                                        )
-                                )
-                                .font(AppFont.rounded(size: 12.5, weight: .black))
-                            }
-                            .foregroundColor(AppTheme.inkPrimary)
+                            Label(
+                                showOriginalPhotoOverlay
+                                    ? l10n.localized(zh: "看棋盘", en: "Board", ja: "盤面", ko: "바둑판", zhHant: "看棋盤")
+                                    : l10n.localized(zh: "看原图", en: "Photo", ja: "元写真", ko: "원본", zhHant: "看原圖"),
+                                systemImage: showOriginalPhotoOverlay ? "square.grid.3x3" : "photo"
+                            )
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
+                            .foregroundColor(.white)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 3, whiteBorderWidth: 2.5))
-                        .accessibilityIdentifier("PhotoJudgeTopHistoryButton")
-                    } else if stage == .history, !appState.photoJudgeHistory.isEmpty {
-                        Button {
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: showOriginalPhotoOverlay ? .sun : .sky, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2.5))
+                        .accessibilityIdentifier("PhotoJudgeComparePhotoButton")
+                    }
+
+                    if activeRecordId != nil {
+                        Button(role: .destructive) {
                             SoundAndHapticsManager.shared.playUITap()
-                            showClearHistoryAlert = true
+                            showDeleteRecordAlert = true
                         } label: {
                             Label(
-                                l10n.localized(zh: "清空", en: "Clear All", ja: "全削除", ko: "전체 삭제", zhHant: "清空"),
+                                l10n.localized(zh: "删除", en: "Delete", ja: "削除", ko: "삭제", zhHant: "刪除"),
                                 systemImage: "trash"
                             )
                             .font(AppFont.rounded(size: 13, weight: .black))
@@ -394,12 +339,57 @@ struct PhotoBoardJudgeView: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 4, whiteBorderWidth: 2.5))
-                        .accessibilityIdentifier("PhotoJudgeHistoryClearAllButton")
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
+                        .accessibilityLabel(l10n.localized(zh: "删除此记录", en: "Delete Record", ja: "この履歴を削除", ko: "이 기록 삭제", zhHant: "刪除此記錄"))
+                        .accessibilityIdentifier("PhotoJudgeTopDeleteButton")
                     }
+                } else if stage == .calibrate {
+                    Button {
+                        SoundAndHapticsManager.shared.playUITap()
+                        stage = .history
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                            Text(
+                                appState.photoJudgeHistory.isEmpty
+                                    ? l10n.localized(zh: "历史", en: "History", ja: "履歴", ko: "기록", zhHant: "歷史")
+                                    : l10n.localized(
+                                        zh: "历史 (\(appState.photoJudgeHistory.count))",
+                                        en: "History (\(appState.photoJudgeHistory.count))",
+                                        ja: "履歴 (\(appState.photoJudgeHistory.count))",
+                                        ko: "기록 (\(appState.photoJudgeHistory.count))",
+                                        zhHant: "歷史 (\(appState.photoJudgeHistory.count))"
+                                    )
+                            )
+                            .font(AppFont.rounded(size: 12.5, weight: .black))
+                        }
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2, whiteBorderWidth: 2.5))
+                    .accessibilityIdentifier("PhotoJudgeTopHistoryButton")
+                } else if stage == .history, !appState.photoJudgeHistory.isEmpty {
+                    Button {
+                        SoundAndHapticsManager.shared.playUITap()
+                        showClearHistoryAlert = true
+                    } label: {
+                        Label(
+                            l10n.localized(zh: "清空", en: "Clear All", ja: "全削除", ko: "전체 삭제", zhHant: "清空"),
+                            systemImage: "trash"
+                        )
+                        .font(AppFont.rounded(size: 13, weight: .black))
+                        .foregroundColor(AppTheme.coralBottom)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 999, rimHeight: 2.5, whiteBorderWidth: 2.5))
+                    .accessibilityIdentifier("PhotoJudgeHistoryClearAllButton")
                 }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var topBarBackButton: some View {
@@ -707,16 +697,23 @@ struct PhotoBoardJudgeView: View {
         .padding(.horizontal, isCompact ? 14 : 20)
         .padding(.vertical, isCompact ? 10 : 13)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(red: 0.09, green: 0.14, blue: 0.24).opacity(0.58))
-                .background(
+            Group {
+                if reduceTransparency {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
+                        .fill(Color(red: 0.09, green: 0.14, blue: 0.24))
+                } else {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color(red: 0.09, green: 0.14, blue: 0.24).opacity(0.58))
+                        .background(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        )
+                }
+            }
         )
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5)
+                .strokeBorder(Color.white.opacity(colorSchemeContrast == .increased ? 0.78 : 0.35), lineWidth: colorSchemeContrast == .increased ? 2.0 : 1.5)
         )
         .shadow(color: Color.black.opacity(0.18), radius: 12, y: 5)
     }
@@ -743,7 +740,7 @@ struct PhotoBoardJudgeView: View {
                 GlossyCapsuleButtonStyle(
                     palette: autoDetectBoardSize ? .mint : .snow,
                     cornerRadius: 12,
-                    rimHeight: 3,
+                    rimHeight: 2,
                     whiteBorderWidth: 2
                 )
             )
@@ -768,7 +765,7 @@ struct PhotoBoardJudgeView: View {
                     GlossyCapsuleButtonStyle(
                         palette: isSelected ? .sky : .snow,
                         cornerRadius: 12,
-                        rimHeight: 3,
+                        rimHeight: 2,
                         whiteBorderWidth: 2
                     )
                 )
@@ -800,7 +797,7 @@ struct PhotoBoardJudgeView: View {
                     GlossyCapsuleButtonStyle(
                         palette: isSelected ? .grape : .snow,
                         cornerRadius: 12,
-                        rimHeight: 3,
+                        rimHeight: 2,
                         whiteBorderWidth: 2
                     )
                 )
@@ -901,7 +898,7 @@ struct PhotoBoardJudgeView: View {
                                     GlossyCapsuleButtonStyle(
                                         palette: isSelected ? .sky : .snow,
                                         cornerRadius: 14,
-                                        rimHeight: 3,
+                                        rimHeight: 2,
                                         whiteBorderWidth: 2
                                     )
                                 )
@@ -925,7 +922,7 @@ struct PhotoBoardJudgeView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 14, rimHeight: 4, whiteBorderWidth: 2))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 14, rimHeight: 2.5, whiteBorderWidth: 2))
 
                         Button {
                             if let img = sourceImage {
@@ -944,7 +941,7 @@ struct PhotoBoardJudgeView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 9)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 14, rimHeight: 4, whiteBorderWidth: 2))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 14, rimHeight: 2.5, whiteBorderWidth: 2))
                     }
 
                     Button {
@@ -965,7 +962,7 @@ struct PhotoBoardJudgeView: View {
                         .frame(maxWidth: .infinity, minHeight: 62)
                         .padding(.vertical, 4)
                     }
-                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 22, rimHeight: 6, whiteBorderWidth: 3.5, showStripeSheen: true))
+                    .buttonStyle(GlossyCapsuleButtonStyle(palette: .mint, cornerRadius: 22, rimHeight: 4, whiteBorderWidth: 3.5, showStripeSheen: true))
                     .accessibilityIdentifier("PhotoJudgeRunRecognizeButton")
                     .padding(.top, 12)
                 }
@@ -1009,6 +1006,7 @@ struct PhotoBoardJudgeView: View {
                     Image(uiImage: warped)
                         .resizable()
                         .scaledToFit()
+                        .accessibilityIgnoresInvertColors()
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -1050,7 +1048,7 @@ struct PhotoBoardJudgeView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                         }
-                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 16, rimHeight: 4, whiteBorderWidth: 2.5))
+                        .buttonStyle(GlossyCapsuleButtonStyle(palette: .snow, cornerRadius: 16, rimHeight: 2.5, whiteBorderWidth: 2.5))
                     }
                 }
                 .padding(16)
@@ -1738,7 +1736,7 @@ struct PhotoBoardJudgeView: View {
                 }
             }
             var effectiveSize = chosenSize
-            var effectiveInset = userInset
+            let effectiveInset = userInset
             var effectiveKomi = currentKomi
 
             if shouldAutoSize {
@@ -1933,6 +1931,7 @@ private struct BoardCornerCalibrationOverlay: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
+                    .accessibilityIgnoresInvertColors()
                     .frame(width: imageRect.width, height: imageRect.height)
                     .position(x: imageRect.midX, y: imageRect.midY)
 
