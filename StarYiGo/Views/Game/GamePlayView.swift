@@ -1399,6 +1399,7 @@ struct GamePlayView: View {
             illegalEventID: viewModel.illegalEventID,
             libertyBadgeFormat: l10n.t("game.libertiesBadge"),
             koBadgeLabel: l10n.t("board.koBadge"),
+            analysis: viewModel.boardAnalysis,
             onSelectPoint: { point in
                 if isChoosingFocus {
                     focusRegion = .focused(around: point, size: viewModel.boardState.size)

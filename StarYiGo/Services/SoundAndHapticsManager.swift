@@ -125,6 +125,8 @@ final class SoundAndHapticsManager {
     private var tensionActive: Bool = false
     private var isAppActive: Bool = true
     private var lastVoiceTimestamp: [VoiceCue: TimeInterval] = [:]
+    private var lastGridTickTime: TimeInterval = 0
+    private static let gridTickMinimumInterval: TimeInterval = 0.055
 
     private let selectionFeedback = UISelectionFeedbackGenerator()
     private let softImpact = UIImpactFeedbackGenerator(style: .soft)
@@ -139,6 +141,34 @@ final class SoundAndHapticsManager {
         lightImpact.prepare()
         mediumImpact.prepare()
         heavyImpact.prepare()
+        observePowerState()
+    }
+
+    /// Music is the first thing to go when the device is hot or in Low Power Mode: a looping
+    /// BGM keeps the audio hardware awake for the whole session.
+    private var isPowerConstrained: Bool {
+        if ProcessInfo.processInfo.isLowPowerModeEnabled { return true }
+        switch ProcessInfo.processInfo.thermalState {
+        case .serious, .critical: return true
+        default: return false
+        }
+    }
+
+    private func observePowerState() {
+        NotificationCenter.default.addObserver(
+            forName: .NSProcessInfoPowerStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.updateBGMPlayback() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.updateBGMPlayback() }
+        }
     }
 
     func setMusicMood(_ mood: MusicMood) {
@@ -164,7 +194,8 @@ final class SoundAndHapticsManager {
     }
 
     func updateBGMPlayback() {
-        let mood = isAppActive && bgmEnabled && !zenDojoMode ? currentMood : .none
+        let allowed = isAppActive && bgmEnabled && !zenDojoMode && !isPowerConstrained
+        let mood = allowed ? currentMood : .none
         let tension = (mood == .match) && tensionActive
         audio.updateMusic(to: mood, tensionLayer: tension)
     }
@@ -192,10 +223,14 @@ final class SoundAndHapticsManager {
     }
 
     func playGridTick() {
+        // Fast drag-aiming used to fire this on every grid crossing (tens of times a second),
+        // flooding the audio queue and the Taptic Engine. Cap it to a crisp, audible rhythm.
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastGridTickTime >= Self.gridTickMinimumInterval else { return }
+        lastGridTickTime = now
         playKey("gridTick")
         if hapticsEnabled {
             selectionFeedback.selectionChanged()
-            selectionFeedback.prepare()
         }
     }
 
@@ -355,7 +390,6 @@ private final class GameAudioPlayback: @unchecked Sendable {
     private var pendingUnduckWorkItem: DispatchWorkItem?
     private var lastVoiceVariant: [VoiceCue: Int] = [:]
     private var isBGMDUcked: Bool = false
-    private var bgmPrepared: Bool = false
     private var bgmPlayers: [MusicMood: AVAudioPlayer] = [:]
     private var bgmTargetVolumes: [MusicMood: Float] = [
         .island: 0.16,
@@ -375,10 +409,105 @@ private final class GameAudioPlayback: @unchecked Sendable {
         }
     }
 
-    private func ensureBGMPrepared() {
-        guard !bgmPrepared else { return }
-        bgmPrepared = true
-        prepareAdaptiveBGM()
+    /// Builds only the background track that is actually about to play. Previously all four
+    /// loops (~2.9 MB of PCM plus four decodes) were synthesized at launch even though only
+    /// one could ever be audible.
+    private func ensureBGMPlayer(for mood: MusicMood) {
+        switch mood {
+        case .island:
+            guard bgmPlayers[.island] == nil else { return }
+            bgmPlayers[.island] = makeIslandBGM()
+        case .match:
+            if bgmPlayers[.match] == nil { bgmPlayers[.match] = makeMatchBGM() }
+            if tensionPlayer == nil { tensionPlayer = makeMatchTensionLayer() }
+        case .boss:
+            guard bgmPlayers[.boss] == nil else { return }
+            bgmPlayers[.boss] = makeBossBGM()
+        case .none:
+            break
+        }
+    }
+
+    private func makeIslandBGM() -> AVAudioPlayer? {
+        // Island Breeze (C Major Pentatonic — 64-step A-B-A'-C warm marimba + harp + warm bass)
+        let islandA: [(Double, Double, Double)] = [
+            (523.25, 261.63, 329.63), (0, 0, 0), (659.25, 0, 0), (783.99, 0, 0),
+            (880.00, 349.23, 440.00), (0, 0, 0), (783.99, 0, 0), (659.25, 0, 0),
+            (587.33, 293.66, 392.00), (0, 0, 0), (659.25, 0, 0), (523.25, 0, 0),
+            (587.33, 196.00, 293.66), (0, 0, 0), (0, 0, 0), (523.25, 0, 0)
+        ]
+        let islandB: [(Double, Double, Double)] = [
+            (783.99, 329.63, 392.00), (0, 0, 0), (880.00, 0, 0), (1046.50, 0, 0),
+            (880.00, 261.63, 329.63), (0, 0, 0), (783.99, 0, 0), (659.25, 0, 0),
+            (659.25, 220.00, 329.63), (587.33, 0, 0), (523.25, 0, 0), (587.33, 0, 0),
+            (659.25, 196.00, 293.66), (0, 0, 0), (523.25, 0, 0), (0, 0, 0)
+        ]
+        let islandC: [(Double, Double, Double)] = [
+            (1046.50, 261.63, 392.00), (0, 0, 0), (880.00, 0, 0), (783.99, 0, 0),
+            (659.25, 349.23, 440.00), (783.99, 0, 0), (880.00, 0, 0), (659.25, 0, 0),
+            (587.33, 293.66, 392.00), (659.25, 0, 0), (523.25, 0, 0), (440.00, 0, 0),
+            (523.25, 261.63, 329.63), (0, 0, 0), (0, 0, 0), (0, 0, 0)
+        ]
+        let islandFull = islandA + islandB + islandA + islandC
+        return makeLoopingBGMPlayer(
+            from: synthesizeRichPentatonicBGM(steps: islandFull, stepDuration: 0.34, brightness: 0.22, padWarmth: 0.16),
+            volume: 0.16
+        )
+    }
+
+    private func makeMatchBGM() -> AVAudioPlayer? {
+        // Calm Zen Match (D Major / A Pentatonic — spacious koto & wooden kalimba, generous silences)
+        let matchA: [(Double, Double, Double)] = [
+            (440.00, 220.00, 293.66), (0, 0, 0), (0, 0, 0), (523.25, 0, 0),
+            (587.33, 196.00, 293.66), (0, 0, 0), (523.25, 0, 0), (0, 0, 0),
+            (440.00, 174.61, 261.63), (0, 0, 0), (392.00, 0, 0), (0, 0, 0),
+            (440.00, 220.00, 329.63), (0, 0, 0), (0, 0, 0), (0, 0, 0)
+        ]
+        let matchB: [(Double, Double, Double)] = [
+            (659.25, 261.63, 329.63), (0, 0, 0), (587.33, 0, 0), (0, 0, 0),
+            (523.25, 220.00, 329.63), (0, 0, 0), (440.00, 0, 0), (392.00, 0, 0),
+            (440.00, 196.00, 293.66), (0, 0, 0), (523.25, 0, 0), (0, 0, 0),
+            (392.00, 196.00, 246.94), (0, 0, 0), (0, 0, 0), (0, 0, 0)
+        ]
+        let matchC: [(Double, Double, Double)] = [
+            (587.33, 220.00, 293.66), (0, 0, 0), (659.25, 0, 0), (0, 0, 0),
+            (783.99, 261.63, 392.00), (0, 0, 0), (659.25, 0, 0), (587.33, 0, 0),
+            (523.25, 196.00, 293.66), (0, 0, 0), (440.00, 0, 0), (0, 0, 0),
+            (392.00, 196.00, 261.63), (0, 0, 0), (0, 0, 0), (0, 0, 0)
+        ]
+        let matchFull = matchA + matchB + matchA + matchC
+        return makeLoopingBGMPlayer(
+            from: synthesizeRichPentatonicBGM(steps: matchFull, stepDuration: 0.44, brightness: 0.14, padWarmth: 0.22),
+            volume: 0.13
+        )
+    }
+
+    /// Gentle taiko/woodblock pulse layered over the Match BGM during ko/atari/byo-yomi.
+    private func makeMatchTensionLayer() -> AVAudioPlayer? {
+        makeLoopingBGMPlayer(
+            from: synthesizeTensionPulseLoop(beats: 16, stepDuration: 0.44),
+            volume: 0.0
+        )
+    }
+
+    private func makeBossBGM() -> AVAudioPlayer? {
+        // Boss Duel (Energetic 32-step shamisen/marimba groove)
+        let bossA: [(Double, Double, Double)] = [
+            (440.00, 220.00, 329.63), (523.25, 0, 0), (587.33, 293.66, 0), (659.25, 0, 0),
+            (783.99, 329.63, 440.00), (659.25, 0, 0), (587.33, 293.66, 0), (523.25, 0, 0),
+            (440.00, 220.00, 329.63), (659.25, 0, 0), (783.99, 329.63, 0), (880.00, 0, 0),
+            (783.99, 329.63, 440.00), (659.25, 293.66, 0), (587.33, 220.00, 0), (523.25, 196.00, 0)
+        ]
+        let bossB: [(Double, Double, Double)] = [
+            (880.00, 220.00, 329.63), (0, 0, 0), (783.99, 293.66, 0), (659.25, 0, 0),
+            (783.99, 261.63, 392.00), (880.00, 0, 0), (1046.50, 329.63, 0), (880.00, 0, 0),
+            (783.99, 293.66, 440.00), (659.25, 0, 0), (587.33, 220.00, 0), (659.25, 0, 0),
+            (523.25, 196.00, 293.66), (587.33, 0, 0), (440.00, 220.00, 0), (0, 0, 0)
+        ]
+        return makeLoopingBGMPlayer(
+            from: synthesizeRichPentatonicBGM(steps: bossA + bossB, stepDuration: 0.24, brightness: 0.28, padWarmth: 0.14),
+            volume: 0.17
+        )
     }
 
     private func observeMemoryWarnings() {
@@ -477,9 +606,9 @@ private final class GameAudioPlayback: @unchecked Sendable {
             : currentMood
         if effectiveMood != .none {
             try? AVAudioSession.sharedInstance().setActive(true)
-            ensureBGMPrepared()
+            // Lazy: only synthesize/decode the track that is actually requested.
+            ensureBGMPlayer(for: effectiveMood)
         }
-        guard bgmPrepared else { return }
 
         let duckScale: Float = isBGMDUcked ? 0.38 : 1.0
         for (mood, player) in bgmPlayers {
@@ -718,90 +847,6 @@ private final class GameAudioPlayback: @unchecked Sendable {
     }
 
     // MARK: - 64-Beat Adaptive BGM Compositions (Zero Loop Fatigue)
-
-    private func prepareAdaptiveBGM() {
-        // 1. Island Breeze (C Major Pentatonic — 64-step A-B-A'-C warm marimba + harp + warm bass)
-        let islandA: [(Double, Double, Double)] = [
-            (523.25, 261.63, 329.63), (0, 0, 0), (659.25, 0, 0), (783.99, 0, 0),
-            (880.00, 349.23, 440.00), (0, 0, 0), (783.99, 0, 0), (659.25, 0, 0),
-            (587.33, 293.66, 392.00), (0, 0, 0), (659.25, 0, 0), (523.25, 0, 0),
-            (587.33, 196.00, 293.66), (0, 0, 0), (0, 0, 0), (523.25, 0, 0)
-        ]
-        let islandB: [(Double, Double, Double)] = [
-            (783.99, 329.63, 392.00), (0, 0, 0), (880.00, 0, 0), (1046.50, 0, 0),
-            (880.00, 261.63, 329.63), (0, 0, 0), (783.99, 0, 0), (659.25, 0, 0),
-            (659.25, 220.00, 329.63), (587.33, 0, 0), (523.25, 0, 0), (587.33, 0, 0),
-            (659.25, 196.00, 293.66), (0, 0, 0), (523.25, 0, 0), (0, 0, 0)
-        ]
-        let islandC: [(Double, Double, Double)] = [
-            (1046.50, 261.63, 392.00), (0, 0, 0), (880.00, 0, 0), (783.99, 0, 0),
-            (659.25, 349.23, 440.00), (783.99, 0, 0), (880.00, 0, 0), (659.25, 0, 0),
-            (587.33, 293.66, 392.00), (659.25, 0, 0), (523.25, 0, 0), (440.00, 0, 0),
-            (523.25, 261.63, 329.63), (0, 0, 0), (0, 0, 0), (0, 0, 0)
-        ]
-        let islandFull = islandA + islandB + islandA + islandC
-        if let p = makeLoopingBGMPlayer(
-            from: synthesizeRichPentatonicBGM(steps: islandFull, stepDuration: 0.34, brightness: 0.22, padWarmth: 0.16),
-            volume: 0.16
-        ) {
-            bgmPlayers[.island] = p
-        }
-
-        // 2. Calm Zen Match (D Major / A Pentatonic — spacious koto & wooden kalimba, generous silences)
-        let matchA: [(Double, Double, Double)] = [
-            (440.00, 220.00, 293.66), (0, 0, 0), (0, 0, 0), (523.25, 0, 0),
-            (587.33, 196.00, 293.66), (0, 0, 0), (523.25, 0, 0), (0, 0, 0),
-            (440.00, 174.61, 261.63), (0, 0, 0), (392.00, 0, 0), (0, 0, 0),
-            (440.00, 220.00, 329.63), (0, 0, 0), (0, 0, 0), (0, 0, 0)
-        ]
-        let matchB: [(Double, Double, Double)] = [
-            (659.25, 261.63, 329.63), (0, 0, 0), (587.33, 0, 0), (0, 0, 0),
-            (523.25, 220.00, 329.63), (0, 0, 0), (440.00, 0, 0), (392.00, 0, 0),
-            (440.00, 196.00, 293.66), (0, 0, 0), (523.25, 0, 0), (0, 0, 0),
-            (392.00, 196.00, 246.94), (0, 0, 0), (0, 0, 0), (0, 0, 0)
-        ]
-        let matchC: [(Double, Double, Double)] = [
-            (587.33, 220.00, 293.66), (0, 0, 0), (659.25, 0, 0), (0, 0, 0),
-            (783.99, 261.63, 392.00), (0, 0, 0), (659.25, 0, 0), (587.33, 0, 0),
-            (523.25, 196.00, 293.66), (0, 0, 0), (440.00, 0, 0), (0, 0, 0),
-            (392.00, 196.00, 261.63), (0, 0, 0), (0, 0, 0), (0, 0, 0)
-        ]
-        let matchFull = matchA + matchB + matchA + matchC
-        if let p = makeLoopingBGMPlayer(
-            from: synthesizeRichPentatonicBGM(steps: matchFull, stepDuration: 0.44, brightness: 0.14, padWarmth: 0.22),
-            volume: 0.13
-        ) {
-            bgmPlayers[.match] = p
-        }
-
-        // 2B. Dynamic Match Tension Layer (gentle taiko/woodblock pulse layered over Match BGM during Ko/Atari/Byo-yomi)
-        if let tp = makeLoopingBGMPlayer(
-            from: synthesizeTensionPulseLoop(beats: 16, stepDuration: 0.44),
-            volume: 0.0
-        ) {
-            tensionPlayer = tp
-        }
-
-        // 3. Boss Duel (Energetic 32-step shamisen/marimba groove)
-        let bossA: [(Double, Double, Double)] = [
-            (440.00, 220.00, 329.63), (523.25, 0, 0), (587.33, 293.66, 0), (659.25, 0, 0),
-            (783.99, 329.63, 440.00), (659.25, 0, 0), (587.33, 293.66, 0), (523.25, 0, 0),
-            (440.00, 220.00, 329.63), (659.25, 0, 0), (783.99, 329.63, 0), (880.00, 0, 0),
-            (783.99, 329.63, 440.00), (659.25, 293.66, 0), (587.33, 220.00, 0), (523.25, 196.00, 0)
-        ]
-        let bossB: [(Double, Double, Double)] = [
-            (880.00, 220.00, 329.63), (0, 0, 0), (783.99, 293.66, 0), (659.25, 0, 0),
-            (783.99, 261.63, 392.00), (880.00, 0, 0), (1046.50, 329.63, 0), (880.00, 0, 0),
-            (783.99, 293.66, 440.00), (659.25, 0, 0), (587.33, 220.00, 0), (659.25, 0, 0),
-            (523.25, 196.00, 293.66), (587.33, 0, 0), (440.00, 220.00, 0), (0, 0, 0)
-        ]
-        if let p = makeLoopingBGMPlayer(
-            from: synthesizeRichPentatonicBGM(steps: bossA + bossB, stepDuration: 0.24, brightness: 0.28, padWarmth: 0.14),
-            volume: 0.17
-        ) {
-            bgmPlayers[.boss] = p
-        }
-    }
 
     private func makeLoopingBGMPlayer(from wavData: Data, volume: Float) -> AVAudioPlayer? {
         guard let player = try? AVAudioPlayer(data: wavData) else { return nil }

@@ -4,6 +4,10 @@
 //
 
 import SwiftUI
+import Combine
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// High-DPI SwiftUI Canvas Go Board engineered with Nintendo physicality & Apple HIG ergonomics:
 /// - Rock-solid immutable square geometry (zero layout shifts)
@@ -42,6 +46,9 @@ struct GoBoardView: View {
     var illegalEventID: UUID = UUID()
     var libertyBadgeFormat: String = "%d"
     var koBadgeLabel: String = "劫"
+    /// Optional pre-computed analysis (atari / two-eye / groups) supplied by the owning model.
+    /// When nil the view falls back to computing it locally (previews, one-off boards).
+    var analysis: GoBoardAnalysis? = nil
     var onSelectPoint: ((BoardPoint) -> Void)? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -63,13 +70,46 @@ struct GoBoardView: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var highFPSAnimationActive: Bool = false
     @State private var highFPSCooldownTask: Task<Void, Never>? = nil
+    @State private var isHoverAnimating: Bool = false
+    @State private var hoverIdleTask: Task<Void, Never>? = nil
+    @State private var ambientPulseActive: Bool = false
+    @State private var ambientPulseTask: Task<Void, Never>? = nil
+    @State private var landingAnimationActive: Bool = false
+    @State private var landingAnimationTask: Task<Void, Never>? = nil
+    @State private var voiceOverEnabled: Bool = {
+        #if canImport(UIKit)
+        return UIAccessibility.isVoiceOverRunning
+        #else
+        return false
+        #endif
+    }()
 
     private var effectiveRegion: BoardCropRegion {
         cropRegion ?? BoardCropRegion.full(size: boardState.size)
     }
 
+    /// Only active, user-driven motion (a moving preview / hover) needs the 60 fps budget.
+    /// Once the pointer or finger rests, the board drops back to a static frame instead of
+    /// ticking forever — a parked trackpad cursor used to keep the whole board at 60 fps.
     private func needsHighFPSTimeline() -> Bool {
-        dragHoverPoint != nil || highFPSAnimationActive
+        (isHoverAnimating && !reduceMotion) || highFPSAnimationActive
+    }
+
+    private func noteContinuousMotion() {
+        guard !reduceMotion else { return }
+        isHoverAnimating = true
+        hoverIdleTask?.cancel()
+        hoverIdleTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            isHoverAnimating = false
+        }
+    }
+
+    private func stopContinuousMotion() {
+        hoverIdleTask?.cancel()
+        hoverIdleTask = nil
+        isHoverAnimating = false
     }
 
     private func scheduleHighFPSBurst(duration: TimeInterval) {
@@ -83,20 +123,66 @@ struct GoBoardView: View {
         }
     }
 
-    private func needsAmbientTimeline(hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
-        guard !reduceMotion else { return false }
-        return hasAtari || hasTwoEyes || boardState.koIndex != nil || !aiSuggestions.isEmpty || puzzleHintPoint != nil || !unsealedWarningPoints.isEmpty || !highlightedPocketPoints.isEmpty || pendingPoint != nil || inspectedGroup != nil || showLiveLiberties
-    }
-
-    private func timelineInterval(hasAtari: Bool, hasTwoEyes: Bool) -> TimeInterval {
-        if needsHighFPSTimeline() {
-            return 1.0 / 60.0
+    /// Ambient effects (two-eye glow, live liberties, atari halo, hint ring) used to keep a
+    /// 15 fps full-board redraw running for the entire game. They now animate for a short
+    /// "pulse" after an event, then rest on a clean static frame (product option A).
+    private func scheduleAmbientPulse(duration: TimeInterval = 2.0) {
+        guard !reduceMotion else { return }
+        ambientPulseActive = true
+        ambientPulseTask?.cancel()
+        ambientPulseTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            ambientPulseActive = false
         }
-        return needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes) ? (1.0 / 15.0) : 1.0
     }
 
-    private func isTimelinePaused(hasAtari: Bool, hasTwoEyes: Bool) -> Bool {
-        !needsHighFPSTimeline() && !needsAmbientTimeline(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+    private func needsAmbientTimeline() -> Bool {
+        guard !reduceMotion else { return false }
+        return inspectedGroup != nil || ambientPulseActive
+    }
+
+    private func timelineInterval() -> TimeInterval {
+        // The animated layer now only draws halos / sparkles / previews (never the stones),
+        // so a smooth 60 fps pulse is cheap and the board no longer looks choppy at 15 fps.
+        if needsHighFPSTimeline() || needsAmbientTimeline() { return 1.0 / 60.0 }
+        return 1.0
+    }
+
+    private func isTimelinePaused() -> Bool {
+        !needsHighFPSTimeline() && !needsAmbientTimeline()
+    }
+
+    private var currentLastMovePoint: BoardPoint? {
+        if case .place(let point) = boardState.lastMove { return point }
+        return nil
+    }
+
+    /// Keeps the freshly placed stone out of the static layer for the short landing pop,
+    /// then re-bakes it in. This is what lets the stone layer stay cached during animation.
+    private func scheduleLandingAnimation() {
+        guard !reduceMotion, currentLastMovePoint != nil else { return }
+        landingAnimationActive = true
+        landingAnimationTask?.cancel()
+        landingAnimationTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            landingAnimationActive = false
+        }
+    }
+
+    /// Stable fingerprint of every input that should trigger a short ambient pulse.
+    private var ambientPulseKey: Int {
+        var hasher = Hasher()
+        hasher.combine(boardState.moveCount)
+        hasher.combine(boardState.koIndex)
+        hasher.combine(aiSuggestions)
+        hasher.combine(puzzleHintPoint)
+        hasher.combine(pendingPoint)
+        hasher.combine(unsealedWarningPoints)
+        hasher.combine(highlightedPocketPoints)
+        hasher.combine(markedDeadIndices)
+        return hasher.finalize()
     }
 
     var body: some View {
@@ -104,54 +190,99 @@ struct GoBoardView: View {
             let side = min(geo.size.width, geo.size.height)
             let region = effectiveRegion
             let palette = AppTheme.palette(for: theme)
-            let atariSet = highlightAtari ? boardState.atariPoints() : []
-            let twoEyeAnalysis = showTwoEyeGlow ? boardState.twoEyeAliveAnalysis() : (eyePoints: Set<BoardPoint>(), aliveStoneIndices: Set<Int>())
-            let cachedGroups = (expressiveStones || showLiveLiberties) ? boardState.allGroups() : []
+            let resolved = analysis ?? GoBoardAnalysis.build(
+                from: boardState,
+                includeAtari: highlightAtari,
+                includeTwoEye: showTwoEyeGlow,
+                includeGroups: expressiveStones || showLiveLiberties
+            )
+            let atariSet = highlightAtari ? resolved.atariPoints : []
+            let twoEyeAnalysis = (
+                eyePoints: showTwoEyeGlow ? resolved.eyePoints : Set<BoardPoint>(),
+                aliveStoneIndices: showTwoEyeGlow ? resolved.aliveStoneIndices : Set<Int>()
+            )
+            let cachedGroups = (expressiveStones || showLiveLiberties) ? resolved.groups : []
+            let liveLibertyPoints = Self.liveLibertyPoints(
+                from: cachedGroups,
+                boardState: boardState,
+                enabled: showLiveLiberties && inspectedGroup == nil && !isDeadStoneReviewMode
+            )
 
-            let hasAtari = !atariSet.isEmpty
-            let hasTwoEyes = !twoEyeAnalysis.eyePoints.isEmpty
-            let interval = timelineInterval(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
-            let paused = isTimelinePaused(hasAtari: hasAtari, hasTwoEyes: hasTwoEyes)
+            let interval = timelineInterval()
+            let paused = isTimelinePaused()
 
             ZStack {
-                // Static board surface (wood grain, grid lines, star points, coordinates) — rasterized once & never redrawn by TimelineView ticks
-                Canvas { context, size in
-                    drawStaticBoardSurface(
-                        context: &context,
-                        canvasSize: size,
-                        region: region,
-                        palette: palette
-                    )
-                }
-                .drawingGroup()
-                .frame(width: side, height: side)
-                .allowsHitTesting(false)
+                // Static drop shadow: a fixed-shape layer behind the board. The shadow used to
+                // be attached to the animating container, forcing a full-board offscreen blur
+                // on every single animation frame.
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(palette.frameBorder)
+                    .frame(width: side, height: side)
+                    .shadow(color: Color.black.opacity(0.22), radius: 22, x: 0, y: 12)
+                    .offset(x: shakeOffset)
+                    .allowsHitTesting(false)
 
-                TimelineView(.animation(minimumInterval: interval, paused: paused)) { timeline in
-                    let now = timeline.date
+                ZStack {
+                    // Static board surface (wood grain, grid lines, star points, coordinates) — rasterized once & never redrawn by TimelineView ticks
                     Canvas { context, size in
-                        drawBoard(
+                        drawStaticBoardSurface(
                             context: &context,
                             canvasSize: size,
                             region: region,
-                            palette: palette,
-                            atariSet: atariSet,
-                            twoEyeAnalysis: twoEyeAnalysis,
-                            cachedGroups: cachedGroups,
-                            now: now
+                            palette: palette
                         )
                     }
+                    .drawingGroup()
                     .frame(width: side, height: side)
+                    .allowsHitTesting(false)
+
+                    // Cached stone layer: only re-renders when the position (or a static
+                    // overlay such as territory / move numbers / dead marks) actually changes.
+                    // Hover, drag and ambient animation never re-draw the 361 stones.
+                    BoardStonesLayer(
+                        boardState: boardState,
+                        stoneStyle: stoneStyle,
+                        region: region,
+                        showCoordinates: showCoordinates,
+                        side: side,
+                        analysis: resolved,
+                        showMoveNumbers: showMoveNumbers,
+                        moveNumbers: moveNumbers,
+                        expressiveStones: expressiveStones,
+                        markedDeadIndices: markedDeadIndices,
+                        territoryEstimate: territoryEstimate,
+                        differentiateWithoutColor: differentiateWithoutColor,
+                        suppressedStone: landingAnimationActive ? currentLastMovePoint : nil
+                    )
+                    .equatable()
+                    .frame(width: side, height: side)
+                    .allowsHitTesting(false)
+
+                    TimelineView(.animation(minimumInterval: interval, paused: paused)) { timeline in
+                        let now = timeline.date
+                        Canvas { context, size in
+                            drawDynamicBoard(
+                                context: &context,
+                                canvasSize: size,
+                                region: region,
+                                atariSet: atariSet,
+                                twoEyeAnalysis: twoEyeAnalysis,
+                                liveLibertyPoints: liveLibertyPoints,
+                                now: now,
+                                animated: needsHighFPSTimeline() || needsAmbientTimeline()
+                            )
+                        }
+                        .frame(width: side, height: side)
+                    }
                 }
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(palette.frameBorder, lineWidth: 4)
+                )
+                .offset(x: shakeOffset)
             }
-            .frame(width: side, height: side)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(palette.frameBorder, lineWidth: 4)
-            )
-            .shadow(color: Color.black.opacity(0.22), radius: 22, x: 0, y: 12)
-            .offset(x: shakeOffset)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -196,6 +327,7 @@ struct GoBoardView: View {
                             if boardState.stone(at: pt) == nil {
                                 if dragHoverPoint != pt {
                                     dragHoverPoint = pt
+                                    noteContinuousMotion()
                                     if isDraggingAim {
                                         SoundAndHapticsManager.shared.playGridTick()
                                     }
@@ -253,11 +385,13 @@ struct GoBoardView: View {
                     if let pt = nearestPoint(for: location, side: side, region: region),
                        boardState.stone(at: pt) == nil {
                         dragHoverPoint = pt
+                        noteContinuousMotion()
                     } else {
                         dragHoverPoint = nil
                     }
                 case .ended:
                     dragHoverPoint = nil
+                    stopContinuousMotion()
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -267,47 +401,68 @@ struct GoBoardView: View {
             .accessibilityLabel(Self.accessibilitySummary(for: boardState, l10n: boardL10n))
             .accessibilityHint(boardAccessibilityHint)
             .accessibilityChildren {
-                GoBoardAccessibilityGrid(
-                    boardState: boardState,
-                    region: region,
-                    side: side,
-                    atariSet: atariSet,
-                    pendingPoint: pendingPoint,
-                    isInteractive: isInteractive,
-                    isDeadStoneReviewMode: isDeadStoneReviewMode,
-                    l10n: boardL10n,
-                    metrics: computeMetrics(side: side, region: region),
-                    onSelectPoint: onSelectPoint
-                )
+                if voiceOverEnabled {
+                    GoBoardAccessibilityGrid(
+                        boardState: boardState,
+                        region: region,
+                        side: side,
+                        atariSet: atariSet,
+                        pendingPoint: pendingPoint,
+                        isInteractive: isInteractive,
+                        isDeadStoneReviewMode: isDeadStoneReviewMode,
+                        l10n: boardL10n,
+                        metrics: computeMetrics(side: side, region: region),
+                        onSelectPoint: onSelectPoint
+                    )
+                }
             }
             .accessibilityRotor(
                 Text(boardL10n.localized(zh: "最后一手", en: "Last Move", ja: "最後の一手", ko: "마지막 수", zhHant: "最後一手")),
-                entries: lastMoveRotorEntries(in: region, atariSet: atariSet),
+                entries: voiceOverEnabled ? lastMoveRotorEntries(in: region, atariSet: atariSet) : [],
                 entryLabel: \.label
             )
             .accessibilityRotor(
                 Text(boardL10n.localized(zh: "叫吃棋子", en: "Atari", ja: "アタリ", ko: "단수", zhHant: "叫吃棋子")),
-                entries: atariRotorEntries(in: region, atariSet: atariSet),
+                entries: voiceOverEnabled ? atariRotorEntries(in: region, atariSet: atariSet) : [],
                 entryLabel: \.label
             )
             .accessibilityRotor(
                 Text(boardL10n.localized(zh: "黑子", en: "Black Stones", ja: "黒石", ko: "흑돌", zhHant: "黑子")),
-                entries: stoneRotorEntries(color: .black, in: region, atariSet: atariSet),
+                entries: voiceOverEnabled ? stoneRotorEntries(color: .black, in: region, atariSet: atariSet) : [],
                 entryLabel: \.label
             )
             .accessibilityRotor(
                 Text(boardL10n.localized(zh: "白子", en: "White Stones", ja: "白石", ko: "백돌", zhHant: "白子")),
-                entries: stoneRotorEntries(color: .white, in: region, atariSet: atariSet),
+                entries: voiceOverEnabled ? stoneRotorEntries(color: .white, in: region, atariSet: atariSet) : [],
                 entryLabel: \.label
             )
         }
         .aspectRatio(1, contentMode: .fit)
+        .onAppear {
+            #if canImport(UIKit)
+            voiceOverEnabled = UIAccessibility.isVoiceOverRunning
+            #endif
+            // One short "hello" pulse so atari / two-eye / liberty highlights are introduced,
+            // then the board rests instead of animating for the whole game.
+            if showLiveLiberties || showTwoEyeGlow || highlightAtari {
+                scheduleAmbientPulse()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in
+            #if canImport(UIKit)
+            voiceOverEnabled = UIAccessibility.isVoiceOverRunning
+            #endif
+        }
+        .onChange(of: ambientPulseKey) { _, _ in
+            scheduleAmbientPulse()
+        }
         .onChange(of: isTouchActive) { _, active in
             if !active {
                 dragHoverPoint = nil
                 isDraggingAim = false
                 inspectedGroup = nil
                 inspectAnchorPoint = nil
+                stopContinuousMotion()
             }
         }
         .onChange(of: boardState.moveCount) { _, _ in
@@ -315,6 +470,7 @@ struct GoBoardView: View {
                 lastMovePointCached = pt
                 lastMoveTimestamp = Date()
                 scheduleHighFPSBurst(duration: 0.50)
+                scheduleLandingAnimation()
             }
         }
         .onChange(of: captureEventID) { _, _ in
@@ -336,6 +492,13 @@ struct GoBoardView: View {
             highFPSCooldownTask?.cancel()
             highFPSCooldownTask = nil
             highFPSAnimationActive = false
+            stopContinuousMotion()
+            ambientPulseTask?.cancel()
+            ambientPulseTask = nil
+            ambientPulseActive = false
+            landingAnimationTask?.cancel()
+            landingAnimationTask = nil
+            landingAnimationActive = false
         }
     }
 
@@ -378,27 +541,7 @@ struct GoBoardView: View {
     }
 
     private func computeMetrics(side: CGFloat, region: BoardCropRegion) -> BoardMetrics {
-        let maxSpan = max(region.rowCount, region.colCount)
-        let coordMargin: CGFloat = showCoordinates ? max(24, side * 0.050) : max(16, side * 0.034)
-        let gridIntervals = max(1, CGFloat(maxSpan - 1))
-        let standardStep = max(0, side - coordMargin * 2) / gridIntervals
-        let frameClearance: CGFloat = showCoordinates ? coordMargin * 0.44 + 9 : 8
-        let stoneSafeStep = max(0, side - frameClearance * 2)
-            / (gridIntervals + BoardMetrics.stoneExtentPerCell * 2)
-        let step = min(standardStep, stoneSafeStep)
-
-        let gridWidth = CGFloat(region.colCount - 1) * step
-        let gridHeight = CGFloat(region.rowCount - 1) * step
-        let originX = (side - gridWidth) / 2
-        let originY = (side - gridHeight) / 2
-
-        return BoardMetrics(
-            padding: coordMargin,
-            cellStep: step,
-            originX: originX,
-            originY: originY,
-            region: region
-        )
+        Self.metrics(side: side, region: region, showCoordinates: showCoordinates)
     }
 
     private func nearestPoint(for location: CGPoint, side: CGFloat, region: BoardCropRegion) -> BoardPoint? {
@@ -579,40 +722,67 @@ struct GoBoardView: View {
         }
     }
 
-    private func drawBoard(
+    // MARK: - Static stone layer (cached)
+
+    fileprivate static func metrics(
+        side: CGFloat,
+        region: BoardCropRegion,
+        showCoordinates: Bool
+    ) -> BoardMetrics {
+        let maxSpan = max(region.rowCount, region.colCount)
+        let coordMargin: CGFloat = showCoordinates ? max(24, side * 0.050) : max(16, side * 0.034)
+        let gridIntervals = max(1, CGFloat(maxSpan - 1))
+        let standardStep = max(0, side - coordMargin * 2) / gridIntervals
+        let frameClearance: CGFloat = showCoordinates ? coordMargin * 0.44 + 9 : 8
+        let stoneSafeStep = max(0, side - frameClearance * 2)
+            / (gridIntervals + BoardMetrics.stoneExtentPerCell * 2)
+        let step = min(standardStep, stoneSafeStep)
+
+        let gridWidth = CGFloat(region.colCount - 1) * step
+        let gridHeight = CGFloat(region.rowCount - 1) * step
+        let originX = (side - gridWidth) / 2
+        let originY = (side - gridHeight) / 2
+
+        return BoardMetrics(
+            padding: coordMargin,
+            cellStep: step,
+            originX: originX,
+            originY: originY,
+            region: region
+        )
+    }
+
+    /// Draws everything that only changes when the position or a static overlay changes:
+    /// territory, stones, expressive faces, move numbers, dead markers and the last-move ring.
+    /// This layer is wrapped in an `.equatable()` view so hover / drag / ambient animation
+    /// never re-rasterizes the 361 stones.
+    fileprivate static func renderStonesLayer(
         context: inout GraphicsContext,
         canvasSize: CGSize,
+        boardState: GoBoardState,
+        stoneStyle: StoneStyle,
         region: BoardCropRegion,
-        palette: AppTheme.BoardPalette,
-        atariSet: Set<BoardPoint>,
-        twoEyeAnalysis: (eyePoints: Set<BoardPoint>, aliveStoneIndices: Set<Int>),
-        cachedGroups: [GoGroup],
-        now: Date
+        showCoordinates: Bool,
+        side: CGFloat,
+        analysis: GoBoardAnalysis,
+        showMoveNumbers: Bool,
+        moveNumbers: [BoardPoint: Int],
+        expressiveStones: Bool,
+        markedDeadIndices: Set<Int>,
+        territoryEstimate: TerritoryEstimate?,
+        differentiateWithoutColor: Bool,
+        suppressedStone: BoardPoint?
     ) {
-        let rect = CGRect(origin: .zero, size: canvasSize)
-        let m = computeMetrics(side: min(canvasSize.width, canvasSize.height), region: region)
-        let timePhase = now.timeIntervalSinceReferenceDate
-        let breathe = 0.5 + 0.5 * sin(timePhase * 4.4)
+        let m = metrics(side: side, region: region, showCoordinates: showCoordinates)
         let stoneRadius = m.cellStep * BoardMetrics.stoneRadiusPerCell
+        let atariSet = analysis.atariPoints
+        let twoEyeAnalysis = (eyePoints: analysis.eyePoints, aliveStoneIndices: analysis.aliveStoneIndices)
+        let lastMovePoint: BoardPoint? = {
+            if case .place(let p) = boardState.lastMove { return p }
+            return nil
+        }()
 
-        // Use hoisted group liberty counts for expressive stones & beginner live liberties
-        var libertyCountByIndex: [Int: Int] = [:]
-        var urgentLibertyPoints: Set<BoardPoint> = []
-        if !cachedGroups.isEmpty {
-            for g in cachedGroups {
-                let libCount = g.liberties.count
-                for s in g.stones {
-                    libertyCountByIndex[s] = libCount
-                }
-                if showLiveLiberties && libCount <= 2 {
-                    for libIdx in g.liberties {
-                        urgentLibertyPoints.insert(boardState.point(for: libIdx))
-                    }
-                }
-            }
-        }
-
-        // 6. Territory Overlay
+        // 1. Territory overlay
         if let est = territoryEstimate {
             let sq = m.cellStep * 0.36
             for r in region.minRow...region.maxRow {
@@ -634,7 +804,6 @@ struct GoBoardView: View {
                     } else {
                         let fill = Color.white.opacity(alpha)
                         if differentiateWithoutColor {
-                            // Distinct diamond/circle shape for White territory in colorblind mode
                             context.fill(Path(ellipseIn: sqRect), with: .color(fill))
                             context.stroke(Path(ellipseIn: sqRect), with: .color(AppTheme.inkPrimary.opacity(0.65)), lineWidth: 1.2)
                         } else {
@@ -646,7 +815,116 @@ struct GoBoardView: View {
             }
         }
 
-        // 6B. Living Two-Eye Star Sparkles ("两眼活棋 · 真眼发光")
+        // 2. Hoisted group liberty counts for expressive stones
+        var libertyCountByIndex: [Int: Int] = [:]
+        if expressiveStones && !analysis.groups.isEmpty {
+            for g in analysis.groups {
+                let libCount = g.liberties.count
+                for s in g.stones { libertyCountByIndex[s] = libCount }
+            }
+        }
+
+        // 3. Stones (static)
+        for r in region.minRow...region.maxRow {
+            for c in region.minCol...region.maxCol {
+                let pt = BoardPoint(row: r, col: c)
+                guard let color = boardState.stone(at: pt) else { continue }
+                if pt == suppressedStone { continue }
+                let idx = boardState.index(row: r, col: c)
+                let center = m.center(for: pt)
+                let isMarkedDead = markedDeadIndices.contains(idx)
+
+                drawStone(
+                    context: &context,
+                    center: center,
+                    radius: stoneRadius,
+                    color: color,
+                    opacity: isMarkedDead ? 0.36 : 1.0,
+                    lifted: false,
+                    stoneStyle: stoneStyle
+                )
+
+                if differentiateWithoutColor && atariSet.contains(pt) && !isMarkedDead {
+                    let badgeR = max(3.5, stoneRadius * 0.28)
+                    let badgeCenter = CGPoint(x: center.x + stoneRadius * 0.58, y: center.y - stoneRadius * 0.58)
+                    let badgeRect = CGRect(x: badgeCenter.x - badgeR, y: badgeCenter.y - badgeR, width: badgeR * 2, height: badgeR * 2)
+                    context.fill(Path(ellipseIn: badgeRect), with: .color(AppTheme.vermilionAccent))
+                    context.stroke(Path(ellipseIn: badgeRect), with: .color(.white), lineWidth: 1.2)
+                    context.draw(
+                        Text("!").font(.system(size: max(7, badgeR * 1.3), weight: .black, design: .rounded)).foregroundColor(.white),
+                        at: badgeCenter
+                    )
+                }
+
+                if expressiveStones && !showMoveNumbers && !isMarkedDead && stoneRadius >= 11 {
+                    let libs = libertyCountByIndex[idx] ?? 3
+                    let isTwoEyeAlive = twoEyeAnalysis.aliveStoneIndices.contains(idx)
+                    drawExpressiveFace(
+                        context: &context,
+                        center: center,
+                        radius: stoneRadius,
+                        color: color,
+                        liberties: libs,
+                        isTwoEyeAlive: isTwoEyeAlive
+                    )
+                }
+
+                if isMarkedDead {
+                    let xr = stoneRadius * 0.42
+                    var xPath = Path()
+                    xPath.move(to: CGPoint(x: center.x - xr, y: center.y - xr))
+                    xPath.addLine(to: CGPoint(x: center.x + xr, y: center.y + xr))
+                    xPath.move(to: CGPoint(x: center.x + xr, y: center.y - xr))
+                    xPath.addLine(to: CGPoint(x: center.x - xr, y: center.y + xr))
+                    context.stroke(xPath, with: .color(AppTheme.coralBottom), style: StrokeStyle(lineWidth: max(2.2, stoneRadius * 0.16), lineCap: .round))
+                } else if showMoveNumbers, let num = moveNumbers[pt] {
+                    let numColor: Color = (color == .black) ? .white : AppTheme.inkPrimary
+                    let numFont = Font.system(size: max(9, stoneRadius * 0.78), weight: .bold, design: .rounded)
+                    context.draw(Text("\(num)").font(numFont).foregroundColor(numColor), at: center)
+                } else if lastMovePoint == pt {
+                    let ringR = expressiveStones ? stoneRadius * 0.88 : stoneRadius * 0.36
+                    let ringRect = CGRect(x: center.x - ringR, y: center.y - ringR, width: ringR * 2, height: ringR * 2)
+                    let ringColor: Color = (color == .black) ? Color(red: 0.96, green: 0.79, blue: 0.36) : AppTheme.vermilionAccent
+                    context.stroke(Path(ellipseIn: ringRect), with: .color(ringColor), lineWidth: max(2.0, stoneRadius * 0.13))
+                }
+            }
+        }
+    }
+
+    fileprivate static func liveLibertyPoints(
+        from groups: [GoGroup],
+        boardState: GoBoardState,
+        enabled: Bool
+    ) -> Set<BoardPoint> {
+        guard enabled else { return [] }
+        var points: Set<BoardPoint> = []
+        for group in groups where group.liberties.count <= 2 {
+            for libertyIndex in group.liberties {
+                points.insert(boardState.point(for: libertyIndex))
+            }
+        }
+        return points
+    }
+
+    // MARK: - Dynamic decorations (cheap 60 fps layer)
+
+    private func drawDynamicBoard(
+        context: inout GraphicsContext,
+        canvasSize: CGSize,
+        region: BoardCropRegion,
+        atariSet: Set<BoardPoint>,
+        twoEyeAnalysis: (eyePoints: Set<BoardPoint>, aliveStoneIndices: Set<Int>),
+        liveLibertyPoints: Set<BoardPoint>,
+        now: Date,
+        animated: Bool
+    ) {
+        let rect = CGRect(origin: .zero, size: canvasSize)
+        let m = computeMetrics(side: min(canvasSize.width, canvasSize.height), region: region)
+        let timePhase = now.timeIntervalSinceReferenceDate
+        let breathe = animated ? (0.5 + 0.5 * sin(timePhase * 4.4)) : 0.5
+        let stoneRadius = m.cellStep * BoardMetrics.stoneRadiusPerCell
+
+        // 1. Living Two-Eye Star Sparkles ("两眼活棋 · 真眼发光")
         if showTwoEyeGlow && !twoEyeAnalysis.eyePoints.isEmpty {
             for eyePt in twoEyeAnalysis.eyePoints where region.contains(eyePt) {
                 let center = m.center(for: eyePt)
@@ -674,9 +952,9 @@ struct GoBoardView: View {
             }
         }
 
-        // 6C. Gentle Live Beginner Liberty Dots (for 1-2 liberty groups so kids intuitively see "气"!)
-        if showLiveLiberties && !urgentLibertyPoints.isEmpty && inspectedGroup == nil && !isDeadStoneReviewMode {
-            for libPt in urgentLibertyPoints where region.contains(libPt) && boardState.stone(at: libPt) == nil {
+        // 2. Live beginner liberty dots
+        if showLiveLiberties && !liveLibertyPoints.isEmpty && inspectedGroup == nil && !isDeadStoneReviewMode {
+            for libPt in liveLibertyPoints where region.contains(libPt) && boardState.stone(at: libPt) == nil {
                 let center = m.center(for: libPt)
                 let dotR = max(3.5, stoneRadius * (0.24 + 0.06 * breathe))
                 let dotRect = CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2)
@@ -696,7 +974,7 @@ struct GoBoardView: View {
             }
         }
 
-        // 6D. Visual Ko Lock Badge ("打劫 · 冷却一回合")
+        // 3. Ko lock badge
         if let koPt = boardState.koPoint, region.contains(koPt), boardState.stone(at: koPt) == nil {
             let center = m.center(for: koPt)
             let boxR = stoneRadius * (0.58 + 0.06 * breathe)
@@ -711,7 +989,7 @@ struct GoBoardView: View {
             )
         }
 
-        // 7. Capture Burst Animation
+        // 4. Capture burst
         let capAge = now.timeIntervalSince(captureTimestamp)
         if capAge >= 0 && capAge < 0.56 {
             let progress = capAge / 0.56
@@ -739,118 +1017,33 @@ struct GoBoardView: View {
             }
         }
 
-        // 8. Stones with Atari Shiver, Expressive Cute Faces, Two-Eye Crown, Dead-Stone Overlay & Landing Pop
-        let lastMovePoint: BoardPoint? = {
-            if case .place(let p) = boardState.lastMove { return p }
-            return nil
-        }()
-        let landingAge = now.timeIntervalSince(lastMoveTimestamp)
-        let inspectedStoneIndices = inspectedGroup?.stones ?? []
-
-        for r in region.minRow...region.maxRow {
-            for c in region.minCol...region.maxCol {
-                let pt = BoardPoint(row: r, col: c)
-                guard let color = boardState.stone(at: pt) else { continue }
-                let idx = boardState.index(row: r, col: c)
-                var center = m.center(for: pt)
-                let isMarkedDead = markedDeadIndices.contains(idx)
-
-                if atariSet.contains(pt) && !isMarkedDead {
-                    let shiver = CGFloat(sin(timePhase * 28.0 + Double(idx))) * 1.1
-                    center.x += shiver
-
-                    let haloScale = 1.12 + 0.10 * breathe
-                    let haloR = stoneRadius * haloScale
-                    let haloRect = CGRect(x: center.x - haloR, y: center.y - haloR, width: haloR * 2, height: haloR * 2)
-                    context.fill(Path(ellipseIn: haloRect), with: .color(AppTheme.vermilionAccent.opacity(0.24 + 0.18 * breathe)))
-                    context.stroke(Path(ellipseIn: haloRect), with: .color(AppTheme.vermilionAccent.opacity(0.65 + 0.30 * breathe)), lineWidth: 2.2)
-                }
-
-                if inspectedStoneIndices.contains(idx) {
-                    let auraR = stoneRadius * 1.16
-                    let auraRect = CGRect(x: center.x - auraR, y: center.y - auraR, width: auraR * 2, height: auraR * 2)
-                    context.stroke(Path(ellipseIn: auraRect), with: .color(AppTheme.starGold.opacity(0.90)), lineWidth: 2.8)
-                }
-
-                var renderRadius = stoneRadius
-                var landingDiveOffset: CGFloat = 0
-                if pt == lastMovePoint && pt == lastMovePointCached && landingAge >= 0 && landingAge < 0.36 && !reduceMotion {
-                    let t = landingAge / 0.36
-                    let ripR = stoneRadius * (0.95 + t * 0.75)
-                    let ripRect = CGRect(x: center.x - ripR, y: center.y - ripR, width: ripR * 2, height: ripR * 2)
-                    context.stroke(Path(ellipseIn: ripRect), with: .color(Color.white.opacity((1.0 - t) * 0.58)), lineWidth: max(1.0, 2.8 * (1.0 - t)))
-                    if landingAge < 0.085 {
-                        // Tactile 3-stage drop: stone dives from pinched hover onto Kaya wood
-                        let dropT = 1.0 - (landingAge / 0.085)
-                        landingDiveOffset = -stoneRadius * 0.24 * CGFloat(dropT * dropT)
-                        renderRadius = stoneRadius * CGFloat(1.0 + 0.07 * dropT)
-                    } else if landingAge < 0.20 {
-                        let st = (landingAge - 0.085) / 0.115
-                        let bounce = 1.0 + 0.12 * exp(-st * 5.0) * cos(st * .pi * 2.0)
-                        renderRadius = stoneRadius * CGFloat(bounce)
-                    }
-                }
-
-                drawStone(
-                    context: &context,
-                    center: CGPoint(x: center.x, y: center.y + landingDiveOffset),
-                    radius: renderRadius,
-                    color: color,
-                    opacity: isMarkedDead ? 0.36 : 1.0,
-                    lifted: landingDiveOffset < -1.0
+        // 5. Atari halos (only the halo animates; stones stay in the cached layer)
+        if !atariSet.isEmpty {
+            let haloR = stoneRadius * (1.12 + 0.10 * breathe)
+            for pt in atariSet where region.contains(pt) {
+                let idx = boardState.index(row: pt.row, col: pt.col)
+                guard boardState.stone(at: pt) != nil, !markedDeadIndices.contains(idx) else { continue }
+                let center = m.center(for: pt)
+                let haloRect = CGRect(x: center.x - haloR, y: center.y - haloR, width: haloR * 2, height: haloR * 2)
+                // Ring + soft outer glow only: the stone itself now lives in the cached layer
+                // underneath, so a filled disc here would tint the stone pink.
+                context.stroke(
+                    Path(ellipseIn: haloRect.insetBy(dx: -1.6, dy: -1.6)),
+                    with: .color(AppTheme.vermilionAccent.opacity(0.16 + 0.10 * breathe)),
+                    lineWidth: 5.0
                 )
-
-                // Colorblind-friendly Atari shape badge (dashed ring + tiny exclamation pip)
-                if differentiateWithoutColor && atariSet.contains(pt) && !isMarkedDead {
-                    let badgeR = max(3.5, stoneRadius * 0.28)
-                    let badgeCenter = CGPoint(x: center.x + stoneRadius * 0.58, y: center.y - stoneRadius * 0.58)
-                    let badgeRect = CGRect(x: badgeCenter.x - badgeR, y: badgeCenter.y - badgeR, width: badgeR * 2, height: badgeR * 2)
-                    context.fill(Path(ellipseIn: badgeRect), with: .color(AppTheme.vermilionAccent))
-                    context.stroke(Path(ellipseIn: badgeRect), with: .color(.white), lineWidth: 1.2)
-                    context.draw(
-                        Text("!").font(.system(size: max(7, badgeR * 1.3), weight: .black, design: .rounded)).foregroundColor(.white),
-                        at: badgeCenter
-                    )
-                }
-
-                // Nintendo Expressive Kids Stone Faces (hidden when move numbers are shown or board is too dense)
-                if expressiveStones && !showMoveNumbers && !isMarkedDead && stoneRadius >= 11 {
-                    let libs = libertyCountByIndex[idx] ?? 3
-                    let isTwoEyeAlive = twoEyeAnalysis.aliveStoneIndices.contains(idx)
-                    drawExpressiveFace(
-                        context: &context,
-                        center: center,
-                        radius: renderRadius,
-                        color: color,
-                        liberties: libs,
-                        isTwoEyeAlive: isTwoEyeAlive
-                    )
-                }
-
-                // Dead-stone confirmation X badge
-                if isMarkedDead {
-                    let xr = renderRadius * 0.42
-                    var xPath = Path()
-                    xPath.move(to: CGPoint(x: center.x - xr, y: center.y - xr))
-                    xPath.addLine(to: CGPoint(x: center.x + xr, y: center.y + xr))
-                    xPath.move(to: CGPoint(x: center.x + xr, y: center.y - xr))
-                    xPath.addLine(to: CGPoint(x: center.x - xr, y: center.y + xr))
-                    context.stroke(xPath, with: .color(AppTheme.coralBottom), style: StrokeStyle(lineWidth: max(2.2, renderRadius * 0.16), lineCap: .round))
-                } else if showMoveNumbers, let num = moveNumbers[pt] {
-                    let numColor: Color = (color == .black) ? .white : AppTheme.inkPrimary
-                    let numFont = Font.system(size: max(9, stoneRadius * 0.78), weight: .bold, design: .rounded)
-                    context.draw(Text("\(num)").font(numFont).foregroundColor(numColor), at: center)
-                } else if lastMovePoint == pt {
-                    let ringR = expressiveStones ? stoneRadius * 0.88 : stoneRadius * 0.36
-                    let ringRect = CGRect(x: center.x - ringR, y: center.y - ringR, width: ringR * 2, height: ringR * 2)
-                    let ringColor: Color = (color == .black) ? Color(red: 0.96, green: 0.79, blue: 0.36) : AppTheme.vermilionAccent
-                    context.stroke(Path(ellipseIn: ringRect), with: .color(ringColor), lineWidth: max(2.0, stoneRadius * 0.13))
-                }
+                context.stroke(Path(ellipseIn: haloRect), with: .color(AppTheme.vermilionAccent.opacity(0.65 + 0.30 * breathe)), lineWidth: 2.2)
             }
         }
 
-        // 9. Firefly Liberties Visualization (when holding any stone!)
+        // 6. Inspected group aura + firefly liberties
         if let group = inspectedGroup {
+            for stoneIdx in group.stones where region.contains(boardState.point(for: stoneIdx)) {
+                let center = m.center(for: boardState.point(for: stoneIdx))
+                let auraR = stoneRadius * 1.16
+                let auraRect = CGRect(x: center.x - auraR, y: center.y - auraR, width: auraR * 2, height: auraR * 2)
+                context.stroke(Path(ellipseIn: auraRect), with: .color(AppTheme.starGold.opacity(0.90)), lineWidth: 2.8)
+            }
             for libIdx in group.liberties {
                 let libPt = boardState.point(for: libIdx)
                 guard region.contains(libPt) else { continue }
@@ -886,16 +1079,14 @@ struct GoBoardView: View {
             }
         }
 
-        // 10. Wrong / Illegal move vivid red flash, X marker & brief red board border pulse
+        // 7. Illegal move flash
         let illAge = now.timeIntervalSince(illegalTimestamp)
         if let illPt = activeIllegalPoint, region.contains(illPt), illAge >= 0 && illAge < 0.80 {
             let p = illAge / 0.80
-            // Keep full visibility for the first ~55% then fade out smoothly
             let fade = p < 0.55 ? 1.0 : max(0.0, 1.0 - (p - 0.55) / 0.45)
             let pulse = 0.5 + 0.5 * sin(illAge * 26.0)
             let center = m.center(for: illPt)
 
-            // Subtle red warning flash along the board edge during the shake
             if illAge < 0.45 {
                 let edgeFade = 1.0 - (illAge / 0.45)
                 context.stroke(
@@ -905,7 +1096,6 @@ struct GoBoardView: View {
                 )
             }
 
-            // Expanding red shockwave ring
             let waveR = stoneRadius * (0.72 + min(1.0, illAge / 0.45) * 0.85)
             let waveFade = max(0.0, 1.0 - illAge / 0.50)
             if waveFade > 0 {
@@ -917,7 +1107,6 @@ struct GoBoardView: View {
                 )
             }
 
-            // Vivid pulsing red halo + filled red badge + crisp white X
             let glowR = stoneRadius * (1.05 + 0.16 * pulse)
             let glowRect = CGRect(x: center.x - glowR, y: center.y - glowR, width: glowR * 2, height: glowR * 2)
             context.fill(
@@ -952,7 +1141,7 @@ struct GoBoardView: View {
             )
         }
 
-        // 11. AI Suggestions
+        // 8. AI suggestions
         for (idx, suggestion) in aiSuggestions.enumerated() where region.contains(suggestion.point) {
             guard boardState.stone(at: suggestion.point) == nil else { continue }
             let center = m.center(for: suggestion.point)
@@ -967,7 +1156,7 @@ struct GoBoardView: View {
             )
         }
 
-        // 12. Puzzle Hint Beacon
+        // 9. Puzzle hint beacon
         if let hintPt = puzzleHintPoint, region.contains(hintPt), boardState.stone(at: hintPt) == nil {
             let center = m.center(for: hintPt)
             let r = stoneRadius * (0.76 + 0.12 * breathe)
@@ -976,7 +1165,7 @@ struct GoBoardView: View {
             context.stroke(Path(ellipseIn: hintRect), with: .color(AppTheme.starGold), lineWidth: 3.0)
         }
 
-        // 12B. Highlighted Territory Pocket (Animated step-by-step counting!)
+        // 10. Highlighted territory pocket
         if !highlightedPocketPoints.isEmpty {
             let sq = m.cellStep * 0.56
             for pt in highlightedPocketPoints where region.contains(pt) {
@@ -987,7 +1176,7 @@ struct GoBoardView: View {
             }
         }
 
-        // 12C. Unsealed Endgame Boundary Warning Beacons ("边界漏风提醒")
+        // 11. Unsealed endgame boundary warnings
         if !unsealedWarningPoints.isEmpty {
             for pt in unsealedWarningPoints where region.contains(pt) {
                 let center = m.center(for: pt)
@@ -1004,7 +1193,7 @@ struct GoBoardView: View {
             }
         }
 
-        // 12D. Board Text Labels (A / B / C for Opening Picker, 1 / 2 / 3 for PV Variations!)
+        // 12. Board text labels (opening picker / PV variations)
         if !labeledPoints.isEmpty {
             for (pt, text) in labeledPoints where region.contains(pt) {
                 let center = m.center(for: pt)
@@ -1026,7 +1215,40 @@ struct GoBoardView: View {
             }
         }
 
-        // 13. Lifted Pinched Stone Hover / Pending Confirm Crosshair
+        // 13. Landing pop for the freshly placed stone (excluded from the cached layer while active)
+        if landingAnimationActive, !reduceMotion, let landingPoint = currentLastMovePoint,
+           region.contains(landingPoint), let landingColor = boardState.stone(at: landingPoint) {
+            let center = m.center(for: landingPoint)
+            let landingAge = now.timeIntervalSince(lastMoveTimestamp)
+            var renderRadius = stoneRadius
+            var diveOffset: CGFloat = 0
+            if landingAge >= 0 && landingAge < 0.36 {
+                let t = landingAge / 0.36
+                let ripR = stoneRadius * (0.95 + t * 0.75)
+                let ripRect = CGRect(x: center.x - ripR, y: center.y - ripR, width: ripR * 2, height: ripR * 2)
+                context.stroke(Path(ellipseIn: ripRect), with: .color(Color.white.opacity((1.0 - t) * 0.58)), lineWidth: max(1.0, 2.8 * (1.0 - t)))
+                if landingAge < 0.085 {
+                    let dropT = 1.0 - (landingAge / 0.085)
+                    diveOffset = -stoneRadius * 0.24 * CGFloat(dropT * dropT)
+                    renderRadius = stoneRadius * CGFloat(1.0 + 0.07 * dropT)
+                } else if landingAge < 0.20 {
+                    let st = (landingAge - 0.085) / 0.115
+                    let bounce = 1.0 + 0.12 * exp(-st * 5.0) * cos(st * .pi * 2.0)
+                    renderRadius = stoneRadius * CGFloat(bounce)
+                }
+            }
+            Self.drawStone(
+                context: &context,
+                center: CGPoint(x: center.x, y: center.y + diveOffset),
+                radius: renderRadius,
+                color: landingColor,
+                opacity: 1.0,
+                lifted: diveOffset < -1.0,
+                stoneStyle: stoneStyle
+            )
+        }
+
+        // 14. Lifted pinched stone hover / pending confirm crosshair
         if !isDeadStoneReviewMode,
            let ghost = dragHoverPoint ?? pendingPoint,
            region.contains(ghost),
@@ -1039,13 +1261,14 @@ struct GoBoardView: View {
             cross.addLine(to: CGPoint(x: center.x, y: m.originY + CGFloat(region.rowCount - 1) * m.cellStep))
             context.stroke(cross, with: .color(AppTheme.jadeAccent.opacity(0.45)), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
 
-            drawStone(
+            Self.drawStone(
                 context: &context,
                 center: center,
                 radius: isDraggingAim ? stoneRadius * 1.08 : stoneRadius,
                 color: previewColor,
                 opacity: isDraggingAim ? 0.86 : 0.68,
-                lifted: isDraggingAim
+                lifted: isDraggingAim,
+                stoneStyle: stoneStyle
             )
 
             let ringR = stoneRadius * (1.10 + 0.08 * breathe)
@@ -1066,7 +1289,7 @@ struct GoBoardView: View {
         }
     }
 
-    private func drawExpressiveFace(
+    fileprivate static func drawExpressiveFace(
         context: inout GraphicsContext,
         center: CGPoint,
         radius: CGFloat,
@@ -1142,13 +1365,14 @@ struct GoBoardView: View {
         }
     }
 
-    private func drawStone(
+    fileprivate static func drawStone(
         context: inout GraphicsContext,
         center: CGPoint,
         radius: CGFloat,
         color: StoneColor,
         opacity: Double,
-        lifted: Bool
+        lifted: Bool,
+        stoneStyle: StoneStyle
     ) {
         let shadowOffsetX = lifted ? radius * 0.34 : radius * 0.14
         let shadowOffsetY = lifted ? radius * 0.42 : radius * 0.18
@@ -1445,6 +1669,47 @@ struct GoBoardView: View {
             }
         }
         return entries
+    }
+}
+
+/// Equatable wrapper around the cached stone layer. As long as the position and the static
+/// overlays are unchanged, SwiftUI skips its body entirely — so hover / drag / ambient
+/// animation never re-rasterize the stones.
+private struct BoardStonesLayer: View, Equatable {
+    let boardState: GoBoardState
+    let stoneStyle: StoneStyle
+    let region: BoardCropRegion
+    let showCoordinates: Bool
+    let side: CGFloat
+    let analysis: GoBoardAnalysis
+    let showMoveNumbers: Bool
+    let moveNumbers: [BoardPoint: Int]
+    let expressiveStones: Bool
+    let markedDeadIndices: Set<Int>
+    let territoryEstimate: TerritoryEstimate?
+    let differentiateWithoutColor: Bool
+    let suppressedStone: BoardPoint?
+
+    var body: some View {
+        Canvas { context, size in
+            GoBoardView.renderStonesLayer(
+                context: &context,
+                canvasSize: size,
+                boardState: boardState,
+                stoneStyle: stoneStyle,
+                region: region,
+                showCoordinates: showCoordinates,
+                side: side,
+                analysis: analysis,
+                showMoveNumbers: showMoveNumbers,
+                moveNumbers: moveNumbers,
+                expressiveStones: expressiveStones,
+                markedDeadIndices: markedDeadIndices,
+                territoryEstimate: territoryEstimate,
+                differentiateWithoutColor: differentiateWithoutColor,
+                suppressedStone: suppressedStone
+            )
+        }
     }
 }
 

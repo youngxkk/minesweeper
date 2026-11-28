@@ -410,12 +410,15 @@ struct OverworldHeroPawn: View {
 struct BiomeAtmosphereOverlay: View {
     let seaIndex: Int
     let reduceMotion: Bool
+    /// Ambient particles only tick for the sea currently on screen; every other sea keeps a
+    /// static frame so a covered / off-screen map never burns GPU time.
+    var isPaused: Bool = false
 
     var body: some View {
         if reduceMotion {
             EmptyView()
         } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPaused)) { timeline in
                 let t = timeline.date.timeIntervalSinceReferenceDate
                 Canvas { context, size in
                     drawAtmosphere(context: &context, size: size, time: t)

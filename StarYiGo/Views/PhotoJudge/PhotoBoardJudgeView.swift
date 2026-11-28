@@ -39,6 +39,14 @@ struct PhotoBoardJudgeView: View {
     @State private var detectedGridConfidence: Double? = nil
     @State private var hasInitialized: Bool = false
     @State private var scoringRule: ScoringRule = .chinese
+    /// Once the player manually marks/unmarks a dead stone we stop auto-applying AI suggestions
+    /// so their edits are never overwritten.
+    @State private var deadStonesUserEdited = false
+
+    /// The photo judge keeps its pre-AGA rule set: Chinese area or Japanese/Korean territory.
+    /// AGA was introduced for the global game settings and must not appear here.
+    private static let photoScoringRules: [ScoringRule] = [.chinese, .japanese]
+
     @State private var komi: Double = 7.5
 
     @State private var sourceImage: UIImage? = nil
@@ -145,7 +153,11 @@ struct PhotoBoardJudgeView: View {
         .onAppear {
             guard !hasInitialized else { return }
             hasInitialized = true
-            scoringRule = appState.settings.effectiveScoringRule
+            // Photo judging keeps its own default (Chinese area scoring). The global scoring
+            // preference is intentionally not applied here: on regions that map to Japanese /
+            // AGA it silently changed the result for every photo. Users can still switch
+            // in-page below.
+            scoringRule = .chinese
             let savedRaw = UserDefaults.standard.integer(forKey: "photoJudgePreferredBoardSize")
             selectedSize = BoardSize(rawValue: savedRaw) ?? .nineteen
             autoDetectBoardSize = UserDefaults.standard.bool(forKey: "photoJudgeAutoDetectBoardSize")
@@ -680,7 +692,7 @@ struct PhotoBoardJudgeView: View {
             if isCompact {
                 VStack(spacing: 8) {
                     boardSizeRuleGroup(isCompact: true)
-                    scoringRuleBadge(isCompact: true)
+                    scoringRuleGroup(isCompact: true)
                 }
             } else {
                 HStack(spacing: 16) {
@@ -690,7 +702,7 @@ struct PhotoBoardJudgeView: View {
                         .fill(Color.white.opacity(0.32))
                         .frame(width: 1.5, height: 26)
 
-                    scoringRuleBadge(isCompact: false)
+                    scoringRuleGroup(isCompact: false)
                 }
             }
         }
@@ -773,31 +785,36 @@ struct PhotoBoardJudgeView: View {
         }
     }
 
-    private func scoringRuleBadge(isCompact: Bool) -> some View {
+    private func scoringRuleGroup(isCompact: Bool) -> some View {
         HStack(spacing: isCompact ? 6 : 8) {
-            Text(l10n.localized(zh: "计分", en: "Scoring", ja: "計算", ko: "계가", zhHant: "計分"))
+            Text(l10n.localized(zh: "计分规则", en: "Rules", ja: "ルール", ko: "규칙", zhHant: "計分規則"))
                 .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
                 .foregroundColor(.white.opacity(0.9))
                 .fixedSize()
 
-            Text(ruleLabel(scoringRule))
-                .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
-                .foregroundColor(.white)
-                .padding(.horizontal, isCompact ? 10 : 13)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Color.white.opacity(0.16)))
-                .fixedSize()
+            ForEach(Self.photoScoringRules) { rule in
+                let isSelected = scoringRule == rule
+                Button {
+                    SoundAndHapticsManager.shared.playUITap()
+                    scoringRule = rule
+                    komi = rule.defaultKomi(for: selectedSize)
+                } label: {
+                    Text(ruleLabel(rule))
+                        .font(AppFont.rounded(size: isCompact ? 11.5 : 12.5, weight: .black))
+                        .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
+                        .padding(.horizontal, isCompact ? 10 : 13)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(
+                    GlossyCapsuleButtonStyle(
+                        palette: isSelected ? .grape : .snow,
+                        cornerRadius: 12,
+                        rimHeight: 2,
+                        whiteBorderWidth: 2
+                    )
+                )
+            }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            l10n.localized(
-                zh: "计分规则：\(ruleLabel(scoringRule))，跟随设置。",
-                en: "Scoring: \(ruleLabel(scoringRule)), follows Settings.",
-                ja: "計算：\(ruleLabel(scoringRule))。設定に従います。",
-                ko: "계가: \(ruleLabel(scoringRule)). 설정을 따릅니다.",
-                zhHant: "計分規則：\(ruleLabel(scoringRule))，跟隨設定。"
-            )
-        )
     }
 
     // MARK: - Stage 2: Calibrate 4 Corners & Grid Margin
@@ -1403,15 +1420,25 @@ struct PhotoBoardJudgeView: View {
     private var rulesAndOverlayCard: some View {
         VStack(spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundColor(AppTheme.skyBottom)
-                Text(l10n.localized(zh: "计分规则", en: "Scoring", ja: "計算", ko: "계가", zhHant: "計分規則"))
-                    .foregroundColor(AppTheme.inkSecondary)
-                Spacer()
-                Text(ruleLabel(scoringRule))
-                    .foregroundColor(AppTheme.inkPrimary)
+                ForEach(Self.photoScoringRules) { rule in
+                    let active = scoringRule == rule
+                    Button {
+                        SoundAndHapticsManager.shared.playUITap()
+                        scoringRule = rule
+                        komi = rule.defaultKomi(for: selectedSize)
+                        boardState.komi = komi
+                        refreshEvaluation()
+                    } label: {
+                        Text(ruleLabel(rule))
+                            .font(AppFont.rounded(size: 11.5, weight: .black))
+                            .foregroundColor(active ? .white : AppTheme.inkPrimary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(active ? AppTheme.grapeBottom : Color.white))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .font(AppFont.rounded(size: 12, weight: .black))
             .padding(.vertical, 4)
 
             HStack {
@@ -1523,7 +1550,6 @@ struct PhotoBoardJudgeView: View {
         liveGridDetectTask?.cancel()
         activeVisionTask?.cancel()
         isProcessing = true
-        scoringRule = appState.settings.effectiveScoringRule
         activeRecordId = nil
         activeRecordDate = nil
         loadedWarpedImage = nil
@@ -1778,6 +1804,7 @@ struct PhotoBoardJudgeView: View {
                 self.loadedWarpedImage = nil
                 self.boardState = result.boardState
                 self.deadStoneIndices = autoDead
+                self.deadStonesUserEdited = false
                 self.openedFromHistory = false
                 if self.activeRecordId == nil {
                     self.activeRecordId = UUID()
@@ -1797,6 +1824,7 @@ struct PhotoBoardJudgeView: View {
         let idx = boardState.index(row: point.row, col: point.col)
         guard idx >= 0, idx < boardState.grid.count else { return }
 
+        deadStonesUserEdited = true
         SoundAndHapticsManager.shared.playUITap()
         switch editTool {
         case .cycle:
@@ -1829,6 +1857,7 @@ struct PhotoBoardJudgeView: View {
     }
 
     private func applyAutoDeadStones() {
+        deadStonesUserEdited = true
         SoundAndHapticsManager.shared.playUITap()
         if let suggested = evaluation?.suggestedDeadIndices {
             deadStoneIndices = suggested
@@ -1855,6 +1884,11 @@ struct PhotoBoardJudgeView: View {
             await MainActor.run {
                 self.evaluation = result
                 self.isEvaluating = false
+                // Auto-apply the (now working) neural dead-stone suggestions on a freshly
+                // recognized photo. Manual edits are preserved.
+                if !self.deadStonesUserEdited {
+                    self.deadStoneIndices = result.suggestedDeadIndices
+                }
                 self.persistActiveHistoryRecord(warpedImage: nil, eval: result)
             }
         }
@@ -1888,10 +1922,13 @@ struct PhotoBoardJudgeView: View {
         activeRecordId = record.id
         activeRecordDate = record.date
         selectedSize = BoardSize(rawValue: record.boardSize) ?? .nineteen
-        scoringRule = record.scoringRule
+        // Records saved while the global AGA rule leaked into photo judging are treated as
+        // Chinese area scoring (identical math) so old photos read the way they used to.
+        scoringRule = record.scoringRule == .aga ? .chinese : record.scoringRule
         komi = record.komi
         boardState = record.makeBoardState()
         deadStoneIndices = Set(record.deadStoneIndices)
+        deadStonesUserEdited = true
         sourceImage = nil
         recognitionResult = nil
         loadedWarpedImage = appState.loadPhotoJudgeImage(for: record)
@@ -1904,6 +1941,7 @@ struct PhotoBoardJudgeView: View {
 
     private func startNewPhotoSession() {
         evaluationTask?.cancel()
+        deadStonesUserEdited = false
         activeRecordId = nil
         activeRecordDate = nil
         sourceImage = nil

@@ -11,6 +11,8 @@ struct PuzzleHubView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var catalogStore = PuzzleCatalogStore.shared
     let initialMistakesOnly: Bool
 
     @State private var scrolledSeaId: String? = "sea-1"
@@ -69,6 +71,19 @@ struct PuzzleHubView: View {
         seas[min(max(0, activeSeaIndex), seas.count - 1)]
     }
 
+    /// The hub is the visible screen only while it is the topmost route, the app is active and
+    /// no sheet is covering it. Covered maps used to keep all five 30 fps particle layers alive.
+    private var isHubVisibleOnScreen: Bool {
+        guard scenePhase == .active, !showPlacementSheet else { return false }
+        guard let last = appState.navigationPath.last else { return false }
+        if case .puzzleHub = last { return true }
+        return false
+    }
+
+    private func isAtmosphereActive(for sea: CampaignSea) -> Bool {
+        isHubVisibleOnScreen && sea.index == activeSeaIndex
+    }
+
     private var isSeaUnlocked: Bool {
         StarYiCampaign.isSeaUnlocked(activeSea, progress: appState.puzzleProgress)
     }
@@ -118,7 +133,11 @@ struct PuzzleHubView: View {
                                 ForEach(seas) { sea in
                                     let centerX = seaOriginX(sea.index, pageW: pageW, pageH: pageH) + pageW / 2
                                     let art = seaArtSize(pageW: pageW, pageH: pageH)
-                                    BiomeAtmosphereOverlay(seaIndex: sea.index, reduceMotion: reduceMotion)
+                                    BiomeAtmosphereOverlay(
+                                        seaIndex: sea.index,
+                                        reduceMotion: reduceMotion,
+                                        isPaused: !isAtmosphereActive(for: sea)
+                                    )
                                         .frame(width: art.width, height: art.height)
                                         .position(x: centerX, y: pageH / 2)
                                 }
@@ -272,6 +291,14 @@ struct PuzzleHubView: View {
                     .modifier(mapEntrance(0, scale: 1.06, animation: MotionToken.screenBackdropSettle, fades: false))
                 }
                 .ignoresSafeArea()
+                .overlay(alignment: .top) {
+                    if !catalogStore.isReady {
+                        puzzleCatalogLoadingPill
+                            .padding(.top, 16)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: catalogStore.isReady)
 
                 // MARK: - Floating Left / Right "Fly to Previous / Next Sea" Edge Portals
                 HStack {
@@ -364,6 +391,9 @@ struct PuzzleHubView: View {
             .onChange(of: scrolledSeaId) { _, _ in
                 syncFocusedIsland(for: activeSea)
             }
+            .task {
+                await catalogStore.waitUntilReady()
+            }
             .onDisappear {
                 toastDismissTask?.cancel()
             }
@@ -383,6 +413,30 @@ struct PuzzleHubView: View {
             }
             lockedToastMessage = nil
         }
+    }
+
+    private var puzzleCatalogLoadingPill: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(l10n.localized(
+                zh: "正在准备题库…",
+                en: "Preparing puzzles…",
+                ja: "問題集を準備中…",
+                ko: "문제집 준비 중…",
+                zhHant: "正在準備題庫…"
+            ))
+                .font(AppFont.rounded(size: 12.5, weight: .bold))
+                .foregroundColor(AppTheme.inkSecondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(
+            Capsule()
+                .fill(Color.white.opacity(0.96))
+                .shadow(color: Color.black.opacity(0.12), radius: 8, y: 3)
+        )
+        .accessibilityAddTraits(.isStaticText)
     }
 
     // MARK: - Biome World Artwork
@@ -745,6 +799,9 @@ struct PuzzleHubView: View {
         case .active, .cleared:
             lockedToastMessage = nil
             if selectedIslandId == island.id {
+                // The island detail resolves puzzle ids through the catalog; wait for the
+                // short background warm-up instead of blocking the first frame on it.
+                guard catalogStore.isReady else { return }
                 SoundAndHapticsManager.shared.playUITap()
                 appState.navigationPath.append(.islandDetail(islandId: island.id))
             } else {

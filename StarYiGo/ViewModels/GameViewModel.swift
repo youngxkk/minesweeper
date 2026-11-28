@@ -98,6 +98,16 @@ struct TimeHourglassAnalysis: Equatable, Sendable {
     let turningPointMoveNumber: Int?
 }
 
+/// A pre-computed package of everything the AI turn needs after the engine returns.
+/// All of it is pure value math, so it is safe to build on a background task.
+private struct AIPostDecision: Sendable {
+    let targetDuration: TimeInterval
+    let assessment: AIResignationEvaluator.Assessment
+    let outcome: MoveOutcome?
+    let territory: TerritoryEstimate?
+    let analysis: GoBoardAnalysis
+}
+
 @MainActor
 final class GameViewModel: ObservableObject {
     @Published var boardState: GoBoardState
@@ -140,6 +150,9 @@ final class GameViewModel: ObservableObject {
 
     /// Cached per-move board graph analysis so `GamePlayView` / `GoBoardView` don't repeat full-board BFS on every render.
     private(set) var cachedAtariPoints: Set<BoardPoint> = []
+    /// One-shot snapshot of atari / two-eye / group analysis for the current position.
+    /// Computed once per move and injected into `GoBoardView` so hover & redraw stay O(1).
+    private(set) var boardAnalysis = GoBoardAnalysis()
     private var hasFinalizedMatchOnce: Bool = false
 
     // Nintendo Companion Personality State
@@ -386,7 +399,9 @@ final class GameViewModel: ObservableObject {
             initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
         }
         self.boardState = initial
-        self.cachedAtariPoints = initial.atariPoints()
+        let initialAnalysis = GoBoardAnalysis.build(from: initial)
+        self.boardAnalysis = initialAnalysis
+        self.cachedAtariPoints = initialAnalysis.atariPoints
         self.stateHistory = [initial]
         self.humanLeadHistory = [0]
         self.lastTurnStartTime = Date()
@@ -452,7 +467,7 @@ final class GameViewModel: ObservableObject {
         }
 
         boardState = state
-        cachedAtariPoints = state.atariPoints()
+        refreshBoardAnalysis(for: state)
         stateHistory = history
         moves = replayedMoves
         rebuildMoveNumberLookup()
@@ -694,7 +709,7 @@ final class GameViewModel: ObservableObject {
         rebuildMoveNumberLookup()
         humanLeadHistory = Array(humanLeadHistory.prefix(targetStateIndex + 1))
         boardState = stateHistory.last ?? GoBoardState(size: boardSize.rawValue, handicap: handicap)
-        cachedAtariPoints = boardState.atariPoints()
+        refreshBoardAnalysis(for: boardState)
 
         // If rewinding from a flagged timeout, grant safe grace time so the player can actually continue
         if clock.isActive {
@@ -981,7 +996,7 @@ final class GameViewModel: ObservableObject {
             initial = GoBoardState(size: boardSize.rawValue, komi: komi, handicap: handicap)
         }
         boardState = initial
-        cachedAtariPoints = initial.atariPoints()
+        refreshBoardAnalysis(for: initial)
         hasFinalizedMatchOnce = false
         stateHistory = [initial]
         humanLeadHistory = [0]
@@ -998,6 +1013,14 @@ final class GameViewModel: ObservableObject {
     }
 
     // MARK: - Internal Move Engine
+
+    @discardableResult
+    private func refreshBoardAnalysis(for state: GoBoardState) -> GoBoardAnalysis {
+        let analysis = GoBoardAnalysis.build(from: state)
+        boardAnalysis = analysis
+        cachedAtariPoints = analysis.atariPoints
+        return analysis
+    }
 
     private func attemptHumanMove(_ action: MoveAction) {
         let color = boardState.currentTurn
@@ -1067,6 +1090,15 @@ final class GameViewModel: ObservableObject {
         let clockSnapshot = clock
         let configuredPace = appState?.settings.aiThinkingPace ?? .brisk
         let effectivePace: AIThinkingPace = simulateHumanThinkingPacing ? configuredPace : .instant
+        // Snapshot the few bits of UI state the background scorer needs, so the heavy
+        // post-decision work can run off the main thread.
+        let recentMaxCapture = moves
+            .suffix(4)
+            .filter { $0.color == aiColor.opposite }
+            .map { $0.capturedPoints.count }
+            .max() ?? 0
+        let hopelessTurns = consecutiveAIHopelessTurns
+        let isTactical = tacticalScenario != nil
 
         aiTask?.cancel()
         aiTask = Task { [weak self] in
@@ -1079,18 +1111,53 @@ final class GameViewModel: ObservableObject {
                 coachingStyle: style
             ) ?? AIMoveDecision(action: .pass)
             let moveAction = decision.action
-            let targetDuration: TimeInterval = AIThinkingPacer.targetThinkingDuration(
-                for: snapshot,
-                difficulty: difficulty,
-                chosenAction: moveAction,
-                lastHumanThinkDuration: humanThinkDuration,
-                clock: clockSnapshot,
-                aiColor: aiColor,
-                pace: effectivePace
-            )
+            // Heavy, pure scoring work (thinking pace, resignation assessment, the resulting
+            // position, territory and graph analysis) now runs off the main thread. Previously
+            // it landed on the exact frame where the AI stone animates, causing a visible hitch.
+            let post = await Task.detached(priority: .userInitiated) { () -> AIPostDecision in
+                let targetDuration = AIThinkingPacer.targetThinkingDuration(
+                    for: snapshot,
+                    difficulty: difficulty,
+                    chosenAction: moveAction,
+                    lastHumanThinkDuration: humanThinkDuration,
+                    clock: clockSnapshot,
+                    aiColor: aiColor,
+                    pace: effectivePace
+                )
+                let assessment = AIResignationEvaluator.evaluate(
+                    state: snapshot,
+                    aiColor: aiColor,
+                    difficulty: difficulty,
+                    ruleSet: currentRules,
+                    isTacticalScenario: isTactical,
+                    consecutiveHopelessTurns: hopelessTurns,
+                    chosenAction: moveAction,
+                    recentMaxCaptureAgainstAI: recentMaxCapture,
+                    neuralWinrateForAI: decision.moverWinrate,
+                    neuralScoreLeadForAI: decision.moverScoreLead,
+                    neuralOwnershipForAI: decision.ownershipForMover
+                )
+                let effectiveAction: MoveAction = (moveAction == .resign) ? .pass : moveAction
+                var outcome: MoveOutcome?
+                var territory: TerritoryEstimate?
+                var analysis = GoBoardAnalysis()
+                if case .success(let applied) = snapshot.applying(action: effectiveAction, color: aiColor) {
+                    outcome = applied
+                    territory = GoScoring.estimateTerritory(state: applied.nextState)
+                    analysis = GoBoardAnalysis.build(from: applied.nextState)
+                }
+                return AIPostDecision(
+                    targetDuration: targetDuration,
+                    assessment: assessment,
+                    outcome: outcome,
+                    territory: territory,
+                    analysis: analysis
+                )
+            }.value
+
             let elapsed = Date().timeIntervalSince(start)
-            if elapsed < targetDuration {
-                try? await Task.sleep(nanoseconds: UInt64((targetDuration - elapsed) * 1_000_000_000))
+            if elapsed < post.targetDuration {
+                try? await Task.sleep(nanoseconds: UInt64((post.targetDuration - elapsed) * 1_000_000_000))
             }
             guard !Task.isCancelled, let self else { return }
             guard !self.isSuspended,
@@ -1102,31 +1169,12 @@ final class GameViewModel: ObservableObject {
                 return
             }
             self.isAIThinking = false
+            self.consecutiveAIHopelessTurns = post.assessment.nextConsecutiveHopelessTurns
 
-            let recentMaxCaptureAgainstAI = self.moves
-                .suffix(4)
-                .filter { $0.color == aiColor.opposite }
-                .map { $0.capturedPoints.count }
-                .max() ?? 0
-            let resignCheck = AIResignationEvaluator.evaluate(
-                state: snapshot,
-                aiColor: aiColor,
-                difficulty: difficulty,
-                ruleSet: currentRules,
-                isTacticalScenario: self.tacticalScenario != nil,
-                consecutiveHopelessTurns: self.consecutiveAIHopelessTurns,
-                chosenAction: moveAction,
-                recentMaxCaptureAgainstAI: recentMaxCaptureAgainstAI,
-                neuralWinrateForAI: decision.moverWinrate,
-                neuralScoreLeadForAI: decision.moverScoreLead,
-                neuralOwnershipForAI: decision.ownershipForMover
-            )
-            self.consecutiveAIHopelessTurns = resignCheck.nextConsecutiveHopelessTurns
-
-            if !self.aiResignOfferDeclined && (moveAction == .resign || resignCheck.shouldOfferResign) {
+            if !self.aiResignOfferDeclined && (moveAction == .resign || post.assessment.shouldOfferResign) {
                 let fallbackAction: MoveAction = (moveAction == .resign) ? .pass : moveAction
                 self.deferredAIMoveAfterResignOffer = (action: fallbackAction, color: aiColor)
-                self.aiResignOfferLead = resignCheck.estimatedHumanLead
+                self.aiResignOfferLead = post.assessment.estimatedHumanLead
                 self.companionMood = .surprised
                 self.showAIResignOfferDialog = true
                 SoundAndHapticsManager.shared.playHint()
@@ -1134,24 +1182,36 @@ final class GameViewModel: ObservableObject {
             }
 
             let effectiveAction: MoveAction = (moveAction == .resign) ? .pass : moveAction
-            switch self.boardState.applying(action: effectiveAction, color: aiColor) {
-            case .success(let outcome):
-                self.applySuccessfulOutcome(outcome, action: effectiveAction, color: aiColor)
-            case .failure:
-                if case .success(let passOut) = self.boardState.applying(action: .pass, color: aiColor) {
-                    self.applySuccessfulOutcome(passOut, action: .pass, color: aiColor)
-                }
+            if let outcome = post.outcome {
+                self.applySuccessfulOutcome(
+                    outcome,
+                    action: effectiveAction,
+                    color: aiColor,
+                    precomputedAnalysis: post.analysis,
+                    precomputedTerritory: post.territory
+                )
+            } else if case .success(let passOut) = self.boardState.applying(action: .pass, color: aiColor) {
+                self.applySuccessfulOutcome(passOut, action: .pass, color: aiColor)
             }
         }
     }
 
-    private func applySuccessfulOutcome(_ outcome: MoveOutcome, action: MoveAction, color: StoneColor) {
+    private func applySuccessfulOutcome(
+        _ outcome: MoveOutcome,
+        action: MoveAction,
+        color: StoneColor,
+        precomputedAnalysis: GoBoardAnalysis? = nil,
+        precomputedTerritory: TerritoryEstimate? = nil
+    ) {
         hintTask?.cancel()
         hintTask = nil
         isComputingHint = false
         suggestions = []
         clock.completeMove(for: color)
         lastTurnStartTime = Date()
+        let nextAnalysis = precomputedAnalysis ?? GoBoardAnalysis.build(from: outcome.nextState)
+        boardAnalysis = nextAnalysis
+        cachedAtariPoints = nextAnalysis.atariPoints
         boardState = outcome.nextState
         stateHistory.append(outcome.nextState)
 
@@ -1169,13 +1229,12 @@ final class GameViewModel: ObservableObject {
             }
         }
 
-        let est = GoScoring.estimateTerritory(state: outcome.nextState)
+        let est = precomputedTerritory ?? GoScoring.estimateTerritory(state: outcome.nextState)
         let perspective = humanColor ?? .black
         let lead = (perspective == .black) ? est.blackLead : -est.blackLead
         humanLeadHistory.append(lead)
 
-        let nextAtariPoints = outcome.nextState.atariPoints()
-        cachedAtariPoints = nextAtariPoints
+        let nextAtariPoints = nextAnalysis.atariPoints
         updateCompanionReaction(move: move, outcome: outcome, nextAtariPoints: nextAtariPoints)
 
         let hasTension = (outcome.nextState.koIndex != nil) || !nextAtariPoints.isEmpty
@@ -1569,7 +1628,7 @@ final class GameViewModel: ObservableObject {
         if humanLeadHistory.count > 1 { humanLeadHistory.removeLast() }
         if let previous = stateHistory.last {
             boardState = previous
-            cachedAtariPoints = previous.atariPoints()
+            refreshBoardAnalysis(for: previous)
         }
         rebuildMoveNumberLookup()
     }

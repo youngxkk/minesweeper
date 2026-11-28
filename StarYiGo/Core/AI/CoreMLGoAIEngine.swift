@@ -237,6 +237,8 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
     private let lock = NSLock()
     private let loadLock = NSLock()
     private let inferenceLock = NSLock()
+    private var reusableSpatialTensor: MLMultiArray?
+    private var reusableGlobalTensor: MLMultiArray?
     private var _activePreset: KataGoModelPreset = .defaultPreset
     /// Retain only the single currently active model in memory to avoid pinning 30+ MB of ANE/GPU weights.
     private var activeLoadedModel: (preset: KataGoModelPreset, model: MLModel)? = nil
@@ -375,6 +377,37 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
     }
 
     /// Loads the specified preset if bundled, retaining only one loaded `MLModel` at a time.
+    /// A cheap sanity probe: rejects models that load but produce degenerate policy / ownership
+    /// tensors (all zeros). Such a model used to pass every availability check while silently
+    /// breaking dead-stone detection and AI move selection.
+    nonisolated private static func isModelHealthy(_ model: MLModel) -> Bool {
+        var probe = GoBoardState(size: 19, komi: 7.5)
+        for (r, c) in [(3, 3), (3, 15), (15, 3), (15, 15), (9, 9)] {
+            probe.setSetupStone((r + c) % 2 == 0 ? .black : .white, at: BoardPoint(row: r, col: c))
+        }
+        guard let inputs = encodeKataGoV7Inputs(state: probe, color: .black, targetSize: 19),
+              let provider = try? MLDictionaryFeatureProvider(dictionary: [
+                  "spatial": MLFeatureValue(multiArray: inputs.spatial),
+                  "global_in": MLFeatureValue(multiArray: inputs.global)
+              ]),
+              let output = try? model.prediction(from: provider),
+              let policy = output.featureValue(for: "policy")?.multiArrayValue,
+              let ownership = output.featureValue(for: "ownership")?.multiArrayValue else {
+            return false
+        }
+        var policyHasSignal = false
+        for i in 0..<policy.count where policy[i].doubleValue != 0 {
+            policyHasSignal = true
+            break
+        }
+        var ownershipHasSignal = false
+        for i in 0..<ownership.count where ownership[i].doubleValue != 0 {
+            ownershipHasSignal = true
+            break
+        }
+        return policyHasSignal && ownershipHasSignal
+    }
+
     /// Serialized with `loadLock` so concurrent callers never load duplicate 25 MB models or race with preset changes.
     func loadModel(for preset: KataGoModelPreset) -> MLModel? {
         lock.lock()
@@ -403,13 +436,28 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         }
         lock.unlock()
 
+        // IMPORTANT: the b10c128 policy/ownership heads emit all-zero tensors when CoreML
+        // schedules them on the GPU (computeUnits = .all / .cpuAndGPU). That silently made
+        // photo-judge dead-stone detection and the MCTS policy blind. CPU+ANE produces the
+        // correct values for every bundled preset and also avoids competing with the board
+        // renderer for the GPU.
         let config = MLModelConfiguration()
-        config.computeUnits = .all
+        config.computeUnits = .cpuAndNeuralEngine
 
         var found: MLModel? = nil
         if let url = modelURL(for: preset),
            let mlModel = try? MLModel(contentsOf: url, configuration: config) {
-            found = mlModel
+            if Self.isModelHealthy(mlModel) {
+                found = mlModel
+            } else {
+                // Defensive fallback for a model whose ops are also unsupported on the ANE.
+                let cpuConfig = MLModelConfiguration()
+                cpuConfig.computeUnits = .cpuOnly
+                if let cpuModel = try? MLModel(contentsOf: url, configuration: cpuConfig),
+                   Self.isModelHealthy(cpuModel) {
+                    found = cpuModel
+                }
+            }
         }
 
         lock.lock()
@@ -783,12 +831,23 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
     static func encodeKataGoV7Inputs(
         state: GoBoardState,
         color: StoneColor,
-        targetSize: Int = 19
+        targetSize: Int = 19,
+        spatialBuffer: MLMultiArray? = nil,
+        globalBuffer: MLMultiArray? = nil
     ) -> (spatial: MLMultiArray, global: MLMultiArray)? {
         let planes = 22
-        guard let sp = try? MLMultiArray(shape: [1, NSNumber(value: planes), NSNumber(value: targetSize), NSNumber(value: targetSize)], dataType: .float32),
-              let gl = try? MLMultiArray(shape: [1, 19], dataType: .float32) else {
-            return nil
+        let sp: MLMultiArray
+        let gl: MLMultiArray
+        if let spatialBuffer, let globalBuffer {
+            sp = spatialBuffer
+            gl = globalBuffer
+        } else {
+            guard let newSpatial = try? MLMultiArray(shape: [1, NSNumber(value: planes), NSNumber(value: targetSize), NSNumber(value: targetSize)], dataType: .float32),
+                  let newGlobal = try? MLMultiArray(shape: [1, 19], dataType: .float32) else {
+                return nil
+            }
+            sp = newSpatial
+            gl = newGlobal
         }
 
         let spPtr = sp.dataPointer.bindMemory(to: Float32.self, capacity: planes * targetSize * targetSize)
@@ -886,28 +945,68 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         return (sp, gl)
     }
 
+    /// Reads a CoreML output tensor through its raw buffer instead of the `NSNumber`
+    /// subscript. The old path boxed ~700 numbers per inference (≈92k allocations per
+    /// high-dan move). Falls back to subscripting for non-Float32 tensors.
+    @inline(__always)
+    private static func floatAccessor(_ array: MLMultiArray) -> (Int) -> Double {
+        if array.dataType == .float32 {
+            let pointer = array.dataPointer.assumingMemoryBound(to: Float.self)
+            return { Double(pointer[$0]) }
+        }
+        return { array[$0].doubleValue }
+    }
+
+    /// Input tensors are reused across playouts; the encoder fully overwrites them.
+    /// Guarded by `inferenceLock`, which already serializes every prediction.
+    private func reusableInputTensors(targetSize: Int) -> (spatial: MLMultiArray, global: MLMultiArray)? {
+        if let spatial = reusableSpatialTensor,
+           let global = reusableGlobalTensor,
+           spatial.shape.map({ $0.intValue }) == [1, 22, targetSize, targetSize],
+           global.shape.map({ $0.intValue }) == [1, 19] {
+            return (spatial, global)
+        }
+        guard let spatial = try? MLMultiArray(
+            shape: [1, 22, NSNumber(value: targetSize), NSNumber(value: targetSize)],
+            dataType: .float32
+        ), let global = try? MLMultiArray(shape: [1, 19], dataType: .float32) else {
+            return nil
+        }
+        reusableSpatialTensor = spatial
+        reusableGlobalTensor = global
+        return (spatial, global)
+    }
+
     private func evaluateSync(
         model: MLModel,
         state: GoBoardState,
         color: StoneColor
     ) -> KataGoEvalOutput? {
-        guard let inputs = Self.encodeKataGoV7Inputs(state: state, color: color, targetSize: supportedBoardSize),
+        inferenceLock.lock()
+        defer { inferenceLock.unlock() }
+        guard let buffers = reusableInputTensors(targetSize: supportedBoardSize),
+              let inputs = Self.encodeKataGoV7Inputs(
+                  state: state,
+                  color: color,
+                  targetSize: supportedBoardSize,
+                  spatialBuffer: buffers.spatial,
+                  globalBuffer: buffers.global
+              ),
               let provider = try? MLDictionaryFeatureProvider(dictionary: [
                   "spatial": MLFeatureValue(multiArray: inputs.spatial),
                   "global_in": MLFeatureValue(multiArray: inputs.global)
               ]) else {
             return nil
         }
-
-        inferenceLock.lock()
         let output = try? model.prediction(from: provider)
-        inferenceLock.unlock()
 
         guard let output,
               let policyArr = output.featureValue(for: "policy")?.multiArrayValue,
               let valueArr = output.featureValue(for: "value")?.multiArrayValue else {
             return nil
         }
+        let policyRead = Self.floatAccessor(policyArr)
+        let valueRead = Self.floatAccessor(valueArr)
 
         let s = state.size
         let total = s * s
@@ -920,7 +1019,7 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
                 guard state.stone(at: pt) == nil, state.isLegal(point: pt, for: color) else { continue }
                 let flatIdx = r * supportedBoardSize + c
                 guard flatIdx < policyArr.count else { continue }
-                let v = policyArr[flatIdx].doubleValue
+                let v = policyRead(flatIdx)
                 if v.isFinite {
                     logits[r * s + c] = v
                     if v > maxLogit { maxLogit = v }
@@ -928,7 +1027,7 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
             }
         }
 
-        let passLogit = (policyArr.count > 361) ? policyArr[361].doubleValue : -12.0
+        let passLogit = (policyArr.count > 361) ? policyRead(361) : -12.0
         if passLogit.isFinite && passLogit > maxLogit { maxLogit = passLogit }
 
         var probs = [Double](repeating: 0.0, count: total)
@@ -946,8 +1045,8 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         let passProb = sumExp > 0 ? (passExp / sumExp) : 0.0
 
         // Value logits: [win, loss, no-result]
-        let vWin = valueArr.count > 0 ? valueArr[0].doubleValue : 0.0
-        let vLoss = valueArr.count > 1 ? valueArr[1].doubleValue : 0.0
+        let vWin = valueArr.count > 0 ? valueRead(0) : 0.0
+        let vLoss = valueArr.count > 1 ? valueRead(1) : 0.0
         let vMax = max(vWin, vLoss)
         let eW = exp(vWin - vMax)
         let eL = exp(vLoss - vMax)
@@ -957,13 +1056,14 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         var lead = (moverWR - 0.5) * 20.0
         var ownershipForMover: [Double]? = nil
         if let ownArr = output.featureValue(for: "ownership")?.multiArrayValue {
+            let ownRead = Self.floatAccessor(ownArr)
             var ownSum = 0.0
             var ownMap = [Double](repeating: 0.0, count: total)
             for r in 0..<s {
                 for c in 0..<s {
                     let idx = r * supportedBoardSize + c
                     if idx < ownArr.count {
-                        let raw = ownArr[idx].doubleValue
+                        let raw = ownRead(idx)
                         let clamped = min(1.0, max(-1.0, raw.isFinite ? raw : 0.0))
                         ownMap[r * s + c] = clamped
                         ownSum += clamped
@@ -1471,26 +1571,34 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         model: MLModel,
         state: GoBoardState
     ) -> (ownership: [Double], blackWinrate: Double, blackScoreLead: Double)? {
-        guard let inputs = Self.encodeKataGoV7Inputs(state: state, color: .black, targetSize: supportedBoardSize),
+        inferenceLock.lock()
+        defer { inferenceLock.unlock() }
+        guard let buffers = reusableInputTensors(targetSize: supportedBoardSize),
+              let inputs = Self.encodeKataGoV7Inputs(
+                  state: state,
+                  color: .black,
+                  targetSize: supportedBoardSize,
+                  spatialBuffer: buffers.spatial,
+                  globalBuffer: buffers.global
+              ),
               let provider = try? MLDictionaryFeatureProvider(dictionary: [
                   "spatial": MLFeatureValue(multiArray: inputs.spatial),
                   "global_in": MLFeatureValue(multiArray: inputs.global)
               ]) else {
             return nil
         }
-
-        inferenceLock.lock()
         let output = try? model.prediction(from: provider)
-        inferenceLock.unlock()
 
         guard let output,
               let valueArr = output.featureValue(for: "value")?.multiArrayValue,
               let ownArr = output.featureValue(for: "ownership")?.multiArrayValue else {
             return nil
         }
+        let valueRead = Self.floatAccessor(valueArr)
+        let ownRead = Self.floatAccessor(ownArr)
 
-        let vWin = valueArr.count > 0 ? valueArr[0].doubleValue : 0.0
-        let vLoss = valueArr.count > 1 ? valueArr[1].doubleValue : 0.0
+        let vWin = valueArr.count > 0 ? valueRead(0) : 0.0
+        let vLoss = valueArr.count > 1 ? valueRead(1) : 0.0
         let vMax = max(vWin, vLoss)
         let eW = exp(vWin - vMax)
         let eL = exp(vLoss - vMax)
@@ -1502,7 +1610,7 @@ final class CoreMLGoAIEngine: GoAIEngine, @unchecked Sendable {
         for r in 0..<s {
             for c in 0..<s {
                 let modelIdx = r * supportedBoardSize + c
-                let raw = modelIdx < ownArr.count ? ownArr[modelIdx].doubleValue : 0.0
+                let raw = modelIdx < ownArr.count ? ownRead(modelIdx) : 0.0
                 let clamped = min(1.0, max(-1.0, raw.isFinite ? raw : 0.0))
                 ownership[r * s + c] = clamped
                 ownSum += clamped

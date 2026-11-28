@@ -207,7 +207,14 @@ final class AppState: ObservableObject {
         self.settings = loadedSettings
         self.puzzleProgress = loadedPuzzles
         self.savedGames = loadedGames
-        self.photoJudgeHistory = loadedPhotoHistory
+        // Photo judging never supported AGA; records created while the global rule leaked into
+        // it are migrated back to Chinese area scoring (identical math, correct labels).
+        self.photoJudgeHistory = loadedPhotoHistory.map { record in
+            guard record.scoringRule == .aga else { return record }
+            var migrated = record
+            migrated.scoringRule = .chinese
+            return migrated
+        }
         self.hasTappedPhotoJudge = storage.loadHasTappedPhotoJudge()
         self.pausedAIMatch = loadedPausedMatch
         #if DEBUG
@@ -423,7 +430,8 @@ final class AppState: ObservableObject {
 
     func syncMusicMood() {
         guard let last = navigationPath.last else {
-            SoundAndHapticsManager.shared.setMusicMood(.island)
+            // Home stays silent by default; music starts only once the player enters a mode.
+            SoundAndHapticsManager.shared.setMusicMood(.none)
             return
         }
         switch last {
@@ -456,6 +464,9 @@ final class AppState: ObservableObject {
             activeGameViewModel?.setSuspended(true)
             eyeCareTimer?.invalidate()
             eyeCareTimer = nil
+            // Coalesced writes live in memory for a moment; make sure nothing is lost if the
+            // system terminates the app while in the background.
+            storage.flushPendingWrites()
         }
     }
 

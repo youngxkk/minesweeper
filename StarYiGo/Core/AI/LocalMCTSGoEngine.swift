@@ -310,6 +310,9 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         let totalIters = max(root.children.count * 2, iterations)
 
         for _ in 0..<totalIters {
+            // Undo / quit / suspend cancels the enclosing task; stop burning a core on
+            // results nobody will use.
+            if Task.isCancelled { break }
             // 1. Selection down the tree using UCT + RAVE
             var node = root
             var path: [MCTSNode] = [root]
@@ -859,6 +862,7 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         candidates.reserveCapacity(total / 2)
 
         for idx in 0..<total {
+            if Task.isCancelled { break }
             guard state.grid[idx] == nil, idx != state.koIndex else { continue }
             let pt = state.point(for: idx)
 
@@ -1074,6 +1078,7 @@ final class LocalMCTSGoEngine: GoAIEngine, @unchecked Sendable {
         let total = state.size * state.size
 
         for _ in 0..<maxSteps {
+            if Task.isCancelled { break }
             if case .captureRace(let target) = ruleSet {
                 if state.blackCaptures >= target { return 1.0 }
                 if state.whiteCaptures >= target { return 0.0 }

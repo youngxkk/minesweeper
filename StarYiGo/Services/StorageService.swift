@@ -669,6 +669,11 @@ final class StorageService {
     private let ioLock = NSLock()
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    /// Heavy stores (progress, archive, photo history) are encoded on the caller, then written
+    /// to disk on a serial background queue. Reads consult the pending snapshot first, so
+    /// read-after-write stays coherent without touching the filesystem.
+    private let writeQueue = DispatchQueue(label: "super.ai.storm.staryigo.storage.write", qos: .utility)
+    private var pendingData: [String: Data] = [:]
 
     private enum Keys {
         static let profile = "starpoint.userProfile.v1"
@@ -993,6 +998,17 @@ final class StorageService {
             return load(type, forKey: key)
         }
         ioLock.lock()
+        let pendingSnapshot = pendingData[key]
+        ioLock.unlock()
+        if let pendingSnapshot {
+            if let envelope = try? decoder.decode(StorageEnvelope<T>.self, from: pendingSnapshot) {
+                return envelope.payload
+            }
+            if let decoded = try? decoder.decode(type, from: pendingSnapshot) {
+                return decoded
+            }
+        }
+        ioLock.lock()
         defer { ioLock.unlock() }
 
         let fm = FileManager.default
@@ -1031,20 +1047,80 @@ final class StorageService {
             save(value, forKey: key)
             return
         }
+        let envelope = StorageEnvelope(schemaVersion: Self.currentSchemaVersion, payload: value)
+        guard let data = try? encoder.encode(envelope) else {
+            Self.logger.error("Failed to encode storage file \(key, privacy: .public)")
+            return
+        }
         ioLock.lock()
-        defer { ioLock.unlock() }
-        if writeAtomicEnvelopeUnlocked(value, to: url), defaults.object(forKey: key) != nil {
-            defaults.removeObject(forKey: key)
+        pendingData[key] = data
+        ioLock.unlock()
+
+        writeQueue.async { [weak self] in
+            guard let self else { return }
+            self.ioLock.lock()
+            guard let latest = self.pendingData[key] else {
+                self.ioLock.unlock()
+                return
+            }
+            self.ioLock.unlock()
+            self.writeEnvelopeData(latest, to: url)
+            // Only clear the snapshot *after* the file exists, and only if no newer save
+            // replaced it meanwhile. Removing it earlier opened a window where a read found
+            // neither the pending value nor the file yet.
+            self.ioLock.lock()
+            if self.pendingData[key] == latest {
+                self.pendingData.removeValue(forKey: key)
+            }
+            self.ioLock.unlock()
+            if self.defaults.object(forKey: key) != nil {
+                self.defaults.removeObject(forKey: key)
+            }
+        }
+    }
+
+    /// Flushes every coalesced write synchronously. Call when the app backgrounds or before
+    /// the process may be terminated.
+    func flushPendingWrites() {
+        writeQueue.sync {
+            self.ioLock.lock()
+            let pending = self.pendingData
+            self.ioLock.unlock()
+            for (key, data) in pending {
+                guard let url = self.fileURL(forKey: key) else { continue }
+                self.writeEnvelopeData(data, to: url)
+                self.ioLock.lock()
+                if self.pendingData[key] == data {
+                    self.pendingData.removeValue(forKey: key)
+                }
+                self.ioLock.unlock()
+                if self.defaults.object(forKey: key) != nil {
+                    self.defaults.removeObject(forKey: key)
+                }
+            }
         }
     }
 
     private func removeHeavy(forKey key: String) {
+        // Let any in-flight write for this key finish first, otherwise it could recreate the
+        // file right after we delete it.
+        writeQueue.sync { }
         ioLock.lock()
+        pendingData.removeValue(forKey: key)
         defer { ioLock.unlock() }
         if let url = fileURL(forKey: key) {
             try? FileManager.default.removeItem(at: url)
         }
         defaults.removeObject(forKey: key)
+    }
+
+    private func writeEnvelopeData(_ data: Data, to url: URL) {
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: [.atomic])
+        } catch {
+            Self.logger.error("Failed to write atomic storage file \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     @discardableResult

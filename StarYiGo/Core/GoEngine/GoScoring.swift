@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct TerritoryEstimate: Sendable {
+struct TerritoryEstimate: Sendable, Equatable {
     /// Value per intersection in [-1.0, +1.0]:
     /// Positive = Black ownership/influence, Negative = White ownership/influence.
     let ownership: [Double]

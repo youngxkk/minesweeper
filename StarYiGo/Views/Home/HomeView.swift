@@ -24,6 +24,7 @@ struct HomeView: View {
     @State private var showStatusGuide = false
     @State private var showInitialPlacementSheet = false
     @State private var hasAppeared = false
+    @StateObject private var catalogStore = PuzzleCatalogStore.shared
 
     private static let homeBackdropNames = [
         "HomeBackdrop",
@@ -1305,7 +1306,9 @@ struct HomeView: View {
     }
 
     private var trainingDojoModuleCard: some View {
-        let totalPuzzles = DojoPuzzleBank.fullCatalog.count
+        // Read the background-warmed count instead of forcing a ~1,900-puzzle build on the
+        // first Home frame. Shows the cached count until the very first build finishes.
+        let totalPuzzles = catalogStore.puzzleCount
 
         return Button {
             appState.navigationPath.append(.trainingDojo)

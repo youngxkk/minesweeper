@@ -339,9 +339,10 @@ struct GoBoardState: Hashable, Sendable {
     /// - 2+ distinct enclosed true eye regions (single-point or multi-point eye spaces), OR
     /// - a single enclosed eye space of >= 4 points that is not a dead Square Four (e.g., Straight/Bent Four, 5+ space).
     /// Used both for visual celebration ("两眼活棋") and accurate endgame/AI evaluation!
-    func twoEyeAliveAnalysis() -> (eyePoints: Set<BoardPoint>, aliveStoneIndices: Set<Int>) {
+    /// - Parameter precomputedGroups: pass an already-computed `allGroups()` result to avoid a second flood fill.
+    func twoEyeAliveAnalysis(precomputedGroups: [GoGroup]? = nil) -> (eyePoints: Set<BoardPoint>, aliveStoneIndices: Set<Int>) {
         let total = size * size
-        let groups = allGroups()
+        let groups = precomputedGroups ?? allGroups()
         var groupIndexAt = Array(repeating: -1, count: total)
         for (gIdx, g) in groups.enumerated() {
             for s in g.stones { groupIndexAt[s] = gIdx }

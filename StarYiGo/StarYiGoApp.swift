@@ -332,6 +332,11 @@ struct RootNavigationView: View {
             syncPortraitOverlayVisibility(debounced: false)
         }
         .task {
+            // Warm the puzzle catalog off the main thread; Home shows a cached count and the
+            // archipelago shows a short loading state instead of blocking launch.
+            PuzzleCatalogStore.shared.warmUp()
+        }
+        .task {
             guard appState.isLaunchSplashActive else {
                 appState.isLaunchSplashRevealing = true
                 return
